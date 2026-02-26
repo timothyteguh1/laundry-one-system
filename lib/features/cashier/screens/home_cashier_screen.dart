@@ -7,21 +7,11 @@ import 'package:laundry_one/features/cashier/screens/create_order_screen.dart';
 
 // ============================================================
 // DESIGN SYSTEM — Laundry One POS
-// Tone: Refined Professional — clean depth, clear hierarchy
-// Palette:
-//   Navy    #0F2557  (header, primary text)
-//   Blue    #1565C0  (primary action, active)
-//   Sky     #E8F0FE  (chip background)
-//   Surface #FFFFFF  (cards)
-//   Ground  #F4F7FB  (background)
-//   Border  #E8EDF5
 // ============================================================
 
 class _DS {
-  // Colors
   static const navy = Color(0xFF0F2557);
   static const blue = Color(0xFF1565C0);
-  static const blueLight = Color(0xFF1976D2);
   static const sky = Color(0xFFE8F0FE);
   static const surface = Colors.white;
   static const ground = Color(0xFFF4F7FB);
@@ -30,53 +20,25 @@ class _DS {
   static const textSecondary = Color(0xFF6B7A99);
   static const textHint = Color(0xFFB0BAD1);
 
-  // Status
-  static const statusDiterima = Color(0xFF1565C0);
   static const statusDiproses = Color(0xFFE65100);
   static const statusSelesai = Color(0xFF00897B);
-  static const statusSiap = Color(0xFF2E7D32);
   static const statusLunas = Color(0xFF757575);
-  static const statusPiutang = Color(0xFFC62828);
 
-  // Shadows
   static List<BoxShadow> cardShadow = [
-    BoxShadow(
-      color: const Color(0xFF0F2557).withOpacity(0.06),
-      blurRadius: 20,
-      offset: const Offset(0, 4),
-    ),
-    BoxShadow(
-      color: const Color(0xFF0F2557).withOpacity(0.03),
-      blurRadius: 6,
-      offset: const Offset(0, 1),
-    ),
+    BoxShadow(color: const Color(0xFF0F2557).withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 4)),
+    BoxShadow(color: const Color(0xFF0F2557).withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 1)),
   ];
 
   static List<BoxShadow> softShadow = [
-    BoxShadow(
-      color: const Color(0xFF0F2557).withOpacity(0.04),
-      blurRadius: 12,
-      offset: const Offset(0, 2),
-    ),
+    BoxShadow(color: const Color(0xFF0F2557).withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 2)),
   ];
 
   static List<BoxShadow> fabShadow = [
-    BoxShadow(
-      color: const Color(0xFF1565C0).withOpacity(0.35),
-      blurRadius: 20,
-      offset: const Offset(0, 8),
-    ),
-    BoxShadow(
-      color: const Color(0xFF1565C0).withOpacity(0.2),
-      blurRadius: 6,
-      offset: const Offset(0, 2),
-    ),
+    BoxShadow(color: const Color(0xFF1565C0).withOpacity(0.35), blurRadius: 20, offset: const Offset(0, 8)),
+    BoxShadow(color: const Color(0xFF1565C0).withOpacity(0.2), blurRadius: 6, offset: const Offset(0, 2)),
   ];
 }
 
-// ============================================================
-// HOME CASHIER SCREEN
-// ============================================================
 class HomeCashierScreen extends StatefulWidget {
   const HomeCashierScreen({super.key});
 
@@ -88,7 +50,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     with SingleTickerProviderStateMixin {
   final _supabase = Supabase.instance.client;
   int _currentTab = 0;
-  AnimationController? _fabAnim; // Diubah jadi nullable agar aman saat Hot Reload
+  AnimationController? _fabAnim;
 
   List<Map<String, dynamic>> _orders = [];
   bool _isLoading = true;
@@ -96,9 +58,8 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
 
   int _totalOrder = 0;
   int _totalAktif = 0;
-  int _totalSiap = 0;
+  int _totalSelesai = 0;
   
-  // Data Keuangan
   double _totalPenjualan = 0;
   double _totalCash = 0;
   double _totalNonCash = 0;
@@ -135,7 +96,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       final todayStr =
           '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
 
-      // Tambahan kolom metode_bayar_awal untuk filter cash / non-cash
       final orders = await _supabase
           .from('orders')
           .select('''
@@ -146,19 +106,18 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
           .gte('created_at', '${todayStr}T00:00:00')
           .order('created_at', ascending: false);
 
-      int aktif = 0, siap = 0;
+      int aktif = 0, selesai = 0;
       double penjualan = 0, cash = 0, nonCash = 0, piutang = 0;
       
       for (final o in orders) {
         final s = o['status'];
         final total = (o['total_harga'] ?? 0).toDouble();
-        final isPiutang = o['is_piutang'] == true || s == 'diambil_belum_lunas';
+        final isPiutang = o['is_piutang'] == true;
         final metode = o['metode_bayar_awal'] ?? 'cash';
 
-        if (['diterima', 'diproses', 'selesai'].contains(s)) aktif++;
-        if (s == 'siap_diambil') siap++;
+        if (s == 'diproses') aktif++;
+        if (s == 'selesai' || s == 'dibayar_lunas') selesai++; 
 
-        // Hitung Pendapatan (Abaikan order yang draft/dibatalkan)
         if (s != 'dibatalkan' && s != 'draft') {
           penjualan += total;
           if (isPiutang) {
@@ -178,7 +137,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
           _orders = List<Map<String, dynamic>>.from(orders);
           _totalOrder = orders.length;
           _totalAktif = aktif;
-          _totalSiap = siap;
+          _totalSelesai = selesai;
           
           _totalPenjualan = penjualan;
           _totalCash = cash;
@@ -208,10 +167,11 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   Future<void> _updateStatus(String orderId, String newStatus) async {
     HapticFeedback.mediumImpact();
     try {
-      final updateData = {'status': newStatus};
-      // Jika pesanan dilunasi, set piutang jadi false
+      // TAMBAHAN: Wajib beri tag <String, dynamic> agar bisa menerima nilai false (boolean)
+      final updateData = <String, dynamic>{'status': newStatus}; 
+      
       if (newStatus == 'dibayar_lunas') {
-        updateData['is_piutang'] = 'false';
+        updateData['is_piutang'] = false; // Lunas berarti bukan piutang lagi
       }
       
       await _supabase.from('orders').update(updateData).eq('id', orderId);
@@ -296,9 +256,8 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     );
   }
 
-  // Menampilkan Rincian Penjualan & Piutang
   void _showPenjualanDetail() {
-    final listPiutang = _orders.where((o) => o['is_piutang'] == true || o['status'] == 'diambil_belum_lunas').toList();
+    final listPiutang = _orders.where((o) => o['is_piutang'] == true).toList();
 
     showModalBottomSheet(
       context: context,
@@ -446,7 +405,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       floatingActionButton: _fabAnim == null ? const SizedBox() : ScaleTransition(
         scale: CurvedAnimation(parent: _fabAnim!, curve: Curves.elasticOut),
         child: Container(
-          margin: const EdgeInsets.only(bottom: 20), // Membuat tombol lebih naik
+          margin: const EdgeInsets.only(bottom: 20),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             boxShadow: _DS.fabShadow,
@@ -467,15 +426,11 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
           ),
         ),
       ),
-      // Mengubah posisi FAB agar floating overlap
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       bottomNavigationBar: _buildBottomNav(),
     );
   }
 
-  // ============================================================
-  // BOTTOM NAV
-  // ============================================================
   Widget _buildBottomNav() {
     return Container(
       decoration: BoxDecoration(
@@ -501,7 +456,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
               _buildNavItem(1, Icons.receipt_long_rounded,
                   Icons.receipt_long_outlined, 'Pesanan',
                   badge: _totalAktif > 0 ? '$_totalAktif' : null),
-              const Expanded(flex: 2, child: SizedBox()), // Ruang untuk FAB
+              const Expanded(flex: 2, child: SizedBox()),
               _buildNavItem(2, Icons.people_alt_rounded,
                   Icons.people_alt_outlined, 'Pelanggan'),
               _buildNavItem(
@@ -578,15 +533,9 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     );
   }
 
-  // ============================================================
-  // TAB BERANDA
-  // ============================================================
   Widget _buildTabBeranda() {
-    final siap = _orders.where((o) => o['status'] == 'siap_diambil').toList();
-    final aktif = _orders
-        .where((o) => ['diterima', 'diproses'].contains(o['status']))
-        .take(5)
-        .toList();
+    final siap = _orders.where((o) => o['status'] == 'selesai' || o['status'] == 'dibayar_lunas').toList();
+    final aktif = _orders.where((o) => o['status'] == 'diproses').take(5).toList();
 
     return SafeArea(
       child: RefreshIndicator(
@@ -595,10 +544,8 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),
           slivers: [
-            // ===== HEADER =====
             SliverToBoxAdapter(child: _buildHeader()),
 
-            // ===== PENJUALAN CARD =====
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -609,13 +556,12 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
               ),
             ),
 
-            // ===== SIAP DIAMBIL =====
             if (siap.isNotEmpty) ...[
               SliverToBoxAdapter(
                 child: _buildSectionHeader(
-                  '⚡  Siap Diambil',
+                  '✅  Pesanan Selesai',
                   count: siap.length,
-                  countColor: _DS.statusSiap,
+                  countColor: _DS.statusSelesai,
                   topPad: 20,
                 ),
               ),
@@ -634,7 +580,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
               ),
             ],
 
-            // ===== AKTIF =====
             SliverToBoxAdapter(
               child: _buildSectionHeader(
                 'Sedang Diproses',
@@ -795,13 +740,13 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                       ),
                       const SizedBox(width: 10),
                       _StatChip(
-                        value: '$_totalSiap',
-                        label: 'Siap',
+                        value: '$_totalSelesai',
+                        label: 'Selesai',
                         icon: Icons.check_circle_outline_rounded,
-                        color: _totalSiap > 0
+                        color: _totalSelesai > 0
                             ? Colors.green.shade300
                             : Colors.white24,
-                        highlight: _totalSiap > 0,
+                        highlight: _totalSelesai > 0,
                       ),
                     ],
                   ),
@@ -931,9 +876,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     );
   }
 
-  // ============================================================
-  // TAB PESANAN
-  // ============================================================
   Widget _buildTabPesanan() {
     return _PesananTab(
       orders: _orders,
@@ -944,16 +886,10 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     );
   }
 
-  // ============================================================
-  // TAB PELANGGAN
-  // ============================================================
   Widget _buildTabPelanggan() {
     return const _PelangganTab();
   }
 
-  // ============================================================
-  // TAB LAPORAN
-  // ============================================================
   Widget _buildTabLaporan() {
     return SafeArea(
       child: Column(
@@ -1003,9 +939,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   }
 }
 
-// ============================================================
-// TAB PESANAN WIDGET (Disederhanakan 2 Tab: Aktif & Selesai)
-// ============================================================
 class _PesananTab extends StatefulWidget {
   final List<Map<String, dynamic>> orders;
   final bool isLoading;
@@ -1030,8 +963,8 @@ class _PesananTabState extends State<_PesananTab>
   late TabController _tc;
   final _tabs = ['Aktif', 'Selesai'];
   final _filter = {
-    'Aktif': ['draft', 'diterima', 'diproses', 'siap_diambil'],
-    'Selesai': ['dibayar_lunas', 'diambil_belum_lunas'],
+    'Aktif': ['diproses'],
+    'Selesai': ['selesai', 'dibayar_lunas'],
   };
 
   @override
@@ -1164,9 +1097,6 @@ class _PesananTabState extends State<_PesananTab>
   }
 }
 
-// ============================================================
-// PREMIUM ORDER CARD
-// ============================================================
 class _PremiumOrderCard extends StatelessWidget {
   final Map<String, dynamic> order;
   final Function(String, String) onUpdate;
@@ -1180,19 +1110,19 @@ class _PremiumOrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = order['status'] ?? 'diterima';
+    final status = order['status'] ?? 'diproses';
     final namaPelanggan =
         order['customers']?['profiles']?['nama_lengkap'] ?? 'Umum';
     final nomorOrder = order['nomor_order'] ?? '-';
     final total = (order['total_harga'] ?? 0).toDouble();
-    final isPiutang = order['is_piutang'] == true || status == 'diambil_belum_lunas';
+    final isPiutang = order['is_piutang'] == true;
     final items = order['order_items'] as List? ?? [];
     final layanan = items.isNotEmpty
         ? items.map((i) => i['services']?['nama'] ?? '').where((n) => n.isNotEmpty).join(' • ')
         : 'Tidak ada item';
 
-    final statusCfg = _statusConfig(status);
-    final nextStatus = _nextStatus(status);
+    final statusCfg = _statusConfig(status, isPiutang);
+    final nextStatus = _nextStatus(status, isPiutang);
 
     return GestureDetector(
       onTap: onTap,
@@ -1357,7 +1287,7 @@ class _PremiumOrderCard extends StatelessWidget {
                                   ],
                                 ),
                                 child: Text(
-                                  _nextStatusLabel(status),
+                                  _nextStatusLabel(status, isPiutang),
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 11,
@@ -1379,34 +1309,25 @@ class _PremiumOrderCard extends StatelessWidget {
     );
   }
 
-  Map<String, dynamic> _statusConfig(String s) {
+  Map<String, dynamic> _statusConfig(String s, bool isPiutang) {
     switch (s) {
-      case 'diterima': return {'label': 'Diterima', 'color': _DS.statusDiterima};
       case 'diproses': return {'label': 'Diproses', 'color': _DS.statusDiproses};
-      case 'selesai': return {'label': 'Selesai', 'color': _DS.statusSelesai};
-      case 'siap_diambil': return {'label': 'Siap Diambil', 'color': _DS.statusSiap};
-      case 'dibayar_lunas': return {'label': 'Lunas', 'color': _DS.statusLunas};
-      case 'diambil_belum_lunas': return {'label': 'Piutang', 'color': _DS.statusPiutang};
+      case 'selesai': return {'label': isPiutang ? 'Belum Lunas' : 'Selesai', 'color': isPiutang ? Colors.orange : _DS.statusSelesai};
+      case 'dibayar_lunas': return {'label': 'Lunas', 'color': _DS.statusSelesai};
       default: return {'label': s, 'color': _DS.statusLunas};
     }
   }
 
-  String? _nextStatus(String s) {
-    const flow = {
-      'diterima': 'diproses',
-      'diproses': 'selesai',
-      'selesai': 'siap_diambil',
-    };
-    return flow[s];
+  String? _nextStatus(String s, bool isPiutang) {
+    if (s == 'diproses') return 'selesai';
+    if (s == 'selesai' && isPiutang) return 'dibayar_lunas';
+    return null;
   }
 
-  String _nextStatusLabel(String s) {
-    const labels = {
-      'diterima': '▶ Proses',
-      'diproses': '✓ Selesai',
-      'selesai': '📦 Siap',
-    };
-    return labels[s] ?? '';
+  String _nextStatusLabel(String s, bool isPiutang) {
+    if (s == 'diproses') return '✓ Tandai Selesai';
+    if (s == 'selesai' && isPiutang) return '💵 Lunasi Piutang';
+    return '';
   }
 
   String _formatRupiah(double amount) {
@@ -1420,9 +1341,6 @@ class _PremiumOrderCard extends StatelessWidget {
   }
 }
 
-// ============================================================
-// TAB PELANGGAN WIDGET
-// ============================================================
 class _PelangganTab extends StatefulWidget {
   const _PelangganTab();
 
@@ -1615,9 +1533,6 @@ class _PelangganTabState extends State<_PelangganTab> {
   }
 }
 
-// ============================================================
-// ORDER DETAIL BOTTOM SHEET
-// ============================================================
 class _OrderDetailSheet extends StatelessWidget {
   final Map<String, dynamic> order;
   final Function(String) onUpdateStatus;
@@ -1627,15 +1542,15 @@ class _OrderDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = order['status'] ?? 'diterima';
+    final status = order['status'] ?? 'diproses';
     final namaPelanggan =
         order['customers']?['profiles']?['nama_lengkap'] ?? 'Umum';
     final nomorHp = order['customers']?['profiles']?['nomor_hp'];
     final nomorOrder = order['nomor_order'] ?? '-';
     final total = (order['total_harga'] ?? 0).toDouble();
-    final isPiutang = order['is_piutang'] == true || status == 'diambil_belum_lunas';
+    final isPiutang = order['is_piutang'] == true;
     final items = order['order_items'] as List? ?? [];
-    final nextSt = _nextStatus(status);
+    final nextSt = _nextStatus(status, isPiutang);
 
     return Container(
       decoration: const BoxDecoration(
@@ -1681,7 +1596,7 @@ class _OrderDetailSheet extends StatelessWidget {
                   ],
                 ),
               ),
-              _StatusPill(status: status),
+              _StatusPill(status: status, isPiutang: isPiutang),
             ],
           ),
 
@@ -1767,46 +1682,25 @@ class _OrderDetailSheet extends StatelessWidget {
 
           if (nextSt != null)
             _ActionButton(
-              label: _nextStatusLabel(status),
-              color: _DS.blue,
+              label: _nextStatusLabel(status, isPiutang),
+              color: status == 'selesai' ? Colors.green : _DS.blue,
               onTap: () => onUpdateStatus(nextSt),
             ),
-          if (status == 'diambil_belum_lunas')
-            _ActionButton(
-              label: '✓ Konfirmasi Lunas',
-              color: _DS.statusSiap,
-              onTap: () => onUpdateStatus('dibayar_lunas'),
-            ),
-          if (status == 'siap_diambil') ...[
-            const SizedBox(height: 10),
-            _ActionButton(
-              label: '⚠️  Diambil Belum Lunas',
-              color: _DS.statusPiutang,
-              onTap: () => onUpdateStatus('diambil_belum_lunas'),
-              outlined: true,
-            ),
-          ],
         ],
       ),
     );
   }
 
-  String? _nextStatus(String s) {
-    const flow = {
-      'diterima': 'diproses',
-      'diproses': 'selesai',
-      'selesai': 'siap_diambil',
-    };
-    return flow[s];
+  String? _nextStatus(String s, bool isPiutang) {
+    if (s == 'diproses') return 'selesai';
+    if (s == 'selesai' && isPiutang) return 'dibayar_lunas';
+    return null;
   }
 
-  String _nextStatusLabel(String s) {
-    const labels = {
-      'diterima': '▶  Mulai Proses',
-      'diproses': '✓  Tandai Selesai',
-      'selesai': '📦  Siap Diambil',
-    };
-    return labels[s] ?? 'Update Status';
+  String _nextStatusLabel(String s, bool isPiutang) {
+    if (s == 'diproses') return '✓  Tandai Selesai';
+    if (s == 'selesai' && isPiutang) return '💵  Lunasi Piutang';
+    return 'Update Status';
   }
 
   String _fmt(double amount) {
@@ -1820,9 +1714,6 @@ class _OrderDetailSheet extends StatelessWidget {
   }
 }
 
-// ============================================================
-// HELPER WIDGETS
-// ============================================================
 class _StatChip extends StatelessWidget {
   final String value;
   final String label;
@@ -1879,7 +1770,9 @@ class _StatChip extends StatelessWidget {
 
 class _StatusPill extends StatelessWidget {
   final String status;
-  const _StatusPill({required this.status});
+  final bool isPiutang;
+  
+  const _StatusPill({required this.status, required this.isPiutang});
 
   @override
   Widget build(BuildContext context) {
@@ -1901,12 +1794,9 @@ class _StatusPill extends StatelessWidget {
 
   Map<String, dynamic> _cfg() {
     switch (status) {
-      case 'diterima': return {'label': 'Diterima', 'color': _DS.statusDiterima};
       case 'diproses': return {'label': 'Diproses', 'color': _DS.statusDiproses};
-      case 'selesai': return {'label': 'Selesai', 'color': _DS.statusSelesai};
-      case 'siap_diambil': return {'label': 'Siap Diambil', 'color': _DS.statusSiap};
-      case 'dibayar_lunas': return {'label': 'Lunas', 'color': _DS.statusLunas};
-      case 'diambil_belum_lunas': return {'label': 'Piutang', 'color': _DS.statusPiutang};
+      case 'selesai': return {'label': isPiutang ? 'Belum Lunas' : 'Selesai', 'color': isPiutang ? Colors.orange : _DS.statusSelesai};
+      case 'dibayar_lunas': return {'label': 'Lunas', 'color': _DS.statusSelesai};
       default: return {'label': status, 'color': _DS.statusLunas};
     }
   }

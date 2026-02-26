@@ -6,12 +6,6 @@ import 'package:laundry_one/features/auth/services/auth_service.dart';
 
 // ============================================================
 // CREATE ORDER SCREEN — Alur POS Kasir
-//
-// Step 1: Cari / pilih pelanggan
-// Step 2: Pilih layanan + qty
-// Step 3: Input voucher (opsional)
-// Step 4: Pilih metode + tipe pembayaran
-// Step 5: Konfirmasi → simpan → ke InvoiceScreen
 // ============================================================
 
 class CreateOrderScreen extends StatefulWidget {
@@ -56,21 +50,18 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     super.dispose();
   }
 
-  // ============================================================
-  // LOAD LAYANAN dari Supabase
-  // ============================================================
   Future<void> _loadServices() async {
     final data = await _supabase
         .from('services')
-        .select('id, nama, harga_per_satuan, satuan, tipe, is_active, inventory_id, qty_per_unit')
+        .select(
+          'id, nama, harga_per_satuan, satuan, tipe, is_active, inventory_id, qty_per_unit',
+        )
         .eq('is_active', true)
         .order('nama');
-    if (mounted) setState(() => _services = List<Map<String, dynamic>>.from(data));
+    if (mounted)
+      setState(() => _services = List<Map<String, dynamic>>.from(data));
   }
 
-  // ============================================================
-  // CARI PELANGGAN
-  // ============================================================
   Future<void> _searchCustomer(String query) async {
     if (query.length < 3) {
       setState(() => _searchResults = []);
@@ -95,9 +86,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     }
   }
 
-  // ============================================================
-  // KERANJANG — tambah item
-  // ============================================================
   void _tambahKeKeranjang(Map<String, dynamic> service) {
     final idx = _cart.indexWhere((c) => c['service']['id'] == service['id']);
     setState(() {
@@ -130,24 +118,23 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   }
 
   int _qtyDiKeranjang(String serviceId) {
-    final item =
-        _cart.firstWhere((c) => c['service']['id'] == serviceId, orElse: () => {});
+    final item = _cart.firstWhere(
+      (c) => c['service']['id'] == serviceId,
+      orElse: () => {},
+    );
     return item.isEmpty ? 0 : item['qty'];
   }
 
   double get _subtotal =>
       _cart.fold(0, (sum, c) => sum + (c['subtotal'] as double));
 
-  double get _total => (_subtotal - _diskonVoucher).clamp(0, double.infinity).toDouble();
+  double get _total =>
+      (_subtotal - _diskonVoucher).clamp(0, double.infinity).toDouble();
 
-  // ============================================================
-  // VALIDASI & PAKAI VOUCHER
-  // ============================================================
   Future<void> _pakaiVoucher() async {
     if (_voucherCode == null || _voucherCode!.isEmpty) return;
     setState(() => _isLoading = true);
     try {
-      // Cari voucher di tabel reward_redemptions
       final data = await _supabase
           .from('reward_redemptions')
           .select('*, rewards_catalog(*)')
@@ -156,22 +143,24 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           .maybeSingle();
 
       if (data == null) {
-        _showSnackBar('Kode voucher tidak valid atau sudah dipakai', Colors.red);
+        _showSnackBar(
+          'Kode voucher tidak valid atau sudah dipakai',
+          Colors.red,
+        );
         return;
       }
 
       final reward = data['rewards_catalog'];
       final minBelanja = (reward['min_belanja'] ?? 0).toDouble();
 
-      // Cek syarat minimum belanja
       if (_subtotal < minBelanja) {
         _showSnackBar(
-            'Minimum belanja Rp ${_formatRupiah(minBelanja)} untuk voucher ini',
-            Colors.orange);
+          'Minimum belanja Rp ${_formatRupiah(minBelanja)} untuk voucher ini',
+          Colors.orange,
+        );
         return;
       }
 
-      // Hitung diskon
       double diskon = 0;
       if (reward['tipe_diskon'] == 'persen') {
         diskon = _subtotal * (reward['nilai_diskon'] / 100);
@@ -186,7 +175,10 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         _diskonVoucher = diskon;
         _isLoading = false;
       });
-      _showSnackBar('Voucher berhasil! Diskon ${_formatRupiah(diskon)}', Colors.green);
+      _showSnackBar(
+        'Voucher berhasil! Diskon ${_formatRupiah(diskon)}',
+        Colors.green,
+      );
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -195,23 +187,18 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     }
   }
 
-  // ============================================================
-  // SIMPAN ORDER
-  // ============================================================
   Future<void> _simpanOrder() async {
     setState(() => _isLoading = true);
     try {
       final kasirId = _supabase.auth.currentUser!.id;
-      
-      // Ambil nama kasir untuk diteruskan ke InvoiceScreen
+
       final kasirProfile = await _supabase
           .from('profiles')
           .select('nama_lengkap')
           .eq('id', kasirId)
           .single();
       final namaKasir = kasirProfile['nama_lengkap'] ?? 'Kasir';
-      
-      // Ambil customer_id dari tabel customers berdasarkan profile_id
+
       String? customerId;
       if (_selectedCustomer != null) {
         final profileId = _selectedCustomer!['id'];
@@ -223,7 +210,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         customerId = custData?['id'];
       }
 
-      // Generate nomor order
       final now = DateTime.now();
       final prefix =
           'ORD-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
@@ -231,24 +217,29 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           .from('orders')
           .select('id')
           .like('nomor_order', '$prefix%');
-      final nomorOrder = '$prefix-${(count.length + 1).toString().padLeft(4, '0')}';
+      final nomorOrder =
+          '$prefix-${(count.length + 1).toString().padLeft(4, '0')}';
 
-      // Insert order
       final orderPayload = <String, dynamic>{
         'nomor_order': nomorOrder,
         'customer_id': customerId,
         'cashier_id': kasirId,
-        'status': 'diterima',
+        'status': 'diproses', // OTOMATIS DIPROSES
         'total_harga': _total.toInt(),
         'metode_bayar_awal': _metodeBayar,
         'is_piutang': _tipeBayar == 'piutang',
       };
-      if (_diskonVoucher > 0) orderPayload['diskon_voucher'] = _diskonVoucher.toInt();
-      if (_voucherData != null) orderPayload['redemption_id'] = _voucherData!['id'];
+      if (_diskonVoucher > 0)
+        orderPayload['diskon_voucher'] = _diskonVoucher.toInt();
+      if (_voucherData != null)
+        orderPayload['redemption_id'] = _voucherData!['id'];
 
-      final order = await _supabase.from('orders').insert(orderPayload).select().single();
+      final order = await _supabase
+          .from('orders')
+          .insert(orderPayload)
+          .select()
+          .single();
 
-      // Insert order items
       for (final item in _cart) {
         await _supabase.from('order_items').insert({
           'order_id': order['id'],
@@ -258,15 +249,12 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           'subtotal': (item['subtotal'] as double).toInt(),
         });
 
-        // Kurangi stok kalau tipe = produk
         if (item['service']['tipe'] == 'produk' &&
             item['service']['inventory_id'] != null) {
           final invId = item['service']['inventory_id'];
-          final qtyPerUnit =
-              (item['service']['qty_per_unit'] ?? 1).toDouble();
+          final qtyPerUnit = (item['service']['qty_per_unit'] ?? 1).toDouble();
           final qtyKurang = item['qty'] * qtyPerUnit;
 
-          // Ambil stok sekarang
           final inv = await _supabase
               .from('inventory')
               .select('stok_saat_ini')
@@ -275,12 +263,11 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           final stokBefore = (inv['stok_saat_ini'] as num).toDouble();
           final stokAfter = stokBefore - qtyKurang;
 
-          // Update stok
           await _supabase
               .from('inventory')
-              .update({'stok_saat_ini': stokAfter}).eq('id', invId);
+              .update({'stok_saat_ini': stokAfter})
+              .eq('id', invId);
 
-          // Log
           await _supabase.from('inventory_log').insert({
             'inventory_id': invId,
             'tipe': 'keluar',
@@ -294,7 +281,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         }
       }
 
-      // Tandai voucher sudah dipakai
       if (_voucherData != null) {
         await _supabase
             .from('reward_redemptions')
@@ -303,7 +289,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       }
 
       if (mounted) {
-        // Ke halaman invoice dengan menyertakan nama Kasir
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -312,7 +297,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               nomorOrder: nomorOrder,
               namaPelanggan: _selectedCustomer?['nama_lengkap'] ?? 'Umum',
               nomorHp: _selectedCustomer?['nomor_hp'] ?? '-',
-              namaKasir: namaKasir, // Disertakan untuk Invoice
+              namaKasir: namaKasir,
               items: _cart,
               subtotal: _subtotal,
               diskon: _diskonVoucher,
@@ -331,9 +316,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     }
   }
 
-  // ============================================================
-  // FORM DAFTARKAN PELANGGAN BARU — dari kasir
-  // ============================================================
   void _showFormDaftarPelanggan({String nomorHpAwal = ''}) {
     final namaCtrl = TextEditingController();
     final hpCtrl = TextEditingController(text: nomorHpAwal);
@@ -364,7 +346,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               children: [
                 Center(
                   child: Container(
-                    width: 40, height: 4,
+                    width: 40,
+                    height: 4,
                     decoration: BoxDecoration(
                       color: Colors.grey.shade300,
                       borderRadius: BorderRadius.circular(2),
@@ -387,15 +370,36 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                   textCapitalization: TextCapitalization.words,
                   decoration: InputDecoration(
                     labelText: 'Nama Lengkap',
-                    prefixIcon: const Icon(Icons.badge_outlined, color: Colors.grey, size: 20),
+                    prefixIcon: const Icon(
+                      Icons.badge_outlined,
+                      color: Colors.grey,
+                      size: 20,
+                    ),
                     filled: true,
                     fillColor: Colors.grey.shade50,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1565C0), width: 1.8)),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 16,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF1565C0),
+                        width: 1.8,
+                      ),
+                    ),
                   ),
-                  validator: (v) => v == null || v.trim().length < 3 ? 'Nama minimal 3 huruf' : null,
+                  validator: (v) => v == null || v.trim().length < 3
+                      ? 'Nama minimal 3 huruf'
+                      : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -404,15 +408,36 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   decoration: InputDecoration(
                     labelText: 'Nomor WhatsApp',
-                    prefixIcon: const Icon(Icons.phone_android_outlined, color: Colors.grey, size: 20),
+                    prefixIcon: const Icon(
+                      Icons.phone_android_outlined,
+                      color: Colors.grey,
+                      size: 20,
+                    ),
                     filled: true,
                     fillColor: Colors.grey.shade50,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF1565C0), width: 1.8)),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 16,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF1565C0),
+                        width: 1.8,
+                      ),
+                    ),
                   ),
-                  validator: (v) => v == null || v.trim().length < 10 ? 'Nomor HP minimal 10 digit' : null,
+                  validator: (v) => v == null || v.trim().length < 10
+                      ? 'Nomor HP minimal 10 digit'
+                      : null,
                 ),
                 const SizedBox(height: 20),
                 SizedBox(
@@ -422,41 +447,68 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF1565C0),
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                       elevation: 0,
                     ),
-                    onPressed: isLoading ? null : () async {
-                      if (!formKey.currentState!.validate()) return;
-                      setModalState(() => isLoading = true);
-                      try {
-                        await AuthService().registerPelanggan(
-                          phone: hpCtrl.text.trim(),
-                          fullName: namaCtrl.text.trim(),
-                        );
-                        await Future.delayed(const Duration(milliseconds: 800));
-                        final results = await _supabase
-                            .from('profiles')
-                            .select('id, nama_lengkap, nomor_hp, customers(id, poin_saldo)')
-                            .eq('nomor_hp', hpCtrl.text.trim())
-                            .limit(1);
-                        if (mounted) {
-                          Navigator.pop(ctx);
-                          if (results.isNotEmpty) {
-                            setState(() {
-                              _selectedCustomer = results[0];
-                              _step = 2;
-                            });
-                            _showSnackBar('${namaCtrl.text.trim()} berhasil didaftarkan! ✓', Colors.green);
-                          }
-                        }
-                      } catch (e) {
-                        setModalState(() => isLoading = false);
-                        _showSnackBar(e.toString().replaceAll('Exception: ', ''), Colors.red);
-                      }
-                    },
+                    onPressed: isLoading
+                        ? null
+                        : () async {
+                            if (!formKey.currentState!.validate()) return;
+                            setModalState(() => isLoading = true);
+                            try {
+                              await AuthService().registerPelanggan(
+                                phone: hpCtrl.text.trim(),
+                                fullName: namaCtrl.text.trim(),
+                              );
+                              await Future.delayed(
+                                const Duration(milliseconds: 800),
+                              );
+                              final results = await _supabase
+                                  .from('profiles')
+                                  .select(
+                                    'id, nama_lengkap, nomor_hp, customers(id, poin_saldo)',
+                                  )
+                                  .eq('nomor_hp', hpCtrl.text.trim())
+                                  .limit(1);
+                              if (mounted) {
+                                Navigator.pop(ctx);
+                                if (results.isNotEmpty) {
+                                  setState(() {
+                                    _selectedCustomer = results[0];
+                                    _step = 2;
+                                  });
+                                  _showSnackBar(
+                                    '${namaCtrl.text.trim()} berhasil didaftarkan! ✓',
+                                    Colors.green,
+                                  );
+                                }
+                              }
+                            } catch (e) {
+                              setModalState(() => isLoading = false);
+                              _showSnackBar(
+                                e.toString().replaceAll('Exception: ', ''),
+                                Colors.red,
+                              );
+                            }
+                          },
                     child: isLoading
-                        ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                        : const Text('Daftarkan & Pilih', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2.5,
+                            ),
+                          )
+                        : const Text(
+                            'Daftarkan & Pilih',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                            ),
+                          ),
                   ),
                 ),
               ],
@@ -491,8 +543,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           _step == 1
               ? 'Pilih Pelanggan'
               : _step == 2
-                  ? 'Pilih Layanan'
-                  : 'Pembayaran',
+              ? 'Pilih Layanan'
+              : 'Pembayaran',
           style: const TextStyle(fontWeight: FontWeight.w700),
         ),
         bottom: PreferredSize(
@@ -516,16 +568,12 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 
-  // ============================================================
-  // STEP 1 — PILIH PELANGGAN
-  // ============================================================
   Widget _buildStep1Pelanggan() {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Search field
           TextField(
             controller: _searchCtrl,
             decoration: InputDecoration(
@@ -554,7 +602,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Pilih tanpa pelanggan
           InkWell(
             onTap: () => setState(() {
               _selectedCustomer = null;
@@ -576,19 +623,24 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                       color: Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.person_off_outlined,
-                        color: Colors.grey),
+                    child: const Icon(
+                      Icons.person_off_outlined,
+                      color: Colors.grey,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Tanpa Pelanggan (Umum)',
-                            style: TextStyle(fontWeight: FontWeight.w600)),
-                        Text('Order tidak terhubung ke akun',
-                            style:
-                                TextStyle(color: Colors.grey, fontSize: 12)),
+                        Text(
+                          'Tanpa Pelanggan (Umum)',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          'Order tidak terhubung ke akun',
+                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                        ),
                       ],
                     ),
                   ),
@@ -599,7 +651,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Hasil search
           if (_isSearching)
             const Center(child: CircularProgressIndicator())
           else if (_searchResults.isNotEmpty)
@@ -617,12 +668,16 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                     ),
                     child: ListTile(
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 4),
+                        horizontal: 14,
+                        vertical: 4,
+                      ),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       leading: CircleAvatar(
-                        backgroundColor:
-                            const Color(0xFF1565C0).withOpacity(0.1),
+                        backgroundColor: const Color(
+                          0xFF1565C0,
+                        ).withOpacity(0.1),
                         child: Text(
                           c['nama_lengkap']?[0]?.toUpperCase() ?? '?',
                           style: const TextStyle(
@@ -631,11 +686,15 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                           ),
                         ),
                       ),
-                      title: Text(c['nama_lengkap'] ?? '-',
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                      title: Text(
+                        c['nama_lengkap'] ?? '-',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
                       subtitle: Text(c['nomor_hp'] ?? '-'),
                       trailing: const Icon(
-                        Icons.chevron_right, color: Colors.grey),
+                        Icons.chevron_right,
+                        color: Colors.grey,
+                      ),
                       onTap: () => setState(() {
                         _selectedCustomer = c;
                         _step = 2;
@@ -650,20 +709,23 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             Center(
               child: Column(
                 children: [
-                  Icon(Icons.person_search_outlined,
-                      size: 48, color: Colors.grey.shade300),
+                  Icon(
+                    Icons.person_search_outlined,
+                    size: 48,
+                    color: Colors.grey.shade300,
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     'Pelanggan tidak ditemukan',
                     style: TextStyle(
-                        color: Colors.grey.shade500,
-                        fontWeight: FontWeight.w600),
+                      color: Colors.grey.shade500,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Belum terdaftar di sistem',
-                    style: TextStyle(
-                        color: Colors.grey.shade400, fontSize: 12),
+                    style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
                   ),
                 ],
               ),
@@ -682,11 +744,12 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   elevation: 0,
                 ),
-                onPressed: () => _showFormDaftarPelanggan(
-                    nomorHpAwal: _searchCtrl.text),
+                onPressed: () =>
+                    _showFormDaftarPelanggan(nomorHpAwal: _searchCtrl.text),
               ),
             ),
           ],
@@ -695,11 +758,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 
-  // ============================================================
-  // STEP 2 — PILIH LAYANAN
-  // ============================================================
   Widget _buildStep2Layanan() {
-    // Pisah jasa dan produk
     final jasa = _services.where((s) => s['tipe'] != 'produk').toList();
     final produk = _services.where((s) => s['tipe'] == 'produk').toList();
 
@@ -708,7 +767,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Pelanggan terpilih
           if (_selectedCustomer != null)
             Container(
               padding: const EdgeInsets.all(12),
@@ -717,12 +775,16 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 color: const Color(0xFF1565C0).withOpacity(0.06),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                    color: const Color(0xFF1565C0).withOpacity(0.2)),
+                  color: const Color(0xFF1565C0).withOpacity(0.2),
+                ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.person_outline,
-                      color: Color(0xFF1565C0), size: 18),
+                  const Icon(
+                    Icons.person_outline,
+                    color: Color(0xFF1565C0),
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     _selectedCustomer!['nama_lengkap'] ?? '-',
@@ -735,54 +797,55 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               ),
             ),
 
-          // Jasa
           if (jasa.isNotEmpty) ...[
-            const Text('Layanan Jasa',
-                style:
-                    TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+            const Text(
+              'Layanan Jasa',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+            ),
             const SizedBox(height: 8),
-            ...jasa.map((s) => _ServiceTile(
-                  service: s,
-                  qty: _qtyDiKeranjang(s['id']),
-                  onTambah: () => _tambahKeKeranjang(s),
-                  onKurangi: () => _kurangiDariKeranjang(s),
-                )),
+            ...jasa.map(
+              (s) => _ServiceTile(
+                service: s,
+                qty: _qtyDiKeranjang(s['id']),
+                onTambah: () => _tambahKeKeranjang(s),
+                onKurangi: () => _kurangiDariKeranjang(s),
+              ),
+            ),
             const SizedBox(height: 16),
           ],
 
-          // Produk
           if (produk.isNotEmpty) ...[
-            const Text('Produk',
-                style:
-                    TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+            const Text(
+              'Produk',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+            ),
             const SizedBox(height: 8),
-            ...produk.map((s) => _ServiceTile(
-                  service: s,
-                  qty: _qtyDiKeranjang(s['id']),
-                  onTambah: () => _tambahKeKeranjang(s),
-                  onKurangi: () => _kurangiDariKeranjang(s),
-                )),
+            ...produk.map(
+              (s) => _ServiceTile(
+                service: s,
+                qty: _qtyDiKeranjang(s['id']),
+                onTambah: () => _tambahKeKeranjang(s),
+                onKurangi: () => _kurangiDariKeranjang(s),
+              ),
+            ),
           ],
 
-          // Spacer untuk bottom bar
           const SizedBox(height: 100),
         ],
       ),
     );
   }
 
-  // ============================================================
-  // STEP 3 — PEMBAYARAN
-  // ============================================================
   Widget _buildStep3Bayar() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Ringkasan item
-          const Text('Ringkasan Pesanan',
-              style: TextStyle(fontWeight: FontWeight.w700)),
+          const Text(
+            'Ringkasan Pesanan',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(14),
@@ -792,33 +855,37 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             ),
             child: Column(
               children: [
-                ..._cart.map((item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '${item['service']['nama']} × ${item['qty']}',
-                              style: const TextStyle(fontSize: 13),
-                            ),
+                ..._cart.map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${item['service']['nama']} × ${item['qty']}',
+                            style: const TextStyle(fontSize: 13),
                           ),
-                          Text(
-                            _formatRupiah(item['subtotal']),
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13),
+                        ),
+                        Text(
+                          _formatRupiah(item['subtotal']),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
                           ),
-                        ],
-                      ),
-                    )),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 const Divider(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Subtotal'),
-                    Text(_formatRupiah(_subtotal),
-                        style:
-                            const TextStyle(fontWeight: FontWeight.w600)),
+                    Text(
+                      _formatRupiah(_subtotal),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
                   ],
                 ),
                 if (_diskonVoucher > 0) ...[
@@ -826,13 +893,16 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Diskon Voucher',
-                          style: TextStyle(color: Colors.green)),
+                      const Text(
+                        'Diskon Voucher',
+                        style: TextStyle(color: Colors.green),
+                      ),
                       Text(
                         '- ${_formatRupiah(_diskonVoucher)}',
                         style: const TextStyle(
-                            color: Colors.green,
-                            fontWeight: FontWeight.w600),
+                          color: Colors.green,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
@@ -841,8 +911,10 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Total',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    const Text(
+                      'Total',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
                     Text(
                       _formatRupiah(_total),
                       style: const TextStyle(
@@ -858,9 +930,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           ),
           const SizedBox(height: 20),
 
-          // Voucher
-          const Text('Voucher',
-              style: TextStyle(fontWeight: FontWeight.w700)),
+          const Text('Voucher', style: TextStyle(fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -875,7 +945,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                       borderSide: BorderSide.none,
                     ),
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 14),
+                      horizontal: 14,
+                      vertical: 14,
+                    ),
                   ),
                   onChanged: (v) => _voucherCode = v,
                 ),
@@ -886,9 +958,12 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                   backgroundColor: const Color(0xFF1565C0),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   elevation: 0,
                 ),
                 onPressed: _pakaiVoucher,
@@ -899,8 +974,10 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           const SizedBox(height: 20),
 
           // Metode bayar
-          const Text('Metode Pembayaran',
-              style: TextStyle(fontWeight: FontWeight.w700)),
+          const Text(
+            'Metode Pembayaran',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -910,20 +987,28 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 selected: _metodeBayar == 'cash',
                 onTap: () => setState(() => _metodeBayar = 'cash'),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8), // jarak diperkecil sedikit agar muat 3
               _PayOption(
-                label: 'Non-Cash',
+                label: 'Transfer',
+                icon: Icons.account_balance_wallet_outlined,
+                selected: _metodeBayar == 'transfer', // <-- Sesuai database
+                onTap: () => setState(() => _metodeBayar = 'transfer'),
+              ),
+              const SizedBox(width: 8),
+              _PayOption(
+                label: 'QRIS',
                 icon: Icons.qr_code_scanner_outlined,
-                selected: _metodeBayar == 'non_cash',
-                onTap: () => setState(() => _metodeBayar = 'non_cash'),
+                selected: _metodeBayar == 'qris', // <-- Sesuai database
+                onTap: () => setState(() => _metodeBayar = 'qris'),
               ),
             ],
           ),
           const SizedBox(height: 20),
 
-          // Tipe bayar
-          const Text('Status Pembayaran',
-              style: TextStyle(fontWeight: FontWeight.w700)),
+          const Text(
+            'Status Pembayaran',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -950,11 +1035,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 
-  // ============================================================
-  // BOTTOM BAR — navigasi antar step
-  // ============================================================
   Widget _buildBottomBar() {
-    // Ringkasan keranjang
     final itemCount = _cart.fold<int>(0, (s, c) => s + (c['qty'] as int));
 
     return Container(
@@ -971,16 +1052,16 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       ),
       child: Row(
         children: [
-          // Keranjang info
           if (_cart.isNotEmpty && _step == 2)
             Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('$itemCount item',
-                      style: const TextStyle(
-                          color: Colors.grey, fontSize: 12)),
+                  Text(
+                    '$itemCount item',
+                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
                   Text(
                     _formatRupiah(_subtotal),
                     style: const TextStyle(
@@ -995,7 +1076,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           else
             const Spacer(),
 
-          // Tombol aksi
           if (_step > 1)
             TextButton(
               onPressed: () => setState(() => _step--),
@@ -1009,29 +1089,27 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 backgroundColor: const Color(0xFF1565C0),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 elevation: 0,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24),
+                padding: const EdgeInsets.symmetric(horizontal: 24),
               ),
               onPressed: _step == 1
-                  ? null // Step 1 pilih pelanggan — maju via tap item
+                  ? null
                   : _step == 2
-                      ? (_cart.isEmpty
-                          ? null
-                          : () => setState(() => _step = 3))
-                      : (_isLoading ? null : _simpanOrder),
+                  ? (_cart.isEmpty ? null : () => setState(() => _step = 3))
+                  : (_isLoading ? null : _simpanOrder),
               child: _isLoading
                   ? const SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2),
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
                     )
                   : Text(
-                      _step == 2
-                          ? 'Lanjut →'
-                          : 'Buat Pesanan',
+                      _step == 2 ? 'Lanjut →' : 'Buat Pesanan',
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
             ),
@@ -1052,9 +1130,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   }
 }
 
-// ============================================================
-// WIDGET: Tile Layanan
-// ============================================================
 class _ServiceTile extends StatelessWidget {
   final Map<String, dynamic> service;
   final int qty;
@@ -1092,23 +1167,25 @@ class _ServiceTile extends StatelessWidget {
                 Text(
                   service['nama'] ?? '-',
                   style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 14),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
                 ),
                 Text(
                   '${_formatRupiah(harga)} / $satuan',
-                  style: TextStyle(
-                      color: Colors.grey.shade600, fontSize: 12),
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                 ),
               ],
             ),
           ),
-          // Qty control
           if (qty == 0)
             GestureDetector(
               onTap: onTambah,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1565C0),
                   borderRadius: BorderRadius.circular(8),
@@ -1116,9 +1193,10 @@ class _ServiceTile extends StatelessWidget {
                 child: const Text(
                   '+ Tambah',
                   style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12),
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
                 ),
               ),
             )
@@ -1143,7 +1221,9 @@ class _ServiceTile extends StatelessWidget {
                     '$qty',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 15),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
                   ),
                 ),
                 GestureDetector(
@@ -1155,8 +1235,7 @@ class _ServiceTile extends StatelessWidget {
                       color: const Color(0xFF1565C0),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.add,
-                        color: Colors.white, size: 16),
+                    child: const Icon(Icons.add, color: Colors.white, size: 16),
                   ),
                 ),
               ],
@@ -1177,9 +1256,6 @@ class _ServiceTile extends StatelessWidget {
   }
 }
 
-// ============================================================
-// WIDGET: Pilihan Pembayaran
-// ============================================================
 class _PayOption extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -1218,8 +1294,7 @@ class _PayOption extends StatelessWidget {
                 label,
                 style: TextStyle(
                   color: selected ? color : Colors.grey,
-                  fontWeight:
-                      selected ? FontWeight.w700 : FontWeight.normal,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.normal,
                   fontSize: 13,
                 ),
               ),
