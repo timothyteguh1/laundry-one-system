@@ -1,15 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 // ============================================================
-// INVOICE SCREEN
-// Tampil setelah order berhasil dibuat
-// - Detail pesanan lengkap
-// - Tombol Print (Bluetooth thermal printer)
-// - Tombol Selesai → kembali ke beranda
-//
-// Untuk print Bluetooth, tambahkan package:
-// blue_thermal_printer: ^1.0.9 (di pubspec.yaml)
+// 1. INVOICE SCREEN (LAYAR UTAMA)
+// Menampilkan detail struk dan tombol print Bluetooth
 // ============================================================
 
 class InvoiceScreen extends StatelessWidget {
@@ -17,7 +10,7 @@ class InvoiceScreen extends StatelessWidget {
   final String nomorOrder;
   final String namaPelanggan;
   final String nomorHp;
-  final String namaKasir; // <-- TAMBAHAN BARU: Nama Kasir
+  final String namaKasir;
   final List<Map<String, dynamic>> items;
   final double subtotal;
   final double diskon;
@@ -31,7 +24,7 @@ class InvoiceScreen extends StatelessWidget {
     required this.nomorOrder,
     required this.namaPelanggan,
     required this.nomorHp,
-    required this.namaKasir, // <-- TAMBAHAN BARU
+    required this.namaKasir,
     required this.items,
     required this.subtotal,
     required this.diskon,
@@ -52,24 +45,12 @@ class InvoiceScreen extends StatelessWidget {
         backgroundColor: const Color(0xFF1565C0),
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          'Invoice',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
-        leading: const SizedBox(), // sembunyikan back button
+        title: const Text('Invoice', style: TextStyle(fontWeight: FontWeight.w700)),
+        leading: const SizedBox(), 
         actions: [
           TextButton(
-            onPressed: () {
-              // Kembali ke beranda kasir
-              Navigator.popUntil(context, (route) => route.isFirst);
-            },
-            child: const Text(
-              'Selesai',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            onPressed: () => Navigator.popUntil(context, (route) => route.isFirst),
+            child: const Text('Selesai', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -77,25 +58,19 @@ class InvoiceScreen extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            // =====================
-            // KERTAS INVOICE
-            // =====================
+            // --- AREA STRUK KERTAS ---
             Container(
               width: double.infinity,
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
-                  ),
+                  BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 16, offset: const Offset(0, 4)),
                 ],
               ),
               child: Column(
                 children: [
-                  // Header invoice
+                  // HEADER STRUK
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: const BoxDecoration(
@@ -104,61 +79,37 @@ class InvoiceScreen extends StatelessWidget {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(16),
-                      ),
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                     ),
                     child: Row(
                       children: [
-                        const Icon(
-                          Icons.local_laundry_service_rounded,
-                          color: Colors.white,
-                          size: 32,
-                        ),
+                        const Icon(Icons.local_laundry_service_rounded, color: Colors.white, size: 32),
                         const SizedBox(width: 12),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
                               'Laundry One',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                              ),
+                              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
                             ),
                             Text(
                               tanggal,
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.75),
-                                fontSize: 12,
-                              ),
+                              style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 12),
                             ),
                           ],
                         ),
                         const Spacer(),
-                        // Badge status bayar
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
-                            color: isPiutang
-                                ? Colors.orange.withOpacity(0.25)
-                                : Colors.green.withOpacity(0.25),
+                            color: isPiutang ? Colors.orange.withOpacity(0.25) : Colors.green.withOpacity(0.25),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: isPiutang ? Colors.orange : Colors.green,
-                              width: 1,
-                            ),
+                            border: Border.all(color: isPiutang ? Colors.orange : Colors.green, width: 1),
                           ),
                           child: Text(
                             isPiutang ? 'PIUTANG' : 'LUNAS',
                             style: TextStyle(
-                              color: isPiutang
-                                  ? Colors.orange.shade200
-                                  : Colors.green.shade200,
+                              color: isPiutang ? Colors.orange.shade200 : Colors.green.shade200,
                               fontWeight: FontWeight.w700,
                               fontSize: 11,
                             ),
@@ -168,63 +119,34 @@ class InvoiceScreen extends StatelessWidget {
                     ),
                   ),
 
+                  // BODY STRUK
                   Padding(
                     padding: const EdgeInsets.all(20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Nomor order
                         Center(
                           child: Text(
                             nomorOrder,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1,
-                            ),
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: 1),
                           ),
                         ),
                         const SizedBox(height: 20),
-
-                        // Garis putus-putus
                         _DashedDivider(),
                         const SizedBox(height: 12),
 
-                        // Header tabel
+                        // HEADER TABEL BARANG
                         Row(
                           children: [
-                            Expanded(
-                              child: Text(
-                                'Item',
-                                style: TextStyle(
-                                  color: Colors.grey.shade500,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              'Qty',
-                              style: TextStyle(
-                                color: Colors.grey.shade500,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                            Expanded(child: Text('Item', style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w600))),
+                            Text('Qty', style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w600)),
                             const SizedBox(width: 60),
-                            Text(
-                              'Harga',
-                              style: TextStyle(
-                                color: Colors.grey.shade500,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                            Text('Harga', style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w600)),
                           ],
                         ),
                         const SizedBox(height: 8),
 
-                        // Item list
+                        // LIST BARANG
                         ...items.map((item) {
                           final nama = item['service']['nama'] ?? '-';
                           final qty = item['qty'];
@@ -233,28 +155,14 @@ class InvoiceScreen extends StatelessWidget {
                             padding: const EdgeInsets.only(bottom: 8),
                             child: Row(
                               children: [
-                                Expanded(
-                                  child: Text(
-                                    nama,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  '$qty',
-                                  style: const TextStyle(fontSize: 13),
-                                ),
+                                Expanded(child: Text(nama, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+                                Text('$qty', style: const TextStyle(fontSize: 13)),
                                 SizedBox(
                                   width: 90,
                                   child: Text(
                                     _formatRupiah(subtotalItem),
                                     textAlign: TextAlign.right,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                                   ),
                                 ),
                               ],
@@ -266,20 +174,12 @@ class InvoiceScreen extends StatelessWidget {
                         _DashedDivider(),
                         const SizedBox(height: 12),
 
-                        // Subtotal
-                        _InvoiceRow(
-                          label: 'Subtotal',
-                          value: _formatRupiah(subtotal),
-                        ),
+                        // AREA TOTAL & METODE BAYAR
+                        _InvoiceRow(label: 'Subtotal', value: _formatRupiah(subtotal)),
                         if (diskon > 0)
-                          _InvoiceRow(
-                            label: 'Diskon Voucher',
-                            value: '- ${_formatRupiah(diskon)}',
-                            valueColor: Colors.green,
-                          ),
+                          _InvoiceRow(label: 'Diskon Voucher', value: '- ${_formatRupiah(diskon)}', valueColor: Colors.green),
                         const SizedBox(height: 8),
 
-                        // Total
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
@@ -289,34 +189,21 @@ class InvoiceScreen extends StatelessWidget {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text(
-                                'TOTAL',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 15,
-                                ),
-                              ),
+                              const Text('TOTAL', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                               Text(
                                 _formatRupiah(total),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 20,
-                                  color: Color(0xFF1565C0),
-                                ),
+                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20, color: Color(0xFF1565C0)),
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(height: 12),
 
-                        // Metode bayar
                         _InvoiceRow(
                           label: 'Metode',
-                          value: metodeBayar == 'cash'
-                              ? 'Cash'
-                              : metodeBayar == 'transfer'
-                              ? 'Transfer'
-                              : 'QRIS',
+                          value: metodeBayar == 'cash' ? 'Cash' 
+                               : metodeBayar == 'transfer' ? 'Transfer' 
+                               : 'QRIS',
                         ),
                         _InvoiceRow(
                           label: 'Status',
@@ -328,65 +215,35 @@ class InvoiceScreen extends StatelessWidget {
                         _DashedDivider(),
                         const SizedBox(height: 12),
 
-                        // --- INFORMASI KASIR & PELANGGAN ---
+                        // INFO KASIR & PELANGGAN
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  'Kasir:',
-                                  style: TextStyle(
-                                    color: Colors.grey.shade500,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                                Text(
-                                  namaKasir,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 12,
-                                  ),
-                                ),
+                                Text('Kasir:', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                                Text(namaKasir, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
                               ],
                             ),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                Text(
-                                  'Pelanggan:',
-                                  style: TextStyle(
-                                    color: Colors.grey.shade500,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                                Text(
-                                  namaPelanggan == 'Umum'
-                                      ? 'Umum'
-                                      : '$namaPelanggan\n$nomorHp',
+                                Text('Pelanggan:', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                                Text(namaPelanggan == 'Umum' ? 'Umum' : '$namaPelanggan\n$nomorHp', 
                                   textAlign: TextAlign.right,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 12,
-                                  ),
-                                ),
+                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
                               ],
                             ),
                           ],
                         ),
-
+                        
                         const SizedBox(height: 16),
-
                         Center(
                           child: Text(
                             'Terima kasih telah mempercayakan\ncucian Anda kepada kami 🙏',
                             textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.grey.shade500,
-                              fontSize: 12,
-                              height: 1.5,
-                            ),
+                            style: TextStyle(color: Colors.grey.shade500, fontSize: 12, height: 1.5),
                           ),
                         ),
                       ],
@@ -397,51 +254,34 @@ class InvoiceScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
-            // =====================
-            // TOMBOL PRINT
-            // =====================
+            // --- AREA TOMBOL AKSI ---
             SizedBox(
               width: double.infinity,
               height: 52,
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.print_rounded),
-                label: const Text(
-                  'Print via Bluetooth',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
+                label: const Text('Print via Bluetooth', style: TextStyle(fontWeight: FontWeight.w700)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF1565C0),
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   elevation: 0,
                 ),
-                onPressed: () => _printBluetooth(context, tanggal),
+                onPressed: () => _printBluetooth(context),
               ),
             ),
             const SizedBox(height: 12),
 
-            // Tombol selesai
             SizedBox(
               width: double.infinity,
               height: 52,
               child: OutlinedButton(
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: Color(0xFF1565C0), width: 1.5),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
-                onPressed: () =>
-                    Navigator.popUntil(context, (route) => route.isFirst),
-                child: const Text(
-                  'Kembali ke Beranda',
-                  style: TextStyle(
-                    color: Color(0xFF1565C0),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                onPressed: () => Navigator.popUntil(context, (route) => route.isFirst),
+                child: const Text('Kembali ke Beranda', style: TextStyle(color: Color(0xFF1565C0), fontWeight: FontWeight.w700)),
               ),
             ),
             const SizedBox(height: 24),
@@ -451,18 +291,12 @@ class InvoiceScreen extends StatelessWidget {
     );
   }
 
-  // ============================================================
-  // PRINT BLUETOOTH
-  // ============================================================
-  void _printBluetooth(BuildContext context, String tanggal) async {
+  void _printBluetooth(BuildContext context) async {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Print Invoice',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
+        title: const Text('Print Invoice', style: TextStyle(fontWeight: FontWeight.w700)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -472,36 +306,22 @@ class InvoiceScreen extends StatelessWidget {
             const Text('• Sudah di-pair di pengaturan Bluetooth HP'),
             const Text('• Kertas tersedia'),
             const SizedBox(height: 12),
-            Text(
-              'Paket yang dibutuhkan:\nblue_thermal_printer: ^1.0.9',
-              style: TextStyle(
-                color: Colors.grey.shade500,
-                fontSize: 12,
-                fontFamily: 'monospace',
-              ),
-            ),
+            Text('Paket yang dibutuhkan:\nblue_thermal_printer: ^1.0.9', style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontFamily: 'monospace')),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF1565C0),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text(
-                    'Tambahkan blue_thermal_printer di pubspec.yaml dulu',
-                  ),
+                  content: Text('Tambahkan blue_thermal_printer di pubspec.yaml dulu'),
                   backgroundColor: Colors.orange,
                 ),
               );
@@ -524,6 +344,10 @@ class InvoiceScreen extends StatelessWidget {
   }
 }
 
+// ============================================================
+// 2. KOMPONEN UI KECIL (HELPER WIDGETS)
+// ============================================================
+
 class _DashedDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -531,16 +355,9 @@ class _DashedDivider extends StatelessWidget {
       builder: (context, constraints) {
         final count = (constraints.maxWidth / 8).floor();
         return Row(
-          children: List.generate(
-            count,
-            (_) => Expanded(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                height: 1,
-                color: Colors.grey.shade300,
-              ),
-            ),
-          ),
+          children: List.generate(count, (_) => Expanded(
+            child: Container(margin: const EdgeInsets.symmetric(horizontal: 2), height: 1, color: Colors.grey.shade300),
+          )),
         );
       },
     );
@@ -552,11 +369,7 @@ class _InvoiceRow extends StatelessWidget {
   final String value;
   final Color? valueColor;
 
-  const _InvoiceRow({
-    required this.label,
-    required this.value,
-    this.valueColor,
-  });
+  const _InvoiceRow({required this.label, required this.value, this.valueColor});
 
   @override
   Widget build(BuildContext context) {
@@ -565,18 +378,8 @@ class _InvoiceRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-              color: valueColor ?? Colors.black87,
-            ),
-          ),
+          Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+          Text(value, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: valueColor ?? Colors.black87)),
         ],
       ),
     );

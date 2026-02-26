@@ -59,7 +59,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   int _totalOrder = 0;
   int _totalAktif = 0;
   int _totalSelesai = 0;
-  
+
   double _totalPenjualan = 0;
   double _totalCash = 0;
   double _totalNonCash = 0;
@@ -81,6 +81,121 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     _fabAnim?.dispose();
     super.dispose();
   }
+
+  // ============================================================
+  // GREETING METHODS — PERBAIKAN ERROR
+  // ============================================================
+
+  String _greeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Selamat Pagi';
+    if (hour < 15) return 'Selamat Siang';
+    if (hour < 18) return 'Selamat Sore';
+    return 'Selamat Malam';
+  }
+
+  String _greetingEmoji() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return '☀️';
+    if (hour < 15) return '🌤️';
+    if (hour < 18) return '🌅';
+    return '🌙';
+  }
+
+  // ============================================================
+  // TAB BUILDER METHODS — PERBAIKAN ERROR
+  // ============================================================
+
+  Widget _buildTabPesanan() {
+    return _PesananTab(
+      orders: _orders,
+      isLoading: _isLoading,
+      onRefresh: _loadData,
+      onUpdate: _updateStatus,
+      onDetail: _showDetail,
+    );
+  }
+
+  Widget _buildTabPelanggan() {
+    return const _PelangganTab();
+  }
+
+  Widget _buildTabLaporan() {
+    return SafeArea(
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF0F2557), Color(0xFF1565C0)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Laporan',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Ringkasan performa laundry',
+                  style: TextStyle(color: Colors.white60, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: const BoxDecoration(
+                      color: _DS.sky,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.bar_chart_rounded,
+                      size: 48,
+                      color: _DS.blue.withOpacity(0.5),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Fitur Laporan',
+                    style: TextStyle(
+                      color: _DS.textPrimary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Segera Hadir',
+                    style: TextStyle(color: _DS.textSecondary, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // DATA & BUSINESS LOGIC
+  // ============================================================
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
@@ -108,7 +223,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
 
       int aktif = 0, selesai = 0;
       double penjualan = 0, cash = 0, nonCash = 0, piutang = 0;
-      
+
       for (final o in orders) {
         final s = o['status'];
         final total = (o['total_harga'] ?? 0).toDouble();
@@ -116,7 +231,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
         final metode = o['metode_bayar_awal'] ?? 'cash';
 
         if (s == 'diproses') aktif++;
-        if (s == 'selesai' || s == 'dibayar_lunas') selesai++; 
+        if (s == 'selesai' || s == 'dibayar_lunas') selesai++;
 
         if (s != 'dibatalkan' && s != 'draft') {
           penjualan += total;
@@ -138,7 +253,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
           _totalOrder = orders.length;
           _totalAktif = aktif;
           _totalSelesai = selesai;
-          
+
           _totalPenjualan = penjualan;
           _totalCash = cash;
           _totalNonCash = nonCash;
@@ -167,13 +282,12 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   Future<void> _updateStatus(String orderId, String newStatus) async {
     HapticFeedback.mediumImpact();
     try {
-      // TAMBAHAN: Wajib beri tag <String, dynamic> agar bisa menerima nilai false (boolean)
-      final updateData = <String, dynamic>{'status': newStatus}; 
-      
+      final updateData = <String, dynamic>{'status': newStatus};
+
       if (newStatus == 'dibayar_lunas') {
-        updateData['is_piutang'] = false; // Lunas berarti bukan piutang lagi
+        updateData['is_piutang'] = false;
       }
-      
+
       await _supabase.from('orders').update(updateData).eq('id', orderId);
       _loadData();
     } catch (e) {
@@ -275,28 +389,37 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
             Center(
               child: Container(
                 margin: const EdgeInsets.only(top: 12, bottom: 20),
-                width: 40, height: 4,
-                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2)),
               ),
             ),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 24),
-              child: Text('Rincian Penjualan Hari Ini', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _DS.textPrimary)),
+              child: Text(
+                'Rincian Penjualan Hari Ini',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: _DS.textPrimary),
+              ),
             ),
             const SizedBox(height: 20),
-            
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Row(
                 children: [
-                  _buildMiniStatCard('Tunai (Cash)', _totalCash, Icons.payments_rounded, Colors.green),
+                  _buildMiniStatCard(
+                      'Tunai (Cash)', _totalCash, Icons.payments_rounded, Colors.green),
                   const SizedBox(width: 12),
-                  _buildMiniStatCard('Non-Tunai', _totalNonCash, Icons.qr_code_scanner_rounded, Colors.blue),
+                  _buildMiniStatCard(
+                      'Non-Tunai', _totalNonCash, Icons.qr_code_scanner_rounded, Colors.blue),
                 ],
               ),
             ),
             const SizedBox(height: 24),
-
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               color: Colors.white,
@@ -306,63 +429,105 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Total Piutang', style: TextStyle(color: _DS.textSecondary, fontWeight: FontWeight.w600, fontSize: 13)),
-                      Text(_formatRupiah(_totalPiutang), style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.w800, fontSize: 18)),
+                      const Text('Total Piutang',
+                          style: TextStyle(
+                              color: _DS.textSecondary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13)),
+                      Text(
+                        _formatRupiah(_totalPiutang),
+                        style: const TextStyle(
+                            color: Colors.orange,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 18),
+                      ),
                     ],
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(8)),
-                    child: Text('${listPiutang.length} Transaksi', style: TextStyle(color: Colors.orange.shade800, fontWeight: FontWeight.w700, fontSize: 12)),
+                    decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(8)),
+                    child: Text(
+                      '${listPiutang.length} Transaksi',
+                      style: TextStyle(
+                          color: Colors.orange.shade800,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12),
+                    ),
                   )
                 ],
               ),
             ),
-
             Expanded(
               child: listPiutang.isEmpty
-                ? Center(child: Text('Tidak ada piutang hari ini', style: TextStyle(color: Colors.grey.shade500)))
-                : ListView.builder(
-                    padding: const EdgeInsets.all(24),
-                    itemCount: listPiutang.length,
-                    itemBuilder: (ctx, i) {
-                      final order = listPiutang[i];
-                      final nama = order['customers']?['profiles']?['nama_lengkap'] ?? 'Umum';
-                      final total = (order['total_harga'] ?? 0).toDouble();
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: _DS.softShadow),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(nama, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                                  const SizedBox(height: 4),
-                                  Text(order['nomor_order'], style: const TextStyle(color: _DS.textSecondary, fontSize: 11)),
-                                  const SizedBox(height: 8),
-                                  Text(_formatRupiah(total), style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.w800, fontSize: 14)),
-                                ],
+                  ? Center(
+                      child: Text(
+                        'Tidak ada piutang hari ini',
+                        style: TextStyle(color: Colors.grey.shade500),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(24),
+                      itemCount: listPiutang.length,
+                      itemBuilder: (ctx, i) {
+                        final order = listPiutang[i];
+                        final nama =
+                            order['customers']?['profiles']?['nama_lengkap'] ?? 'Umum';
+                        final total = (order['total_harga'] ?? 0).toDouble();
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: _DS.softShadow),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(nama,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 14)),
+                                    const SizedBox(height: 4),
+                                    Text(order['nomor_order'],
+                                        style: const TextStyle(
+                                            color: _DS.textSecondary,
+                                            fontSize: 11)),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      _formatRupiah(total),
+                                      style: const TextStyle(
+                                          color: Colors.orange,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 14),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green, foregroundColor: Colors.white,
-                                elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
-                              ),
-                              onPressed: () {
-                                Navigator.pop(context);
-                                _updateStatus(order['id'], 'dibayar_lunas');
-                              },
-                              child: const Text('Lunasi', style: TextStyle(fontWeight: FontWeight.w700)),
-                            )
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10)),
+                                ),
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  _updateStatus(order['id'], 'dibayar_lunas');
+                                },
+                                child: const Text('Lunasi',
+                                    style: TextStyle(fontWeight: FontWeight.w700)),
+                              )
+                            ],
+                          ),
+                        );
+                      },
+                    ),
             )
           ],
         ),
@@ -370,24 +535,40 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     );
   }
 
-  Widget _buildMiniStatCard(String title, double amount, IconData icon, Color color) {
+  Widget _buildMiniStatCard(
+      String title, double amount, IconData icon, Color color) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: _DS.softShadow),
+        decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: _DS.softShadow),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(icon, color: color, size: 24),
             const SizedBox(height: 12),
-            Text(title, style: const TextStyle(color: _DS.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)),
+            Text(title,
+                style: const TextStyle(
+                    color: _DS.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500)),
             const SizedBox(height: 4),
-            Text(_formatRupiah(amount), style: TextStyle(color: _DS.textPrimary, fontSize: 16, fontWeight: FontWeight.w800)),
+            Text(_formatRupiah(amount),
+                style: const TextStyle(
+                    color: _DS.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800)),
           ],
         ),
       ),
     );
   }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -402,30 +583,36 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
           _buildTabLaporan(),
         ],
       ),
-      floatingActionButton: _fabAnim == null ? const SizedBox() : ScaleTransition(
-        scale: CurvedAnimation(parent: _fabAnim!, curve: Curves.elasticOut),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 20),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: _DS.fabShadow,
-          ),
-          child: FloatingActionButton.extended(
-            onPressed: _goCreateOrder,
-            backgroundColor: _DS.blue,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
+      floatingActionButton: _fabAnim == null
+          ? const SizedBox()
+          : ScaleTransition(
+              scale: CurvedAnimation(
+                  parent: _fabAnim!, curve: Curves.elasticOut),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: _DS.fabShadow,
+                ),
+                child: FloatingActionButton.extended(
+                  onPressed: _goCreateOrder,
+                  backgroundColor: _DS.blue,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  icon: const Icon(Icons.add_rounded, size: 22),
+                  label: const Text(
+                    'Buat Pesanan',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        height: 1.2),
+                  ),
+                ),
+              ),
             ),
-            icon: const Icon(Icons.add_rounded, size: 22),
-            label: const Text(
-              'Buat Pesanan',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, height: 1.2),
-            ),
-          ),
-        ),
-      ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       bottomNavigationBar: _buildBottomNav(),
     );
@@ -453,12 +640,16 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
           child: Row(
             children: [
               _buildNavItem(0, Icons.home_rounded, Icons.home_outlined, 'Beranda'),
-              _buildNavItem(1, Icons.receipt_long_rounded,
-                  Icons.receipt_long_outlined, 'Pesanan',
-                  badge: _totalAktif > 0 ? '$_totalAktif' : null),
+              _buildNavItem(
+                1,
+                Icons.receipt_long_rounded,
+                Icons.receipt_long_outlined,
+                'Pesanan',
+                badge: _totalAktif > 0 ? '$_totalAktif' : null,
+              ),
               const Expanded(flex: 2, child: SizedBox()),
-              _buildNavItem(2, Icons.people_alt_rounded,
-                  Icons.people_alt_outlined, 'Pelanggan'),
+              _buildNavItem(
+                  2, Icons.people_alt_rounded, Icons.people_alt_outlined, 'Pelanggan'),
               _buildNavItem(
                   3, Icons.bar_chart_rounded, Icons.bar_chart_outlined, 'Laporan'),
             ],
@@ -468,8 +659,13 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     );
   }
 
-  Widget _buildNavItem(int idx, IconData activeIcon, IconData inactiveIcon,
-      String label, {String? badge}) {
+  Widget _buildNavItem(
+    int idx,
+    IconData activeIcon,
+    IconData inactiveIcon,
+    String label, {
+    String? badge,
+  }) {
     final active = _currentTab == idx;
     return Expanded(
       flex: 2,
@@ -503,8 +699,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                   label,
                   style: TextStyle(
                     fontSize: 10,
-                    fontWeight:
-                        active ? FontWeight.w700 : FontWeight.w400,
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w400,
                     color: active ? _DS.blue : _DS.textHint,
                   ),
                 ),
@@ -520,11 +715,13 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                     color: Colors.red.shade600,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Text(badge,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700)),
+                  child: Text(
+                    badge,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700),
+                  ),
                 ),
               ),
           ],
@@ -534,8 +731,11 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   }
 
   Widget _buildTabBeranda() {
-    final siap = _orders.where((o) => o['status'] == 'selesai' || o['status'] == 'dibayar_lunas').toList();
-    final aktif = _orders.where((o) => o['status'] == 'diproses').take(5).toList();
+    final siap = _orders
+        .where((o) => o['status'] == 'selesai' || o['status'] == 'dibayar_lunas')
+        .toList();
+    final aktif =
+        _orders.where((o) => o['status'] == 'diproses').take(5).toList();
 
     return SafeArea(
       child: RefreshIndicator(
@@ -545,7 +745,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
           physics: const BouncingScrollPhysics(),
           slivers: [
             SliverToBoxAdapter(child: _buildHeader()),
-
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -555,7 +754,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                 ),
               ),
             ),
-
             if (siap.isNotEmpty) ...[
               SliverToBoxAdapter(
                 child: _buildSectionHeader(
@@ -579,7 +777,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                 ),
               ),
             ],
-
             SliverToBoxAdapter(
               child: _buildSectionHeader(
                 'Sedang Diproses',
@@ -592,7 +789,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                 actionLabel: 'Lihat Semua',
               ),
             ),
-
             if (_isLoading)
               const SliverToBoxAdapter(
                 child: Center(
@@ -624,7 +820,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                   childCount: aktif.length,
                 ),
               ),
-
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
         ),
@@ -690,8 +885,10 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                                   ),
                                 ),
                                 const SizedBox(width: 4),
-                                Text(_greetingEmoji(),
-                                    style: const TextStyle(fontSize: 13)),
+                                Text(
+                                  _greetingEmoji(),
+                                  style: const TextStyle(fontSize: 13),
+                                ),
                               ],
                             ),
                             const SizedBox(height: 2),
@@ -779,19 +976,21 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
               ),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.payments_rounded,
-                color: Colors.white, size: 22),
+            child:
+                const Icon(Icons.payments_rounded, color: Colors.white, size: 22),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Penjualan Hari Ini',
-                    style: TextStyle(
-                        color: _DS.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500)),
+                const Text(
+                  'Penjualan Hari Ini',
+                  style: TextStyle(
+                      color: _DS.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500),
+                ),
                 const SizedBox(height: 2),
                 Text(
                   _formatRupiah(_totalPenjualan),
@@ -876,55 +1075,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     );
   }
 
-  Widget _buildTabPesanan() {
-    return _PesananTab(
-      orders: _orders,
-      isLoading: _isLoading,
-      onRefresh: _loadData,
-      onUpdate: _updateStatus,
-      onDetail: _showDetail,
-    );
-  }
-
-  Widget _buildTabPelanggan() {
-    return const _PelangganTab();
-  }
-
-  Widget _buildTabLaporan() {
-    return SafeArea(
-      child: Column(
-        children: [
-          const _PremiumHeader(title: 'Laporan', subtitle: 'Rekap penjualan & omset'),
-          Expanded(
-            child: const Center(
-              child: _EmptyState(
-                icon: Icons.bar_chart_rounded,
-                message: 'Laporan akan hadir segera',
-                sub: 'Filter tanggal & rekap omset — Sprint 2',
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _greeting() {
-    final h = DateTime.now().hour;
-    if (h < 11) return 'Selamat pagi,';
-    if (h < 15) return 'Selamat siang,';
-    if (h < 18) return 'Selamat sore,';
-    return 'Selamat malam,';
-  }
-
-  String _greetingEmoji() {
-    final h = DateTime.now().hour;
-    if (h < 11) return '☀️';
-    if (h < 15) return '🌤️';
-    if (h < 18) return '🌅';
-    return '🌙';
-  }
-
   String _formatRupiah(double amount) {
     if (amount >= 1000000) {
       return 'Rp ${(amount / 1000000).toStringAsFixed(1)}jt';
@@ -938,6 +1088,10 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     return 'Rp ${buffer.toString()}';
   }
 }
+
+// ============================================================
+// TAB: PESANAN
+// ============================================================
 
 class _PesananTab extends StatefulWidget {
   final List<Map<String, dynamic>> orders;
@@ -1008,10 +1162,11 @@ class _PesananTabState extends State<_PesananTab>
                         fontSize: 20,
                         fontWeight: FontWeight.w800)),
                 const SizedBox(height: 4),
-                Text('${widget.orders.length} order hari ini',
-                    style: TextStyle(
-                        color: Colors.white.withOpacity(0.65),
-                        fontSize: 12)),
+                Text(
+                  '${widget.orders.length} order hari ini',
+                  style: TextStyle(
+                      color: Colors.white.withOpacity(0.65), fontSize: 12),
+                ),
                 const SizedBox(height: 12),
                 TabBar(
                   controller: _tc,
@@ -1097,249 +1252,9 @@ class _PesananTabState extends State<_PesananTab>
   }
 }
 
-class _PremiumOrderCard extends StatelessWidget {
-  final Map<String, dynamic> order;
-  final Function(String, String) onUpdate;
-  final VoidCallback onTap;
-
-  const _PremiumOrderCard({
-    required this.order,
-    required this.onUpdate,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final status = order['status'] ?? 'diproses';
-    final namaPelanggan =
-        order['customers']?['profiles']?['nama_lengkap'] ?? 'Umum';
-    final nomorOrder = order['nomor_order'] ?? '-';
-    final total = (order['total_harga'] ?? 0).toDouble();
-    final isPiutang = order['is_piutang'] == true;
-    final items = order['order_items'] as List? ?? [];
-    final layanan = items.isNotEmpty
-        ? items.map((i) => i['services']?['nama'] ?? '').where((n) => n.isNotEmpty).join(' • ')
-        : 'Tidak ada item';
-
-    final statusCfg = _statusConfig(status, isPiutang);
-    final nextStatus = _nextStatus(status, isPiutang);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: _DS.surface,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: _DS.cardShadow,
-        ),
-        child: IntrinsicHeight(
-          child: Row(
-            children: [
-              Container(
-                width: 5,
-                decoration: BoxDecoration(
-                  color: statusCfg['color'],
-                  borderRadius: const BorderRadius.horizontal(
-                    left: Radius.circular(18),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: (statusCfg['color'] as Color).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Center(
-                              child: Text(
-                                namaPelanggan.isNotEmpty
-                                    ? namaPelanggan[0].toUpperCase()
-                                    : '?',
-                                style: TextStyle(
-                                  color: statusCfg['color'],
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  namaPelanggan,
-                                  style: const TextStyle(
-                                    color: _DS.textPrimary,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                Text(
-                                  nomorOrder,
-                                  style: const TextStyle(
-                                    color: _DS.textSecondary,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: (statusCfg['color'] as Color).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: (statusCfg['color'] as Color).withOpacity(0.2),
-                              ),
-                            ),
-                            child: Text(
-                              statusCfg['label'],
-                              style: TextStyle(
-                                color: statusCfg['color'],
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          const Icon(Icons.local_laundry_service_outlined,
-                              size: 12, color: _DS.textHint),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              layanan,
-                              style: const TextStyle(
-                                color: _DS.textSecondary,
-                                fontSize: 12,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Text(
-                            _formatRupiah(total),
-                            style: const TextStyle(
-                              color: _DS.textPrimary,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 16,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                          if (isPiutang) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.red.shade50,
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: Colors.red.shade200),
-                              ),
-                              child: Text(
-                                'PIUTANG',
-                                style: TextStyle(
-                                  color: Colors.red.shade600,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
-                          const Spacer(),
-                          if (nextStatus != null)
-                            GestureDetector(
-                              onTap: () => onUpdate(order['id'], nextStatus),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: statusCfg['color'],
-                                  borderRadius: BorderRadius.circular(10),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: (statusCfg['color'] as Color)
-                                          .withOpacity(0.3),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 3),
-                                    ),
-                                  ],
-                                ),
-                                child: Text(
-                                  _nextStatusLabel(status, isPiutang),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Map<String, dynamic> _statusConfig(String s, bool isPiutang) {
-    switch (s) {
-      case 'diproses': return {'label': 'Diproses', 'color': _DS.statusDiproses};
-      case 'selesai': return {'label': isPiutang ? 'Belum Lunas' : 'Selesai', 'color': isPiutang ? Colors.orange : _DS.statusSelesai};
-      case 'dibayar_lunas': return {'label': 'Lunas', 'color': _DS.statusSelesai};
-      default: return {'label': s, 'color': _DS.statusLunas};
-    }
-  }
-
-  String? _nextStatus(String s, bool isPiutang) {
-    if (s == 'diproses') return 'selesai';
-    if (s == 'selesai' && isPiutang) return 'dibayar_lunas';
-    return null;
-  }
-
-  String _nextStatusLabel(String s, bool isPiutang) {
-    if (s == 'diproses') return '✓ Tandai Selesai';
-    if (s == 'selesai' && isPiutang) return '💵 Lunasi Piutang';
-    return '';
-  }
-
-  String _formatRupiah(double amount) {
-    final str = amount.toStringAsFixed(0);
-    final buffer = StringBuffer();
-    for (int i = 0; i < str.length; i++) {
-      if (i > 0 && (str.length - i) % 3 == 0) buffer.write('.');
-      buffer.write(str[i]);
-    }
-    return 'Rp ${buffer.toString()}';
-  }
-}
+// ============================================================
+// TAB: PELANGGAN
+// ============================================================
 
 class _PelangganTab extends StatefulWidget {
   const _PelangganTab();
@@ -1420,15 +1335,18 @@ class _PelangganTabState extends State<_PelangganTab> {
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.white.withOpacity(0.2)),
+                    border:
+                        Border.all(color: Colors.white.withOpacity(0.2)),
                   ),
                   child: TextField(
                     controller: _searchCtrl,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    style:
+                        const TextStyle(color: Colors.white, fontSize: 14),
                     decoration: InputDecoration(
                       hintText: 'Cari nama atau nomor HP...',
                       hintStyle: TextStyle(
-                          color: Colors.white.withOpacity(0.5), fontSize: 14),
+                          color: Colors.white.withOpacity(0.5),
+                          fontSize: 14),
                       prefixIcon: Icon(Icons.search_rounded,
                           color: Colors.white.withOpacity(0.6), size: 20),
                       border: InputBorder.none,
@@ -1456,11 +1374,13 @@ class _PelangganTabState extends State<_PelangganTab> {
                         color: _DS.blue,
                         child: ListView.builder(
                           physics: const BouncingScrollPhysics(),
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+                          padding:
+                              const EdgeInsets.fromLTRB(16, 12, 16, 100),
                           itemCount: _list.length,
                           itemBuilder: (_, i) {
                             final c = _list[i];
-                            final poin = c['customers']?[0]?['poin_saldo'] ?? 0;
+                            final poin =
+                                c['customers']?[0]?['poin_saldo'] ?? 0;
                             return Container(
                               margin: const EdgeInsets.only(bottom: 8),
                               decoration: BoxDecoration(
@@ -1480,7 +1400,8 @@ class _PelangganTabState extends State<_PelangganTab> {
                                   ),
                                   child: Center(
                                     child: Text(
-                                      c['nama_lengkap']?[0]?.toUpperCase() ?? '?',
+                                      c['nama_lengkap']?[0]?.toUpperCase() ??
+                                          '?',
                                       style: const TextStyle(
                                         color: _DS.blue,
                                         fontWeight: FontWeight.w800,
@@ -1489,22 +1410,26 @@ class _PelangganTabState extends State<_PelangganTab> {
                                     ),
                                   ),
                                 ),
-                                title: Text(c['nama_lengkap'] ?? '-',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        color: _DS.textPrimary,
-                                        fontSize: 14)),
-                                subtitle: Text(c['nomor_hp'] ?? '-',
-                                    style: const TextStyle(
-                                        color: _DS.textSecondary, fontSize: 12)),
+                                title: Text(
+                                  c['nama_lengkap'] ?? '-',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      color: _DS.textPrimary,
+                                      fontSize: 14),
+                                ),
+                                subtitle: Text(
+                                  c['nomor_hp'] ?? '-',
+                                  style: const TextStyle(
+                                      color: _DS.textSecondary, fontSize: 12),
+                                ),
                                 trailing: Container(
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 10, vertical: 5),
                                   decoration: BoxDecoration(
                                     color: Colors.amber.shade50,
                                     borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                        color: Colors.amber.shade200),
+                                    border:
+                                        Border.all(color: Colors.amber.shade200),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -1513,11 +1438,13 @@ class _PelangganTabState extends State<_PelangganTab> {
                                           color: Colors.amber.shade600,
                                           size: 13),
                                       const SizedBox(width: 3),
-                                      Text('$poin',
-                                          style: TextStyle(
-                                              color: Colors.amber.shade700,
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 12)),
+                                      Text(
+                                        '$poin',
+                                        style: TextStyle(
+                                            color: Colors.amber.shade700,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 12),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -1532,6 +1459,270 @@ class _PelangganTabState extends State<_PelangganTab> {
     );
   }
 }
+
+// ============================================================
+// WIDGET: ORDER CARD
+// ============================================================
+
+class _PremiumOrderCard extends StatelessWidget {
+  final Map<String, dynamic> order;
+  final Function(String, String) onUpdate;
+  final VoidCallback onTap;
+
+  const _PremiumOrderCard({
+    required this.order,
+    required this.onUpdate,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final status = order['status'] ?? 'diproses';
+    final namaPelanggan =
+        order['customers']?['profiles']?['nama_lengkap'] ?? 'Umum';
+    final nomorOrder = order['nomor_order'] ?? '-';
+    final total = (order['total_harga'] ?? 0).toDouble();
+    final isPiutang = order['is_piutang'] == true;
+    final items = order['order_items'] as List? ?? [];
+    final layanan = items.isNotEmpty
+        ? items
+            .map((i) => i['services']?['nama'] ?? '')
+            .where((n) => n.isNotEmpty)
+            .join(' • ')
+        : 'Tidak ada item';
+
+    final statusCfg = _statusConfig(status, isPiutang);
+    final nextStatus = _nextStatus(status, isPiutang);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: _DS.surface,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: _DS.cardShadow,
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            children: [
+              Container(
+                width: 5,
+                decoration: BoxDecoration(
+                  color: statusCfg['color'],
+                  borderRadius: const BorderRadius.horizontal(
+                    left: Radius.circular(18),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color:
+                                  (statusCfg['color'] as Color).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Center(
+                              child: Text(
+                                namaPelanggan.isNotEmpty
+                                    ? namaPelanggan[0].toUpperCase()
+                                    : '?',
+                                style: TextStyle(
+                                  color: statusCfg['color'],
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  namaPelanggan,
+                                  style: const TextStyle(
+                                    color: _DS.textPrimary,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                Text(
+                                  nomorOrder,
+                                  style: const TextStyle(
+                                    color: _DS.textSecondary,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: (statusCfg['color'] as Color).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color:
+                                    (statusCfg['color'] as Color).withOpacity(0.2),
+                              ),
+                            ),
+                            child: Text(
+                              statusCfg['label'],
+                              style: TextStyle(
+                                color: statusCfg['color'],
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          const Icon(Icons.local_laundry_service_outlined,
+                              size: 12, color: _DS.textHint),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              layanan,
+                              style: const TextStyle(
+                                color: _DS.textSecondary,
+                                fontSize: 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Text(
+                            _formatRupiah(total),
+                            style: const TextStyle(
+                              color: _DS.textPrimary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          if (isPiutang) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.red.shade200),
+                              ),
+                              child: Text(
+                                'PIUTANG',
+                                style: TextStyle(
+                                  color: Colors.red.shade600,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                          const Spacer(),
+                          if (nextStatus != null)
+                            GestureDetector(
+                              onTap: () => onUpdate(order['id'], nextStatus!),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: statusCfg['color'],
+                                  borderRadius: BorderRadius.circular(10),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: (statusCfg['color'] as Color)
+                                          .withOpacity(0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Text(
+                                  _nextStatusLabel(status, isPiutang),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Map<String, dynamic> _statusConfig(String s, bool isPiutang) {
+    switch (s) {
+      case 'diproses':
+        return {'label': 'Diproses', 'color': _DS.statusDiproses};
+      case 'selesai':
+        return {
+          'label': isPiutang ? 'Belum Lunas' : 'Selesai',
+          'color': isPiutang ? Colors.orange : _DS.statusSelesai
+        };
+      case 'dibayar_lunas':
+        return {'label': 'Lunas', 'color': _DS.statusSelesai};
+      default:
+        return {'label': s, 'color': _DS.statusLunas};
+    }
+  }
+
+  String? _nextStatus(String s, bool isPiutang) {
+    if (s == 'diproses') return 'selesai';
+    if (s == 'selesai' && isPiutang) return 'dibayar_lunas';
+    return null;
+  }
+
+  String _nextStatusLabel(String s, bool isPiutang) {
+    if (s == 'diproses') return '✓ Tandai Selesai';
+    if (s == 'selesai' && isPiutang) return '💵 Lunasi Piutang';
+    return '';
+  }
+
+  String _formatRupiah(double amount) {
+    final str = amount.toStringAsFixed(0);
+    final buffer = StringBuffer();
+    for (int i = 0; i < str.length; i++) {
+      if (i > 0 && (str.length - i) % 3 == 0) buffer.write('.');
+      buffer.write(str[i]);
+    }
+    return 'Rp ${buffer.toString()}';
+  }
+}
+
+// ============================================================
+// WIDGET: ORDER DETAIL SHEET
+// ============================================================
 
 class _OrderDetailSheet extends StatelessWidget {
   final Map<String, dynamic> order;
@@ -1573,7 +1764,6 @@ class _OrderDetailSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-
           Row(
             children: [
               Expanded(
@@ -1599,11 +1789,9 @@ class _OrderDetailSheet extends StatelessWidget {
               _StatusPill(status: status, isPiutang: isPiutang),
             ],
           ),
-
           const SizedBox(height: 16),
           Container(height: 1, color: _DS.border),
           const SizedBox(height: 14),
-
           const Text('Detail Pesanan',
               style: TextStyle(
                   fontWeight: FontWeight.w700,
@@ -1632,18 +1820,15 @@ class _OrderDetailSheet extends StatelessWidget {
               ),
             );
           }),
-
           const SizedBox(height: 10),
           Container(height: 1, color: _DS.border),
           const SizedBox(height: 12),
-
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('Total',
                   style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: _DS.textPrimary)),
+                      fontWeight: FontWeight.w700, color: _DS.textPrimary)),
               Text(_fmt(total),
                   style: const TextStyle(
                       fontWeight: FontWeight.w800,
@@ -1677,14 +1862,12 @@ class _OrderDetailSheet extends StatelessWidget {
                 ),
               ),
             ),
-
           const SizedBox(height: 20),
-
           if (nextSt != null)
             _ActionButton(
               label: _nextStatusLabel(status, isPiutang),
               color: status == 'selesai' ? Colors.green : _DS.blue,
-              onTap: () => onUpdateStatus(nextSt),
+              onTap: () => onUpdateStatus(nextSt!),
             ),
         ],
       ),
@@ -1713,6 +1896,10 @@ class _OrderDetailSheet extends StatelessWidget {
     return 'Rp ${buffer.toString()}';
   }
 }
+
+// ============================================================
+// WIDGET: STAT CHIP
+// ============================================================
 
 class _StatChip extends StatelessWidget {
   final String value;
@@ -1768,10 +1955,14 @@ class _StatChip extends StatelessWidget {
   }
 }
 
+// ============================================================
+// WIDGET: STATUS PILL
+// ============================================================
+
 class _StatusPill extends StatelessWidget {
   final String status;
   final bool isPiutang;
-  
+
   const _StatusPill({required this.status, required this.isPiutang});
 
   @override
@@ -1782,7 +1973,8 @@ class _StatusPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: (cfg['color'] as Color).withOpacity(0.1),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: (cfg['color'] as Color).withOpacity(0.25)),
+        border:
+            Border.all(color: (cfg['color'] as Color).withOpacity(0.25)),
       ),
       child: Text(cfg['label'],
           style: TextStyle(
@@ -1794,13 +1986,24 @@ class _StatusPill extends StatelessWidget {
 
   Map<String, dynamic> _cfg() {
     switch (status) {
-      case 'diproses': return {'label': 'Diproses', 'color': _DS.statusDiproses};
-      case 'selesai': return {'label': isPiutang ? 'Belum Lunas' : 'Selesai', 'color': isPiutang ? Colors.orange : _DS.statusSelesai};
-      case 'dibayar_lunas': return {'label': 'Lunas', 'color': _DS.statusSelesai};
-      default: return {'label': status, 'color': _DS.statusLunas};
+      case 'diproses':
+        return {'label': 'Diproses', 'color': _DS.statusDiproses};
+      case 'selesai':
+        return {
+          'label': isPiutang ? 'Belum Lunas' : 'Selesai',
+          'color': isPiutang ? Colors.orange : _DS.statusSelesai
+        };
+      case 'dibayar_lunas':
+        return {'label': 'Lunas', 'color': _DS.statusSelesai};
+      default:
+        return {'label': status, 'color': _DS.statusLunas};
     }
   }
 }
+
+// ============================================================
+// WIDGET: ACTION BUTTON
+// ============================================================
 
 class _ActionButton extends StatelessWidget {
   final String label;
@@ -1850,6 +2053,10 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
+// ============================================================
+// WIDGET: PREMIUM HEADER
+// ============================================================
+
 class _PremiumHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
@@ -1885,6 +2092,10 @@ class _PremiumHeader extends StatelessWidget {
   }
 }
 
+// ============================================================
+// WIDGET: EMPTY STATE
+// ============================================================
+
 class _EmptyState extends StatelessWidget {
   final IconData icon;
   final String message;
@@ -1915,8 +2126,7 @@ class _EmptyState extends StatelessWidget {
           if (sub != null) ...[
             const SizedBox(height: 4),
             Text(sub!,
-                style: const TextStyle(
-                    color: _DS.textHint, fontSize: 12),
+                style: const TextStyle(color: _DS.textHint, fontSize: 12),
                 textAlign: TextAlign.center),
           ],
         ],
