@@ -4,6 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:laundry_one/features/auth/services/auth_service.dart';
 import 'package:laundry_one/features/auth/screens/login_screen.dart';
 import 'package:laundry_one/features/cashier/screens/create_order_screen.dart';
+import 'package:laundry_one/features/cashier/screens/inventory_screen.dart';
+import 'package:laundry_one/features/cashier/screens/tabs/report_tab.dart';
+import 'package:laundry_one/features/cashier/screens/invoice_screen.dart';
 
 // ============================================================
 // DESIGN SYSTEM — Laundry One POS
@@ -375,6 +378,13 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                       ],
                     ),
                   ),
+                  // ==========================================
+                  // TOMBOL BARU: INVENTORY / STOK
+                  // ==========================================
+                  Material(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(12), child: InkWell(onTap: () { HapticFeedback.selectionClick(); Navigator.push(context, MaterialPageRoute(builder: (_) => const InventoryScreen())); }, borderRadius: BorderRadius.circular(12), child: const Padding(padding: EdgeInsets.all(10), child: Icon(Icons.inventory_2_outlined, color: Colors.white, size: 20)))),
+                  const SizedBox(width: 8),
+                  
+                  // TOMBOL LAMA: LOGOUT
                   Material(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(12), child: InkWell(onTap: () async { HapticFeedback.mediumImpact(); await AuthService().logout(); if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen(config: LoginConfig(roleName: 'Staf Kasir', roleDatabase: 'cashier', labelIdentifier: 'Nomor HP', hint: '081234567890', keyboardType: TextInputType.phone, primaryColor: Color(0xFF1565C0), secondaryColor: Color(0xFF0D47A1), backgroundColor: Colors.white, icon: Icons.point_of_sale_rounded, tagline: 'Kelola pesanan dengan cepat & mudah', homeScreen: HomeCashierScreen(), showRegister: true)))); }, borderRadius: BorderRadius.circular(12), child: const Padding(padding: EdgeInsets.all(10), child: Icon(Icons.logout_rounded, color: Colors.white, size: 20)))),
                 ],
               ),
@@ -499,9 +509,45 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     );
   }
 
-  void _showDetail(Map<String, dynamic> order) {
+  Future<void> _showDetail(Map<String, dynamic> order) async {
     HapticFeedback.lightImpact();
-    showModalBottomSheet(context: context, isScrollControlled: true, backgroundColor: Colors.transparent, builder: (_) => _OrderDetailSheet(order: order, onUpdateStatus: (s) { Navigator.pop(context); _handleUpdateStatus(order, s); }));
+
+    // 1. Terjemahkan item dari Database menjadi format Invoice
+    final List<Map<String, dynamic>> mappedItems = (order['order_items'] as List? ?? []).map((i) => {
+      'qty': (i['jumlah'] as num?)?.toInt() ?? 0,
+      'subtotal': (i['harga_satuan'] as num?)?.toDouble() ?? 0 * ((i['jumlah'] as num?)?.toInt() ?? 0),
+      'service': {'nama': i['services']?['nama'] ?? 'Item'},
+    }).toList();
+
+    // 2. Buka Layar Invoice dengan mode "isFromHome = true"
+    final action = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InvoiceScreen(
+          isFromHome: true, // INI KUNCI AGAR APP BAR MUNCUL
+          status: order['status'],
+          orderId: order['id'],
+          nomorOrder: order['nomor_order'],
+          namaPelanggan: order['customers']?['profiles']?['nama_lengkap'] ?? 'Umum',
+          nomorHp: order['customers']?['profiles']?['nomor_hp'] ?? '-',
+          namaKasir: _kasirNama ?? 'Kasir',
+          items: mappedItems,
+          subtotal: (order['total_harga'] ?? 0).toDouble(), 
+          diskon: 0, 
+          total: (order['total_harga'] ?? 0).toDouble(),
+          metodeBayar: order['metode_bayar_awal'] ?? 'cash',
+          isPiutang: order['is_piutang'] == true,
+          created_at: order['created_at'],
+        ),
+      ),
+    );
+
+    // 3. Tangkap respon jika tombol Selesai/Lunas ditekan
+    if (action == 'selesai') {
+      _handleUpdateStatus(order, 'selesai');
+    } else if (action == 'dibayar_lunas') {
+      _handleUpdateStatus(order, 'dibayar_lunas');
+    }
   }
 
   Widget _buildSectionHeader(String title, {int count = 0, Color countColor = _DS.blue, double topPad = 20, VoidCallback? action, String? actionLabel}) {
@@ -524,7 +570,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   Widget _buildMiniStatCard(String title, double amount, IconData icon, Color color) { return Expanded(child: Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _DS.border), boxShadow: _DS.softShadow), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(icon, color: color, size: 24), const SizedBox(height: 12), Text(title, style: const TextStyle(color: _DS.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)), const SizedBox(height: 4), Text(_formatRupiah(amount), style: const TextStyle(color: _DS.textPrimary, fontSize: 16, fontWeight: FontWeight.w800))]))); }
   
   Widget _buildBottomNav() { 
-    return Container(decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, -4))]), child: BottomAppBar(shape: const CircularNotchedRectangle(), notchMargin: 10, color: Colors.transparent, elevation: 0, child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 800), child: SizedBox(height: 60, child: Row(children: [_buildNavItem(0, Icons.home_rounded, Icons.home_outlined, 'Beranda'), _buildNavItem(1, Icons.receipt_long_rounded, Icons.receipt_long_outlined, 'Pesanan', badge: _todayAktif > 0 ? '$_todayAktif' : null), const Expanded(flex: 2, child: SizedBox()), _buildNavItem(2, Icons.people_alt_rounded, Icons.people_alt_outlined, 'Pelanggan'), _buildNavItem(3, Icons.bar_chart_rounded, Icons.bar_chart_outlined, 'Laporan')])))))); 
+    return Container(decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, -4))]), child: BottomAppBar(shape: const CircularNotchedRectangle(), notchMargin: 10, color: Colors.transparent, elevation: 0, child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 800), child: SizedBox(height: 60, child: Row(children: [_buildNavItem(0, Icons.home_rounded, Icons.home_outlined, 'Beranda'), _buildNavItem(1, Icons.receipt_long_rounded, Icons.receipt_long_outlined, 'Pesanan', badge: _todayAktif > 0 ? '$_todayAktif' : null), const Expanded(flex: 2, child: SizedBox()), _buildNavItem(2, Icons.people_alt_rounded, Icons.people_alt_outlined, 'Pelanggan'), _buildNavItem(3, Icons.bar_chart_rounded, Icons.bar_chart_outlined, 'Kelola')])))))); 
   }
   
   Widget _buildNavItem(int idx, IconData activeIcon, IconData inactiveIcon, String label, {String? badge}) { 
@@ -532,7 +578,9 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     return Expanded(flex: 2, child: GestureDetector(onTap: () { HapticFeedback.selectionClick(); setState(() => _currentTab = idx); }, behavior: HitTestBehavior.opaque, child: Stack(alignment: Alignment.center, children: [Column(mainAxisAlignment: MainAxisAlignment.center, children: [AnimatedContainer(duration: const Duration(milliseconds: 200), padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4), decoration: BoxDecoration(color: active ? _DS.sky : Colors.transparent, borderRadius: BorderRadius.circular(20)), child: Icon(active ? activeIcon : inactiveIcon, color: active ? _DS.blue : _DS.textHint, size: 22)), const SizedBox(height: 2), Text(label, style: TextStyle(fontSize: 10, fontWeight: active ? FontWeight.w800 : FontWeight.w600, color: active ? _DS.blue : _DS.textHint))]), if (badge != null) Positioned(top: 4, right: 14, child: Container(padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1), decoration: BoxDecoration(color: Colors.red.shade500, borderRadius: BorderRadius.circular(10)), child: Text(badge, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800))))]))); 
   }
   
-  Widget _buildTabLaporan() { return SafeArea(child: Column(children: [Container(width: double.infinity, decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF0F2557), Color(0xFF1565C0)], begin: Alignment.topLeft, end: Alignment.bottomRight)), padding: const EdgeInsets.fromLTRB(20, 20, 20, 24), child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Laporan', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)), SizedBox(height: 4), Text('Ringkasan performa laundry', style: TextStyle(color: Colors.white70, fontSize: 13))])), Expanded(child: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Container(padding: const EdgeInsets.all(24), decoration: const BoxDecoration(color: _DS.sky, shape: BoxShape.circle), child: Icon(Icons.bar_chart_rounded, size: 48, color: _DS.blue.withOpacity(0.5))), const SizedBox(height: 16), const Text('Fitur Laporan', style: TextStyle(color: _DS.textPrimary, fontWeight: FontWeight.w700, fontSize: 16)), const SizedBox(height: 6), const Text('Segera Hadir di Sprint 2', style: TextStyle(color: _DS.textSecondary, fontSize: 13))])))])); }
+  Widget _buildTabLaporan() { 
+    return const ReportTab(); 
+  }
   String _greeting() { final hour = DateTime.now().hour; if (hour < 12) return 'Selamat Pagi'; if (hour < 15) return 'Selamat Siang'; if (hour < 18) return 'Selamat Sore'; return 'Selamat Malam'; }
   String _greetingEmoji() { final hour = DateTime.now().hour; if (hour < 12) return '☀️'; if (hour < 15) return '🌤️'; if (hour < 18) return '🌅'; return '🌙'; }
   String _formatRupiah(double amount) { final str = amount.toStringAsFixed(0); final buffer = StringBuffer(); for (int i = 0; i < str.length; i++) { if (i > 0 && (str.length - i) % 3 == 0) buffer.write('.'); buffer.write(str[i]); } return 'Rp ${buffer.toString()}'; }

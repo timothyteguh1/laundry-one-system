@@ -13,6 +13,10 @@ class InvoiceScreen extends StatelessWidget {
   final String metodeBayar;
   final bool isPiutang;
   final String created_at; 
+  
+  // TAMBAHAN BARU UNTUK MODE DETAIL DARI BERANDA
+  final bool isFromHome;
+  final String? status;
 
   const InvoiceScreen({
     super.key,
@@ -28,6 +32,8 @@ class InvoiceScreen extends StatelessWidget {
     required this.metodeBayar,
     required this.isPiutang,
     this.created_at = '',
+    this.isFromHome = false, // Default false (berarti dari menu Buat Order)
+    this.status,
   });
 
   String _formatRupiah(double amount) {
@@ -57,6 +63,15 @@ class InvoiceScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7FB), 
+      // JIKA DIBUKA DARI BERANDA, MUNCULKAN HEADER APP BAR (<- BACK)
+      appBar: isFromHome 
+        ? AppBar(
+            backgroundColor: const Color(0xFF1565C0),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            title: const Text('Detail Pesanan', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+          ) 
+        : null,
       body: SafeArea(
         child: Column(
           children: [
@@ -66,15 +81,18 @@ class InvoiceScreen extends StatelessWidget {
                 child: Column(
                   children: [
                     const SizedBox(height: 10),
-                    // ICON SUCCESS
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), shape: BoxShape.circle),
-                      child: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 56),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(isPiutang ? 'Pesanan Disimpan!' : 'Pembayaran Berhasil!', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF0F2557))),
-                    const SizedBox(height: 24),
+                    
+                    // ICON SUCCESS HANYA MUNCUL SAAT BUAT ORDER BARU
+                    if (!isFromHome) ...[
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), shape: BoxShape.circle),
+                        child: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 56),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(isPiutang ? 'Pesanan Disimpan!' : 'Pembayaran Berhasil!', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF0F2557))),
+                      const SizedBox(height: 24),
+                    ],
                     
                     // CARD KERTAS NOTA
                     Container(
@@ -86,9 +104,11 @@ class InvoiceScreen extends StatelessWidget {
                           Center(
                             child: Column(
                               children: [
-                                const Text('NOTA PESANAN', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: 1)),
+                                const Icon(Icons.receipt_long_rounded, color: Color(0xFF1565C0), size: 36),
+                                const SizedBox(height: 8),
+                                const Text('NOTA PESANAN', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: 1, color: Color(0xFF0F2557))),
                                 const SizedBox(height: 4),
-                                Text(nomorOrder, style: const TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w500)),
+                                Text(nomorOrder, style: const TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w600)),
                               ],
                             ),
                           ),
@@ -101,6 +121,8 @@ class InvoiceScreen extends StatelessWidget {
                           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Kasir', style: TextStyle(color: Colors.grey, fontSize: 12)), Text(namaKasir, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12))]),
                           const SizedBox(height: 8),
                           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Pelanggan', style: TextStyle(color: Colors.grey, fontSize: 12)), Text(namaPelanggan, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12))]),
+                          const SizedBox(height: 8),
+                          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('No. HP', style: TextStyle(color: Colors.grey, fontSize: 12)), Text(nomorHp, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12))]),
                           
                           const SizedBox(height: 16),
                           const Divider(color: Colors.black12, thickness: 1),
@@ -136,7 +158,7 @@ class InvoiceScreen extends StatelessWidget {
                           if (isPiutang)
                             Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 8), decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red.shade200)), child: Text('STATUS: PIUTANG / BELUM LUNAS', textAlign: TextAlign.center, style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w800, fontSize: 12, letterSpacing: 1)))
                           else
-                            Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 8), decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.green.shade200)), child: Text('STATUS: LUNAS ($metodeBayar)', textAlign: TextAlign.center, style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.w800, fontSize: 12, letterSpacing: 1))),
+                            Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 8), decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.green.shade200)), child: Text('STATUS: LUNAS (${metodeBayar.toUpperCase()})', textAlign: TextAlign.center, style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.w800, fontSize: 12, letterSpacing: 1))),
                         ],
                       ),
                     ),
@@ -169,14 +191,43 @@ class InvoiceScreen extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity, height: 50,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1565C0), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Kembali ke Beranda', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                  
+                  // JIKA DARI BERANDA, MUNCULKAN TOMBOL UPDATE STATUS
+                  if (isFromHome) ...[
+                    if (status == 'diproses')
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: SizedBox(
+                          width: double.infinity, height: 50,
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.check_circle_outline), label: const Text('Tandai Cucian Selesai', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1565C0), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+                            onPressed: () { Navigator.pop(context, 'selesai'); },
+                          ),
+                        ),
+                      ),
+
+                    if (isPiutang)
+                      SizedBox(
+                        width: double.infinity, height: 50,
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.payments_outlined), label: const Text('Lunasi Tagihan', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+                          onPressed: () { Navigator.pop(context, 'dibayar_lunas'); }, 
+                        ),
+                      )
+                  ] 
+                  // JIKA DARI BUAT PESANAN BARU, MUNCULKAN TOMBOL KEMBALI
+                  else ...[
+                    SizedBox(
+                      width: double.infinity, height: 50,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1565C0), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Kembali ke Beranda', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                      ),
                     ),
-                  ),
+                  ]
                 ],
               ),
             )
