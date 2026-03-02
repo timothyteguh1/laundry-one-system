@@ -3,20 +3,19 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ============================================================
-// DESIGN SYSTEM - KONSISTEN DENGAN HALAMAN LAIN
+// DESIGN SYSTEM - KONSISTEN
 // ============================================================
 class _DS {
   static const navy = Color(0xFF0F2557);
   static const blue = Color(0xFF1565C0);
   static const sky = Color(0xFFE8F0FE);
-  static const ground = Color(0xFFEAF0F6); // Background abu kebiruan terang
+  static const ground = Color(0xFFEAF0F6); 
   static const surface = Colors.white;
-  static const border = Color(0xFFD2DCE8); // Border tegas
+  static const border = Color(0xFFD2DCE8); 
   static const textPrimary = Color(0xFF0F2557);
   static const textSecondary = Color(0xFF6B7A99);
   static const textHint = Color(0xFFB0BAD1);
 
-  // SHADOW PERSIS SEPERTI DI BERANDA & REPORT TAB
   static List<BoxShadow> cardShadow = [
     BoxShadow(color: const Color(0xFF0F2557).withOpacity(0.09), blurRadius: 16, offset: const Offset(0, 4)),
     BoxShadow(color: const Color(0xFF0F2557).withOpacity(0.05), blurRadius: 6, offset: const Offset(0, 2)),
@@ -60,24 +59,26 @@ class _InventoryScreenState extends State<InventoryScreen> {
     }
   }
 
-  // DESAIN INPUT MODERN UNTUK FORM
-  InputDecoration _modernInputDecoration(String label) {
+  InputDecoration _modernInputDecoration(String label, {IconData? icon}) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: _DS.textHint, fontSize: 14),
+      labelStyle: const TextStyle(color: _DS.textHint, fontSize: 13),
       filled: true,
       fillColor: _DS.ground,
+      prefixIcon: icon != null ? Icon(icon, color: _DS.textHint, size: 20) : null,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _DS.blue, width: 1.5)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }
 
-  // FITUR A: TAMBAH BARANG (DENGAN OPSI JUAL DI KASIR)
+  // FITUR TAMBAH BARANG (DENGAN LOGIKA EXPENSES)
   void _showAddBarangDialog() {
     final namaCtrl = TextEditingController();
-    final hargaCtrl = TextEditingController();
     final stokCtrl = TextEditingController();
+    final modalCtrl = TextEditingController(); // Untuk Total Biaya Beli (Expenses)
+    final hargaJualCtrl = TextEditingController();
+    
     bool isSubmitting = false;
     bool isDijual = false;
 
@@ -87,15 +88,23 @@ class _InventoryScreenState extends State<InventoryScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => AlertDialog(
           backgroundColor: _DS.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)), // Sudut membulat modern
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: const Text('Tambah Barang Fisik', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: _DS.textPrimary)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: namaCtrl, decoration: _modernInputDecoration('Nama Barang (Cth: Plastik / Downy)')),
+                TextField(controller: namaCtrl, decoration: _modernInputDecoration('Nama Barang (Cth: Deterjen)')),
                 const SizedBox(height: 12),
-                TextField(controller: stokCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Stok Awal Saat Ini')),
+                Row(
+                  children: [
+                    Expanded(child: TextField(controller: stokCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Stok Awal'))),
+                    const SizedBox(width: 12),
+                    Expanded(flex: 2, child: TextField(controller: modalCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Total Modal / Harga Beli (Rp)', icon: Icons.payments_outlined))),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                const Text('*Modal akan tercatat otomatis di Pengeluaran Kasir', style: TextStyle(fontSize: 10, color: Colors.orange, fontStyle: FontStyle.italic)),
                 const SizedBox(height: 16),
                 
                 // TOGGLE JUAL DI KASIR
@@ -103,7 +112,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   decoration: BoxDecoration(color: isDijual ? _DS.sky : _DS.ground, borderRadius: BorderRadius.circular(12), border: Border.all(color: isDijual ? _DS.blue : Colors.transparent)),
                   child: CheckboxListTile(
                     title: Text('Jual di Kasir?', style: TextStyle(fontWeight: FontWeight.w700, color: isDijual ? _DS.blue : _DS.textSecondary, fontSize: 14)),
-                    subtitle: Text(isDijual ? 'Barang akan muncul di layar pesanan' : 'Hanya untuk pemakaian internal/gudang', style: TextStyle(fontSize: 11, color: isDijual ? _DS.blue.withOpacity(0.7) : _DS.textHint)),
+                    subtitle: Text(isDijual ? 'Barang akan muncul di layar pesanan' : 'Hanya pemakaian internal/gudang', style: TextStyle(fontSize: 11, color: isDijual ? _DS.blue.withOpacity(0.7) : _DS.textHint)),
                     value: isDijual,
                     activeColor: _DS.blue,
                     onChanged: (val) => setModalState(() => isDijual = val ?? false),
@@ -114,7 +123,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 
                 if (isDijual) ...[
                   const SizedBox(height: 12),
-                  TextField(controller: hargaCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Harga Jual per Pcs (Rp)')),
+                  TextField(controller: hargaJualCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Harga Jual per Pcs (Rp)', icon: Icons.sell_outlined)),
                 ]
               ],
             ),
@@ -125,21 +134,29 @@ class _InventoryScreenState extends State<InventoryScreen> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), elevation: 0),
               onPressed: isSubmitting ? null : () async {
-                if (namaCtrl.text.isEmpty || stokCtrl.text.isEmpty) return;
-                if (isDijual && hargaCtrl.text.isEmpty) return; 
+                if (namaCtrl.text.isEmpty || stokCtrl.text.isEmpty || modalCtrl.text.isEmpty) return;
+                if (isDijual && hargaJualCtrl.text.isEmpty) return; 
                 
                 setModalState(() => isSubmitting = true);
                 try {
+                  final qty = int.parse(stokCtrl.text.trim());
+                  final totalModal = int.parse(modalCtrl.text.trim());
+                  final hargaBeliPerSatuan = qty > 0 ? (totalModal / qty) : 0;
+                  final kasirId = _supabase.auth.currentUser!.id;
+
+                  // 1. Simpan ke Inventory (beserta harga beli)
                   final invRes = await _supabase.from('inventory').insert({
                     'nama_item': namaCtrl.text.trim(),
-                    'stok_saat_ini': int.parse(stokCtrl.text.trim()),
+                    'stok_saat_ini': qty,
                     'satuan': 'pcs',
+                    'harga_beli': hargaBeliPerSatuan,
                   }).select().single();
 
+                  // 2. Jika dijual, simpan ke Services
                   if (isDijual) {
                     await _supabase.from('services').insert({
                       'nama': namaCtrl.text.trim(),
-                      'harga_per_satuan': int.parse(hargaCtrl.text.trim()),
+                      'harga_per_satuan': int.parse(hargaJualCtrl.text.trim()),
                       'satuan': 'pcs',
                       'tipe': 'produk',
                       'inventory_id': invRes['id'],
@@ -147,11 +164,21 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     });
                   }
 
+                  // 3. Catat Riwayat Masuk
                   await _supabase.from('inventory_log').insert({
-                    'inventory_id': invRes['id'], 'tipe': 'masuk', 'qty': int.parse(stokCtrl.text.trim()),
-                    'stok_sebelum': 0, 'stok_sesudah': int.parse(stokCtrl.text.trim()),
-                    'keterangan': 'Stok Awal Sistem', 'created_by': _supabase.auth.currentUser!.id
+                    'inventory_id': invRes['id'], 'tipe': 'masuk', 'qty': qty,
+                    'stok_sebelum': 0, 'stok_sesudah': qty,
+                    'keterangan': 'Stok Awal Sistem', 'created_by': kasirId
                   });
+
+                  // 4. Catat Pengeluaran Modal ke EXPENSES jika totalModal > 0
+                  if (totalModal > 0) {
+                    await _supabase.from('expenses').insert({
+                      'cashier_id': kasirId,
+                      'nominal': totalModal,
+                      'keterangan': 'Belanja Stok Awal: ${namaCtrl.text.trim()}',
+                    });
+                  }
 
                   if (mounted) { Navigator.pop(ctx); _loadInventory(); }
                 } catch (e) {
@@ -184,7 +211,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _DS.ground, // Background disamakan
+      backgroundColor: _DS.ground,
       appBar: AppBar(
         title: const Text('Stok Barang Fisik', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)), 
         backgroundColor: _DS.navy, 
@@ -195,14 +222,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
         ? const Center(child: CircularProgressIndicator(color: _DS.blue)) 
         : ListView.builder(
             physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 100), // Padding bawah agar tidak tertutup FAB
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 100), 
             itemCount: _inventory.length,
             itemBuilder: (ctx, i) {
               final item = _inventory[i];
               final stok = (item['stok_saat_ini'] as num).toInt();
               return Container(
                 margin: const EdgeInsets.only(bottom: 14),
-                // KONSISTENSI SHADOW & BORDER KARTU
                 decoration: BoxDecoration(
                   color: _DS.surface,
                   borderRadius: BorderRadius.circular(16),
@@ -235,7 +261,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
               );
             },
           ),
-      // FAB MODERN SHADOW
       floatingActionButton: Container(
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), boxShadow: _DS.fabShadow),
@@ -313,9 +338,11 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
     );
   }
 
+  // UPDATE STOK (DENGAN LOGIKA EXPENSES)
   void _showUpdateStokDialog() {
     final qtyCtrl = TextEditingController();
     final ketCtrl = TextEditingController();
+    final modalCtrl = TextEditingController(); // Khusus jika tipe = masuk
     String tipe = 'masuk'; 
     bool isSubmitting = false;
 
@@ -326,20 +353,32 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
           backgroundColor: _DS.surface,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: const Text('Update Stok Fisik', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: _DS.textPrimary)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Expanded(child: RadioListTile<String>(title: const Text('Masuk', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.green)), value: 'masuk', activeColor: Colors.green, groupValue: tipe, onChanged: (v) => setModalState(() => tipe = v!), contentPadding: EdgeInsets.zero)),
-                  Expanded(child: RadioListTile<String>(title: const Text('Keluar', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.red)), value: 'keluar', activeColor: Colors.red, groupValue: tipe, onChanged: (v) => setModalState(() => tipe = v!), contentPadding: EdgeInsets.zero)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              TextField(controller: qtyCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Jumlah (Qty)')),
-              const SizedBox(height: 12),
-              TextField(controller: ketCtrl, decoration: _modernInputDecoration('Keterangan (Cth: Rusak / Beli)')),
-            ],
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: RadioListTile<String>(title: const Text('Masuk', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.green)), value: 'masuk', activeColor: Colors.green, groupValue: tipe, onChanged: (v) => setModalState(() => tipe = v!), contentPadding: EdgeInsets.zero)),
+                    Expanded(child: RadioListTile<String>(title: const Text('Keluar / Rusak', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.red)), value: 'keluar', activeColor: Colors.red, groupValue: tipe, onChanged: (v) => setModalState(() => tipe = v!), contentPadding: EdgeInsets.zero)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextField(controller: qtyCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Jumlah (Qty)')),
+                const SizedBox(height: 12),
+                TextField(controller: ketCtrl, decoration: _modernInputDecoration('Keterangan (Wajib)')),
+                
+                // MUNCULKAN INPUT MODAL JIKA BARANG MASUK
+                if (tipe == 'masuk') ...[
+                  const SizedBox(height: 16),
+                  const Divider(color: _DS.border),
+                  const SizedBox(height: 8),
+                  TextField(controller: modalCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Total Biaya Beli (Opsional)')),
+                  const SizedBox(height: 4),
+                  const Text('*Jika diisi, akan otomatis masuk ke tabel Pengeluaran.', style: TextStyle(fontSize: 10, color: Colors.orange, fontStyle: FontStyle.italic)),
+                ]
+              ],
+            ),
           ),
           actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
           actions: [
@@ -352,13 +391,29 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
                 try {
                   final qty = int.parse(qtyCtrl.text.trim());
                   final stokBaru = tipe == 'masuk' ? _currentStock + qty : _currentStock - qty;
+                  final kasirId = _supabase.auth.currentUser!.id;
 
+                  // 1. Update Stok di DB
                   await _supabase.from('inventory').update({'stok_saat_ini': stokBaru}).eq('id', widget.item['id']);
+                  
+                  // 2. Catat Log Keluar Masuk
                   await _supabase.from('inventory_log').insert({
                     'inventory_id': widget.item['id'], 'tipe': tipe, 'qty': qty,
                     'stok_sebelum': _currentStock, 'stok_sesudah': stokBaru,
-                    'keterangan': ketCtrl.text.trim(), 'created_by': _supabase.auth.currentUser!.id
+                    'keterangan': ketCtrl.text.trim(), 'created_by': kasirId
                   });
+
+                  // 3. Jika Masuk & ada biayanya, catat di EXPENSES
+                  if (tipe == 'masuk' && modalCtrl.text.isNotEmpty) {
+                    final totalBeli = int.parse(modalCtrl.text.trim());
+                    if (totalBeli > 0) {
+                      await _supabase.from('expenses').insert({
+                        'cashier_id': kasirId,
+                        'nominal': totalBeli,
+                        'keterangan': 'Restock Barang: ${widget.item['nama_item']} ($qty pcs)',
+                      });
+                    }
+                  }
 
                   if (mounted) { 
                     Navigator.pop(ctx); 
@@ -387,7 +442,6 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
       decoration: const BoxDecoration(color: _DS.ground, borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
       child: Column(
         children: [
-          // HEADER PANEL BERBAYANG
           Container(
             padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
             decoration: BoxDecoration(color: _DS.surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(28)), boxShadow: _DS.softShadow),
@@ -424,7 +478,6 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
             ),
           ),
           
-          // DAFTAR RIWAYAT DENGAN CARD KONSISTEN
           Expanded(
             child: _isLoading 
               ? const Center(child: CircularProgressIndicator(color: _DS.blue))
@@ -463,7 +516,6 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
                     ),
           ),
 
-          // TOMBOL UPDATE
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(color: _DS.surface, boxShadow: [BoxShadow(color: const Color(0xFF0F2557).withOpacity(0.06), blurRadius: 20, offset: const Offset(0, -4))]),
@@ -481,4 +533,4 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
       ),
     );
   }
-} 
+}
