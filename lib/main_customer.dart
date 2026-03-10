@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:laundry_one/features/customer/customer_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:laundry_one/features/auth/screens/login_screen.dart';
 import 'package:laundry_one/features/customer/screens/home_customer_screen.dart';
@@ -65,7 +66,7 @@ class _SplashRouterState extends State<_SplashRouter> {
     _keLogin();
   }
 
-  void _keLogin() {
+void _keLogin() {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -76,11 +77,14 @@ class _SplashRouterState extends State<_SplashRouter> {
             labelIdentifier: 'Nomor HP',
             hint: '081234567890',
             keyboardType: TextInputType.phone,
-            primaryColor: const Color(0xFF00897B),
-            secondaryColor: const Color(0xFF00695C),
-            backgroundColor: Colors.white,
+            primaryColor: CustomerTheme.primary,
+            secondaryColor: CustomerTheme.primaryDark,
+            
+            // UBAH BARIS INI: Gunakan warna redup, bukan Colors.white
+            backgroundColor: CustomerTheme.surface, 
+            
             icon: Icons.local_laundry_service_rounded,
-            tagline: 'Cucian bersih, hati senang ✨',
+            tagline: 'Lacak cucian & kumpulkan poinnya', 
             homeScreen: const HomeCustomerScreen(),
             showRegister: true,
             registerScreen: const RegisterCustomerScreen(),
