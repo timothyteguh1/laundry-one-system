@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:laundry_one/features/auth/services/notification_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:laundry_one/features/auth/services/auth_service.dart';
 import 'package:laundry_one/features/auth/screens/login_screen.dart';
@@ -37,7 +38,9 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
   @override
   void initState() {
     super.initState();
+    NotificationService.setupPushNotifications();
     _loadAllData();
+    
   }
 
   @override
@@ -135,7 +138,12 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
                     customerId: _customerData?['id'], 
                     onRefresh: () => _fetchInitialData(_supabase.auth.currentUser!.id)
                   ),
-                  const KatalogTab(),
+                  // UBAH BARIS INI:
+                  KatalogTab(
+                    customerId: _customerData?['id'],
+                    currentPoin: poin,
+                    onRefresh: () => _fetchInitialData(_supabase.auth.currentUser!.id),
+                  ),
                   ProfilTab(nama: nama, noHp: noHp, avatarUrl: _profile?['avatar_url'], onLogout: _handleLogout),
                 ],
               ),

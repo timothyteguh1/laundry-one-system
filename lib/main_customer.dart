@@ -1,18 +1,32 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:laundry_one/features/customer/customer_theme.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'firebase_options.dart';
+import 'package:laundry_one/features/customer/customer_theme.dart';
 import 'package:laundry_one/features/auth/screens/login_screen.dart';
 import 'package:laundry_one/features/customer/screens/home_customer_screen.dart';
 import 'package:laundry_one/features/customer/screens/register_customer_screen.dart';
 import 'package:laundry_one/features/auth/services/auth_service.dart';
+import 'package:laundry_one/features/auth/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 1. Inisialisasi Firebase (Hanya di Android/iOS/Web)
+  if (kIsWeb || Platform.isAndroid || Platform.isIOS) {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  }
+
+  // 2. Inisialisasi Supabase
   await Supabase.initialize(
     url: 'https://wmmbzdcmewqtcuqyhatk.supabase.co',
-    anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtbWJ6ZGNtZXdxdGN1cXloYXRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwMTA5MDYsImV4cCI6MjA4NzU4NjkwNn0.xso6FyX2hnZWqhAosUluF_gow6NaSlgsWISgE0f7SqM',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtbWJ6ZGNtZXdxdGN1cXloYXRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwMTA5MDYsImV4cCI6MjA4NzU4NjkwNn0.xso6FyX2hnZWqhAosUluF_gow6NaSlgsWISgE0f7SqM',
   );
+
   runApp(const CustomerApp());
 }
 
@@ -25,8 +39,7 @@ class CustomerApp extends StatelessWidget {
       title: 'Laundry One',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme:
-            ColorScheme.fromSeed(seedColor: const Color(0xFF00897B)),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF00897B)),
         useMaterial3: true,
       ),
       home: const _SplashRouter(),
@@ -56,6 +69,9 @@ class _SplashRouterState extends State<_SplashRouter> {
       final role = await auth.getMyRole();
       if (!mounted) return;
       if (role == 'customer') {
+        // Ambil token notifikasi segera setelah sesi terdeteksi
+        NotificationService.setupPushNotifications();
+        
         Navigator.pushReplacement(context,
             MaterialPageRoute(builder: (_) => const HomeCustomerScreen()));
         return;
@@ -66,7 +82,7 @@ class _SplashRouterState extends State<_SplashRouter> {
     _keLogin();
   }
 
-void _keLogin() {
+  void _keLogin() {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -79,10 +95,7 @@ void _keLogin() {
             keyboardType: TextInputType.phone,
             primaryColor: CustomerTheme.primary,
             secondaryColor: CustomerTheme.primaryDark,
-            
-            // UBAH BARIS INI: Gunakan warna redup, bukan Colors.white
             backgroundColor: CustomerTheme.surface, 
-            
             icon: Icons.local_laundry_service_rounded,
             tagline: 'Lacak cucian & kumpulkan poinnya', 
             homeScreen: const HomeCustomerScreen(),
@@ -112,24 +125,12 @@ void _keLogin() {
                   size: 56, color: Colors.white),
             ),
             const SizedBox(height: 20),
-            const Text(
-              'Laundry One',
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5),
+            const Text('Laundry One',
+              style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800, letterSpacing: -0.5),
             ),
-            const SizedBox(height: 6),
-            Text('Cucian bersih, hati senang ✨',
-                style: TextStyle(
-                    color: Colors.white.withOpacity(0.75), fontSize: 14)),
             const SizedBox(height: 48),
-            const SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                  color: Colors.white, strokeWidth: 2.5),
+            const SizedBox(width: 24, height: 24,
+              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
             ),
           ],
         ),
