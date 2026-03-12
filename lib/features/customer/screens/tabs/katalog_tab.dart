@@ -1,3 +1,4 @@
+import 'dart:async'; // TAMBAHAN: Wajib untuk fungsi Timer
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -28,7 +29,7 @@ class _KatalogTabState extends State<KatalogTab> {
   List<Map<String, dynamic>> _services = [];
   
   List<Map<String, dynamic>> _activeVouchers = []; 
-  Set<String> _usedRewardIds = {}; // Menyimpan ID voucher yang SUDAH PERNAH DIPAKAI
+  Set<String> _usedRewardIds = {}; 
   
   bool _isLoading = true;
   bool _isProcessing = false; 
@@ -49,22 +50,21 @@ class _KatalogTabState extends State<KatalogTab> {
       Set<String> usedIds = {};
       
       if (widget.customerId != null) {
-        // Ambil SEMUA riwayat voucher pelanggan (Aktif & Dipakai)
         final resVouchers = await _supabase
             .from('reward_redemptions')
             .select('*, rewards_catalog(nama)')
             .eq('customer_id', widget.customerId!);
 
-        // Gunakan UTC untuk perhitungan yang akurat agar tidak bentrok dengan server Tokyo
         final nowUtc = DateTime.now().toUtc();
         
         for (var v in resVouchers) {
           if (v['status'] == 'dipakai') {
-            usedIds.add(v['reward_id']); // Catat bahwa voucher ini sudah pernah dinikmati
+            usedIds.add(v['reward_id']); 
           } else if (v['status'] == 'aktif') {
             final expiredAtUtc = DateTime.parse(v['berlaku_sampai']).toUtc();
             if (nowUtc.isAfter(expiredAtUtc)) {
               // Jika sudah lewat waktunya, hanguskan di database
+              // Ini akan otomatis memicu Trigger DB untuk refund poin!
               await _supabase.from('reward_redemptions').update({'status': 'expired'}).eq('id', v['id']);
             } else {
               validVouchers.add(v);
@@ -90,19 +90,16 @@ class _KatalogTabState extends State<KatalogTab> {
   Future<void> _tukarPoin(Map<String, dynamic> reward) async {
     if (widget.customerId == null) return;
     
-    // 1. CEK ANTI-DOUBLE (SATU KALI SEUMUR HIDUP)
     if (_usedRewardIds.contains(reward['id'])) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anda sudah pernah menggunakan promo ini sebelumnya!'), backgroundColor: Colors.orange));
       return;
     }
 
-    // 2. CEK LIMIT MAKSIMAL VOUCHER AKTIF
     if (_activeVouchers.length >= 2) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Limit Tercapai! Maksimal hanya boleh memiliki 2 voucher aktif.'), backgroundColor: Colors.orange));
       return;
     }
 
-    // 3. CEK APAKAH SEDANG PUNYA VOUCHER INI TAPI BELUM DIPAKAI
     final hasActive = _activeVouchers.any((v) => v['reward_id'] == reward['id']);
     if (hasActive) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anda masih memiliki voucher jenis ini yang sedang aktif!'), backgroundColor: Colors.orange));
@@ -139,7 +136,6 @@ class _KatalogTabState extends State<KatalogTab> {
 
       final randomCode = 'VCH-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
       
-      // MENGIRIM WAKTU DALAM FORMAT UTC (Standar Internasional) agar Supabase tidak bingung
       final expiredTimeUtc = DateTime.now().toUtc().add(const Duration(minutes: 5)).toIso8601String();
 
       await _supabase.from('reward_redemptions').insert({
@@ -184,15 +180,6 @@ class _KatalogTabState extends State<KatalogTab> {
       result = str[str.length - 1 - i] + result;
     }
     return 'Rp $result';
-  }
-
-  // MEMAKSA WAKTU TAMPIL DALAM FORMAT WIB (UTC+7)
-  String _formatJam(String iso) {
-    try {
-      // Ambil waktu dari database, konversi ke UTC murni, lalu PAKSA tambah 7 jam (WIB)
-      final d = DateTime.parse(iso).toUtc().add(const Duration(hours: 7));
-      return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')} WIB';
-    } catch (e) { return '-'; }
   }
 
   @override
@@ -288,33 +275,17 @@ class _KatalogTabState extends State<KatalogTab> {
               if (_activeVouchers.isNotEmpty) ...[
                 const Text('Voucher Aktif Saya', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: CustomerTheme.textPrimary)),
                 const SizedBox(height: 12),
-                ..._activeVouchers.map((v) => Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [CustomerTheme.primary, CustomerTheme.primaryDark]),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: CustomerTheme.cardShadow
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.qr_code_2_rounded, color: Colors.white, size: 48),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(v['rewards_catalog']?['nama'] ?? 'Voucher', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 4),
-                            Text(v['kode_voucher'] ?? '-', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 2)),
-                            const SizedBox(height: 4),
-                            Text('Hangus pukul ${_formatJam(v['berlaku_sampai'])}', style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.w700)),
-                          ],
-                        ),
-                      )
-                    ],
-                  ),
+                
+                // 👇 DI SINI KITA GUNAKAN WIDGET TIMER KITA 👇
+                ..._activeVouchers.map((v) => ActiveVoucherCard(
+                  voucherData: v,
+                  onExpired: () async {
+                    // Ketika waktu habis, jalankan fetch data agar UI dan Database terupdate otomatis!
+                    await _fetchData();
+                    await widget.onRefresh(); // Supaya poin di header Beranda juga ikut ter-update
+                  },
                 )),
+                
                 const Divider(height: 32, color: CustomerTheme.border, thickness: 1.5),
               ],
 
@@ -327,7 +298,6 @@ class _KatalogTabState extends State<KatalogTab> {
                   final poinDibutuhkan = r['poin_dibutuhkan'] ?? 0;
                   final bisaDitebus = widget.currentPoin >= poinDibutuhkan;
                   
-                  // CEK STATUS TOMBOL
                   final isAlreadyUsed = _usedRewardIds.contains(r['id']);
                   final isAlreadyActive = _activeVouchers.any((v) => v['reward_id'] == r['id']);
                   final isButtonDisabled = !bisaDitebus || isAlreadyActive || isLimitReached || isAlreadyUsed;
@@ -398,7 +368,6 @@ class _KatalogTabState extends State<KatalogTab> {
     );
   }
 
-  // ... (Sisa fungsi _buildListHarga tetap sama seperti sebelumnya) ...
   Widget _buildListHarga() {
     if (_services.isEmpty) {
       return const EmptyState(icon: Icons.list_alt_rounded, message: 'Katalog Kosong', sub: 'Daftar harga layanan belum tersedia.');
@@ -436,6 +405,108 @@ class _KatalogTabState extends State<KatalogTab> {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+// ==============================================================
+// WIDGET KARTU VOUCHER KHUSUS DENGAN TIMER HITUNG MUNDUR
+// ==============================================================
+class ActiveVoucherCard extends StatefulWidget {
+  final Map<String, dynamic> voucherData;
+  final VoidCallback onExpired;
+
+  const ActiveVoucherCard({
+    super.key, 
+    required this.voucherData, 
+    required this.onExpired
+  });
+
+  @override
+  State<ActiveVoucherCard> createState() => _ActiveVoucherCardState();
+}
+
+class _ActiveVoucherCardState extends State<ActiveVoucherCard> {
+  Timer? _timer;
+  Duration _timeLeft = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _startCountdown();
+  }
+
+  void _startCountdown() {
+    // Ambil waktu dari database yang sudah dalam format UTC
+    final expiredAtUtc = DateTime.parse(widget.voucherData['berlaku_sampai']).toUtc();
+    
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      final nowUtc = DateTime.now().toUtc();
+      
+      if (nowUtc.isAfter(expiredAtUtc)) {
+        // Waktu habis! Matikan timer dan panggil fungsi onExpired (fetch data)
+        _timer?.cancel();
+        widget.onExpired();
+      } else {
+        // Hitung selisih waktu untuk ditampilkan
+        if (mounted) {
+          setState(() {
+            _timeLeft = expiredAtUtc.difference(nowUtc);
+          });
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel(); // Sangat penting agar tidak memory leak
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Format timer (04:59)
+    final minutes = _timeLeft.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = _timeLeft.inSeconds.remainder(60).toString().padLeft(2, '0');
+    final timeString = _timeLeft.isNegative ? "00:00" : "$minutes:$seconds";
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [CustomerTheme.primary, CustomerTheme.primaryDark]),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: CustomerTheme.cardShadow
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.qr_code_2_rounded, color: Colors.white, size: 48),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.voucherData['rewards_catalog']?['nama'] ?? 'Voucher', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Text(widget.voucherData['kode_voucher'] ?? '-', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 2)),
+                const SizedBox(height: 4),
+                // Tampilkan hitung mundur yang berjalan
+                Row(
+                  children: [
+                    const Icon(Icons.timer_outlined, color: Colors.amber, size: 14),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Hangus dalam $timeString', 
+                      style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.w700)
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          )
+        ],
       ),
     );
   }
