@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:laundry_one/features/customer/customer_theme.dart';
 import 'package:laundry_one/features/customer/widgets/customer_shared_widgets.dart';
-import 'package:laundry_one/features/customer/screens/customer_invoice_screen.dart'; // IMPORT NOTA
+import 'package:laundry_one/features/customer/screens/customer_invoice_screen.dart'; 
+import 'package:laundry_one/features/customer/screens/customer_notification_screen.dart'; // IMPORT LAYAR NOTIF BARU
 
 class BerandaTab extends StatelessWidget {
   final String nama;
@@ -45,7 +46,23 @@ class BerandaTab extends StatelessWidget {
                           ],
                         ),
                       ),
-                      Container(padding: const EdgeInsets.all(12), decoration: const BoxDecoration(color: CustomerTheme.primaryLight, shape: BoxShape.circle), child: const Icon(Icons.notifications_none_rounded, color: CustomerTheme.primary))
+                      // 👇 TOMBOL NOTIFIKASI SUDAH NAVIGASI KE LAYAR BARU 👇
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const CustomerNotificationScreen()),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12), 
+                          decoration: const BoxDecoration(
+                            color: CustomerTheme.primaryLight, 
+                            shape: BoxShape.circle
+                          ), 
+                          child: const Icon(Icons.notifications_none_rounded, color: CustomerTheme.primary)
+                        ),
+                      )
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -94,7 +111,6 @@ class BerandaTab extends StatelessWidget {
                         order: order, 
                         isCustomerView: true, 
                         onTap: () {
-                          // BUKA LAYAR NOTA DIGITAL
                           Navigator.push(
                             context,
                             MaterialPageRoute(builder: (_) => CustomerInvoiceScreen(order: order)),
