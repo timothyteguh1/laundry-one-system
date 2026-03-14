@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; 
 import 'package:laundry_one/features/customer/customer_theme.dart';
 import 'package:laundry_one/features/customer/widgets/customer_shared_widgets.dart';
 import 'package:laundry_one/features/customer/screens/customer_invoice_screen.dart'; 
-import 'package:laundry_one/features/customer/screens/customer_notification_screen.dart'; // IMPORT LAYAR NOTIF BARU
+import 'package:laundry_one/features/customer/screens/customer_notification_screen.dart'; 
+
+// 👇 IMPORT AKTIVITAS TAB
+import 'package:laundry_one/features/customer/screens/tabs/aktivitas_tab.dart'; 
 
 class BerandaTab extends StatelessWidget {
   final String nama;
@@ -46,7 +50,7 @@ class BerandaTab extends StatelessWidget {
                           ],
                         ),
                       ),
-                      // 👇 TOMBOL NOTIFIKASI SUDAH NAVIGASI KE LAYAR BARU 👇
+                      // TOMBOL NOTIFIKASI DENGAN BADGE MERAH
                       GestureDetector(
                         onTap: () {
                           Navigator.push(
@@ -54,28 +58,54 @@ class BerandaTab extends StatelessWidget {
                             MaterialPageRoute(builder: (_) => const CustomerNotificationScreen()),
                           );
                         },
-                        child: Container(
-                          padding: const EdgeInsets.all(12), 
-                          decoration: const BoxDecoration(
-                            color: CustomerTheme.primaryLight, 
-                            shape: BoxShape.circle
-                          ), 
-                          child: const Icon(Icons.notifications_none_rounded, color: CustomerTheme.primary)
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12), 
+                              decoration: const BoxDecoration(
+                                color: CustomerTheme.primaryLight, 
+                                shape: BoxShape.circle
+                              ), 
+                              child: const Icon(Icons.notifications_none_rounded, color: CustomerTheme.primary)
+                            ),
+                            const NotificationBadge(),
+                          ],
                         ),
                       )
                     ],
                   ),
                   const SizedBox(height: 24),
+                  
+                  // 👇 UPDATE: KOTAK KOIN NAVIGASI LANGSUNG KE AKTIVITAS (MUTASI POIN)
                   Container(
-                    padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(gradient: const LinearGradient(colors: [CustomerTheme.primary, CustomerTheme.primaryDark], begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(20), boxShadow: CustomerTheme.cardShadow),
-                    child: Row(
-                      children: [
-                        Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle), child: const Icon(Icons.stars_rounded, color: Colors.amber, size: 28)),
-                        const SizedBox(width: 16),
-                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Saldo Koin Laundry', style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12, fontWeight: FontWeight.w600)), const SizedBox(height: 4), Text('$poin Koin', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800))])),
-                        const Icon(Icons.chevron_right_rounded, color: Colors.white),
-                      ],
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () {
+                          Navigator.push(
+                            context, 
+                            MaterialPageRoute(builder: (_) => AktivitasTab(
+                              isStandalone: true,    // Tampilkan tombol back
+                              initialFilter: 1,      // Langsung buka Mutasi Poin
+                              onRefresh: onRefresh,  // Bawa fungsi refresh
+                            ))
+                          );
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Row(
+                            children: [
+                              Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle), child: const Icon(Icons.stars_rounded, color: Colors.amber, size: 28)),
+                              const SizedBox(width: 16),
+                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Saldo Koin Laundry', style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12, fontWeight: FontWeight.w600)), const SizedBox(height: 4), Text('$poin Koin', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800))])),
+                              const Icon(Icons.chevron_right_rounded, color: Colors.white),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   )
                 ],
@@ -125,6 +155,53 @@ class BerandaTab extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class NotificationBadge extends StatefulWidget {
+  const NotificationBadge({super.key});
+  @override
+  State<NotificationBadge> createState() => _NotificationBadgeState();
+}
+
+class _NotificationBadgeState extends State<NotificationBadge> {
+  String? _customerId;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCustomerId();
+  }
+
+  Future<void> _fetchCustomerId() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      final data = await Supabase.instance.client.from('customers').select('id').eq('profile_id', userId).maybeSingle();
+      if (data != null && mounted) {
+        setState(() { _customerId = data['id']; });
+      }
+    } catch (e) { }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_customerId == null) return const SizedBox.shrink();
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: Supabase.instance.client.from('notifications').stream(primaryKey: ['id']).eq('customer_id', _customerId!).map((data) => data.where((n) => n['is_read'] == false).toList()),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink(); 
+        final unreadCount = snapshot.data!.length;
+        return Positioned(
+          right: -2, top: -2,
+          child: Container(
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle, border: Border.all(color: CustomerTheme.surface, width: 2)),
+            child: Text(unreadCount > 9 ? '9+' : unreadCount.toString(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, height: 1), textAlign: TextAlign.center),
+          ),
+        );
+      },
     );
   }
 }

@@ -2,18 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:laundry_one/features/customer/customer_theme.dart';
 import 'package:laundry_one/features/customer/widgets/customer_shared_widgets.dart';
-import 'package:laundry_one/features/customer/screens/customer_invoice_screen.dart'; // IMPORT NOTA
+import 'package:laundry_one/features/customer/screens/customer_invoice_screen.dart';
 
 class AktivitasTab extends StatefulWidget {
   final List<Map<String, dynamic>> historyOrders;
   final String? customerId;
   final Future<void> Function() onRefresh;
+  
+  // 👇 TAMBAHAN VARIABEL UNTUK MENANGKAP PERINTAH DARI BERANDA
+  final int initialFilter; 
+  final bool isStandalone; 
 
   const AktivitasTab({
     super.key,
-    required this.historyOrders,
-    required this.customerId,
+    this.historyOrders = const [], // Dibuat default kosong
+    this.customerId,               // Dibuat opsional
     required this.onRefresh,
+    this.initialFilter = 0,
+    this.isStandalone = false,     // Default false (saat dipakai di bottom nav)
   });
 
   @override
@@ -22,24 +28,36 @@ class AktivitasTab extends StatefulWidget {
 
 class _AktivitasTabState extends State<AktivitasTab> {
   final _supabase = Supabase.instance.client;
-  int _selectedFilter = 0; 
+  late int _selectedFilter; 
   List<Map<String, dynamic>> _pointsHistory = [];
   bool _isLoadingPoin = false;
 
   @override
   void initState() {
     super.initState();
-    _loadPointsHistory();
+    _selectedFilter = widget.initialFilter; // Set filter dari variabel lemparan
+    if (_selectedFilter == 1) _loadPointsHistory();
   }
 
   Future<void> _loadPointsHistory() async {
-    if (widget.customerId == null) return;
     setState(() => _isLoadingPoin = true);
     try {
+      // Jika dipanggil dari beranda (customerId kosong), kita cari sendiri ID-nya
+      String? targetCustomerId = widget.customerId;
+      if (targetCustomerId == null) {
+        final userId = _supabase.auth.currentUser?.id;
+        if (userId != null) {
+          final custData = await _supabase.from('customers').select('id').eq('profile_id', userId).maybeSingle();
+          targetCustomerId = custData?['id'];
+        }
+      }
+
+      if (targetCustomerId == null) throw Exception('Customer ID not found');
+
       final data = await _supabase
           .from('points_ledger')
           .select('tipe, jumlah, created_at, catatan')
-          .eq('customer_id', widget.customerId!)
+          .eq('customer_id', targetCustomerId)
           .order('created_at', ascending: false);
           
       if (mounted) {
@@ -55,13 +73,14 @@ class _AktivitasTabState extends State<AktivitasTab> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
+    // KONTEN UTAMA AKTIVITAS
+    Widget content = SafeArea(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(24, 24, 24, 16),
-            child: Text('Riwayat Aktivitas', style: TextStyle(color: CustomerTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w800)),
+          Padding(
+            padding: EdgeInsets.fromLTRB(24, widget.isStandalone ? 16 : 24, 24, 16),
+            child: const Text('Riwayat Aktivitas', style: TextStyle(color: CustomerTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w800)),
           ),
           
           Padding(
@@ -87,6 +106,25 @@ class _AktivitasTabState extends State<AktivitasTab> {
         ],
       ),
     );
+
+    // 👇 JIKA DIPANGGIL DARI BERANDA, BUNGKUS DENGAN SCAFFOLD & TOMBOL BACK
+    if (widget.isStandalone) {
+      return Scaffold(
+        backgroundColor: CustomerTheme.ground,
+        appBar: AppBar(
+          backgroundColor: CustomerTheme.ground,
+          foregroundColor: CustomerTheme.textPrimary,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: content,
+      );
+    }
+
+    return content;
   }
 
   Widget _buildToggleBtn(int index, String title, IconData icon) {
@@ -119,6 +157,14 @@ class _AktivitasTabState extends State<AktivitasTab> {
   }
 
   Widget _buildListCucian() {
+    if (widget.historyOrders.isEmpty && widget.isStandalone) {
+      return const EmptyState(
+        icon: Icons.receipt_long_outlined, 
+        message: 'Akses lewat Tab Bawah', 
+        sub: 'Silakan akses Cucian Saya melalui menu tab Aktivitas di bawah.'
+      );
+    }
+
     if (widget.historyOrders.isEmpty) {
       return const EmptyState(
         icon: Icons.receipt_long_outlined, 
@@ -142,11 +188,7 @@ class _AktivitasTabState extends State<AktivitasTab> {
               order: order,
               isCustomerView: true,
               onTap: () {
-                // BUKA LAYAR NOTA DIGITAL
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => CustomerInvoiceScreen(order: order)),
-                );
+                Navigator.push(context, MaterialPageRoute(builder: (_) => CustomerInvoiceScreen(order: order)));
               },
             ),
           );
@@ -224,11 +266,16 @@ class _AktivitasTabState extends State<AktivitasTab> {
     return 'Transaksi Poin';
   }
 
+  // 👇 PERBAIKAN WAKTU WIB SEKALIGUS
   String _formatDate(String? iso) {
     if (iso == null) return '-';
     try {
-      final d = DateTime.parse(iso).toLocal();
-      return '${d.day}/${d.month}/${d.year} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+      DateTime d = DateTime.parse(iso);
+      if (!iso.endsWith('Z') && !iso.contains('+')) {
+        d = DateTime.parse('${iso}Z');
+      }
+      d = d.toLocal();
+      return '${d.day}/${d.month}/${d.year} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')} WIB';
     } catch (e) { return '-'; }
   }
 }

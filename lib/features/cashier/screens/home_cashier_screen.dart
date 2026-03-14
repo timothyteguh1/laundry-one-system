@@ -18,9 +18,7 @@ class _DS {
   static const sky = Color(0xFFE8F0FE);
   static const surface = Colors.white;
   
-  // FIX: Latar belakang digelapkan sedikit agar kotak putih terlihat jelas
   static const ground = Color(0xFFEAF0F6); 
-  // FIX: Garis tepi dipertegas warnanya
   static const border = Color(0xFFD2DCE8); 
   
   static const textPrimary = Color(0xFF0F2557);
@@ -31,7 +29,6 @@ class _DS {
   static const statusSelesai = Color(0xFF00897B);
   static const statusLunas = Color(0xFF757575);
 
-  // FIX: Shadow ditebalkan agar kotak terasa mengambang dan terpisah dari background
   static List<BoxShadow> cardShadow = [
     BoxShadow(color: const Color(0xFF0F2557).withOpacity(0.09), blurRadius: 16, offset: const Offset(0, 4)),
     BoxShadow(color: const Color(0xFF0F2557).withOpacity(0.05), blurRadius: 6, offset: const Offset(0, 2)),
@@ -131,7 +128,8 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       final todayStart = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}T00:00:00';
       final todayEnd = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}T23:59:59';
 
-      final queryStr = 'id, nomor_order, status, total_harga, is_piutang, metode_bayar_awal, created_at, estimasi_selesai, jatuh_tempo, customers(profiles(nama_lengkap, nomor_hp)), order_items(jumlah, harga_satuan, services(nama))';
+      // PENTING: Tambahan customer_id, poin_didapat, dan poin_sudah_diberikan agar tidak error saat pelunasan
+      final queryStr = 'id, nomor_order, status, total_harga, is_piutang, metode_bayar_awal, created_at, estimasi_selesai, jatuh_tempo, customer_id, poin_didapat, poin_sudah_diberikan, customers(profiles(nama_lengkap, nomor_hp)), order_items(jumlah, harga_satuan, services(nama))';
 
       final results = await Future.wait([
         _supabase.from('orders').select(queryStr).gte('created_at', startStr).lte('created_at', endStr).order('created_at', ascending: false),
@@ -256,16 +254,59 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                       String newStatus = currentStatus;
                       if (currentStatus == 'selesai') newStatus = 'dibayar_lunas'; 
 
+                      // PENARIKAN DATA UNTUK POIN
+                      final orderId = order['id'];
+                      final kasirId = _supabase.auth.currentUser!.id;
+                      final customerId = order['customer_id'];
+                      final poinDidapat = order['poin_didapat'] ?? 0;
+                      final poinSudahDiberikan = order['poin_sudah_diberikan'] == true;
+                      final nomorOrder = order['nomor_order'];
+
+                      // 1. UPDATE ORDER
                       await _supabase.from('orders').update({
                         'status': newStatus, 
                         'is_piutang': false, 
-                        'total_dibayar': total.toInt()
-                      }).eq('id', order['id']);
+                        'total_dibayar': total.toInt(),
+                        'poin_sudah_diberikan': true
+                      }).eq('id', orderId);
                       
-                      await _supabase.from('order_payments').insert({'order_id': order['id'], 'jumlah': total.toInt(), 'metode': metodeBayar, 'diterima_oleh': _supabase.auth.currentUser!.id});
+                      // 2. CATAT PEMBAYARAN
+                      await _supabase.from('order_payments').insert({
+                        'order_id': orderId, 
+                        'jumlah': total.toInt(), 
+                        'metode': metodeBayar, 
+                        'diterima_oleh': kasirId
+                      });
+
+                      // 3. PENCAIRAN POIN OTOMATIS
+                      if (customerId != null && poinDidapat > 0 && !poinSudahDiberikan) {
+                        final cust = await _supabase.from('customers').select('poin_saldo').eq('id', customerId).single();
+                        final saldoSebelum = (cust['poin_saldo'] as num).toInt();
+                        final saldoSesudah = saldoSebelum + poinDidapat;
+
+                        await _supabase.from('customers').update({'poin_saldo': saldoSesudah}).eq('id', customerId);
+                        
+                        await _supabase.from('points_ledger').insert({
+                          'customer_id': customerId, 
+                          'tipe': 'earned', 
+                          'jumlah': poinDidapat,
+                          'saldo_sebelum': saldoSebelum, 
+                          'saldo_sesudah': saldoSesudah,
+                          'order_id': orderId, 
+                          'dilakukan_oleh': kasirId, 
+                          'catatan': 'Poin Pelunasan Piutang ($nomorOrder)',
+                        });
+                      }
                       
-                      if (mounted) { Navigator.pop(ctx); _loadData(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Pelunasan berhasil! ✓', style: TextStyle(fontWeight: FontWeight.w600)), backgroundColor: Colors.green.shade600, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))); }
-                    } catch (e) { setModalState(() => isSubmitting = false); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal melunasi: $e'), backgroundColor: Colors.red)); }
+                      if (mounted) { 
+                        Navigator.pop(ctx); 
+                        _loadData(); 
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('Pelunasan berhasil & Poin Masuk! ✓', style: TextStyle(fontWeight: FontWeight.w600)), backgroundColor: Colors.green.shade600, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))); 
+                      }
+                    } catch (e) { 
+                      setModalState(() => isSubmitting = false); 
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal melunasi: $e'), backgroundColor: Colors.red)); 
+                    }
                   },
                   child: isSubmitting ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Konfirmasi Pelunasan', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                 ),
@@ -378,13 +419,8 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                       ],
                     ),
                   ),
-                  // ==========================================
-                  // TOMBOL BARU: INVENTORY / STOK
-                  // ==========================================
                   Material(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(12), child: InkWell(onTap: () { HapticFeedback.selectionClick(); Navigator.push(context, MaterialPageRoute(builder: (_) => const InventoryScreen())); }, borderRadius: BorderRadius.circular(12), child: const Padding(padding: EdgeInsets.all(10), child: Icon(Icons.inventory_2_outlined, color: Colors.white, size: 20)))),
                   const SizedBox(width: 8),
-                  
-                  // TOMBOL LAMA: LOGOUT
                   Material(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(12), child: InkWell(onTap: () async { HapticFeedback.mediumImpact(); await AuthService().logout(); if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen(config: LoginConfig(roleName: 'Staf Kasir', roleDatabase: 'cashier', labelIdentifier: 'Nomor HP', hint: '081234567890', keyboardType: TextInputType.phone, primaryColor: Color(0xFF1565C0), secondaryColor: Color(0xFF0D47A1), backgroundColor: Colors.white, icon: Icons.point_of_sale_rounded, tagline: 'Kelola pesanan dengan cepat & mudah', homeScreen: HomeCashierScreen(), showRegister: true)))); }, borderRadius: BorderRadius.circular(12), child: const Padding(padding: EdgeInsets.all(10), child: Icon(Icons.logout_rounded, color: Colors.white, size: 20)))),
                 ],
               ),
@@ -436,7 +472,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     return Material(
       color: Colors.transparent,
       child: Ink(
-        // DITAMBAHKAN BORDER TEGAS
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: _DS.border, width: 1.5), boxShadow: _DS.cardShadow),
         child: InkWell(
           onTap: () { HapticFeedback.lightImpact(); _showPiutangList(); },
@@ -512,19 +547,17 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   Future<void> _showDetail(Map<String, dynamic> order) async {
     HapticFeedback.lightImpact();
 
-    // 1. Terjemahkan item dari Database menjadi format Invoice
     final List<Map<String, dynamic>> mappedItems = (order['order_items'] as List? ?? []).map((i) => {
       'qty': (i['jumlah'] as num?)?.toInt() ?? 0,
       'subtotal': (i['harga_satuan'] as num?)?.toDouble() ?? 0 * ((i['jumlah'] as num?)?.toInt() ?? 0),
       'service': {'nama': i['services']?['nama'] ?? 'Item'},
     }).toList();
 
-    // 2. Buka Layar Invoice dengan mode "isFromHome = true"
     final action = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => InvoiceScreen(
-          isFromHome: true, // INI KUNCI AGAR APP BAR MUNCUL
+          isFromHome: true,
           status: order['status'],
           orderId: order['id'],
           nomorOrder: order['nomor_order'],
@@ -542,7 +575,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       ),
     );
 
-    // 3. Tangkap respon jika tombol Selesai/Lunas ditekan
     if (action == 'selesai') {
       _handleUpdateStatus(order, 'selesai');
     } else if (action == 'dibayar_lunas') {
@@ -566,7 +598,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     );
   }
 
-  // DITAMBAHKAN BORDER AGAR KOTAK JELAS
   Widget _buildMiniStatCard(String title, double amount, IconData icon, Color color) { return Expanded(child: Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _DS.border), boxShadow: _DS.softShadow), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(icon, color: color, size: 24), const SizedBox(height: 12), Text(title, style: const TextStyle(color: _DS.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)), const SizedBox(height: 4), Text(_formatRupiah(amount), style: const TextStyle(color: _DS.textPrimary, fontSize: 16, fontWeight: FontWeight.w800))]))); }
   
   Widget _buildBottomNav() { 
@@ -687,7 +718,6 @@ class _PiutangBottomSheetState extends State<_PiutangBottomSheet> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Container(
-              // DITAMBAHKAN BORDER AGAR KOTAK JELAS
               decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: _DS.border)),
               child: TextField(
                 controller: _searchCtrl,
@@ -727,7 +757,6 @@ class _PiutangBottomSheetState extends State<_PiutangBottomSheet> {
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 12),
-                        // DITAMBAHKAN BORDER AGAR KOTAK JELAS
                         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _DS.border), boxShadow: _DS.softShadow),
                         child: Theme(
                           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
@@ -1003,7 +1032,6 @@ class _PelangganTabState extends State<_PelangganTab> {
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 10),
-                              // DITAMBAHKAN BORDER AGAR KOTAK JELAS
                               decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _DS.border), boxShadow: _DS.softShadow),
                               child: ListTile(
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1056,7 +1084,6 @@ class _PremiumOrderCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        // DITAMBAHKAN BORDER AGAR KOTAK JELAS
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _DS.border), boxShadow: _DS.softShadow),
         child: IntrinsicHeight(
           child: Row(
@@ -1148,12 +1175,11 @@ class _OrderDetailSheet extends StatelessWidget {
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16),
             padding: const EdgeInsets.all(20),
-            // DITAMBAHKAN BORDER AGAR KOTAK JELAS
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _DS.border), boxShadow: _DS.softShadow),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // HEADER NOTA (TANPA TOMBOL HAPUS)
+                // HEADER NOTA
                 Center(
                   child: Column(
                     children: [
@@ -1228,7 +1254,7 @@ class _OrderDetailSheet extends StatelessWidget {
             ),
           ),
           
-          // ACTION BUTTONS DI BAWAH NOTA (DIPISAH FUNGSINYA)
+          // ACTION BUTTONS DI BAWAH NOTA 
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
             child: Column(
@@ -1263,7 +1289,7 @@ class _OrderDetailSheet extends StatelessWidget {
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.payments_outlined), label: const Text('Bayar / Lunasi Tagihan', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
-                      onPressed: () { HapticFeedback.heavyImpact(); onUpdateStatus('dibayar_lunas'); }, // Pemicu buka Form Bayar
+                      onPressed: () { HapticFeedback.heavyImpact(); onUpdateStatus('dibayar_lunas'); }, 
                     ),
                   )
               ],

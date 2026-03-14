@@ -154,9 +154,97 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   double get _subtotal => _cart.fold(0, (sum, c) => sum + (c['subtotal'] as double));
   double get _total => (_subtotal - _diskonVoucher).clamp(0, double.infinity).toDouble();
 
-  // (Fungsi Voucher & Simpan Order tidak diubah logikanya)
-  Future<void> _pakaiVoucher() async { /*...*/ }
+  // =========================================================
+  // LOGIKA VOUCHER / PROMO BARU
+  // =========================================================
+  Future<void> _pakaiVoucher() async {
+    if (_selectedCustomer == null) return;
+    final codeCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
 
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _DS.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Gunakan Voucher', style: TextStyle(fontWeight: FontWeight.w800)),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: codeCtrl,
+            textCapitalization: TextCapitalization.characters,
+            decoration: _modernInputDecoration('Kode Voucher (Misal: VCH-123)'),
+            validator: (v) => v == null || v.isEmpty ? 'Masukkan kode' : null,
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal', style: TextStyle(color: _DS.textSecondary))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, elevation: 0),
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              Navigator.pop(ctx);
+              await _prosesVoucher(codeCtrl.text.trim());
+            },
+            child: const Text('Gunakan', style: TextStyle(color: Colors.white)),
+          )
+        ],
+      )
+    );
+  }
+
+  Future<void> _prosesVoucher(String kode) async {
+    setState(() => _isLoading = true);
+    try {
+      final profileId = _selectedCustomer!['id'];
+      final custData = await _supabase.from('customers').select('id').eq('profile_id', profileId).maybeSingle();
+      if (custData == null) throw 'Data pelanggan belum lengkap.';
+      final customerId = custData['id'];
+
+      // Cari kode voucher
+      final voucher = await _supabase.from('reward_redemptions')
+          .select('*, rewards_catalog(*)')
+          .eq('kode_voucher', kode)
+          .eq('customer_id', customerId)
+          .eq('status', 'aktif')
+          .maybeSingle();
+
+      if (voucher == null) throw 'Voucher tidak valid atau milik pelanggan lain.';
+
+      // Cek kadaluarsa
+      final expiredAt = DateTime.parse(voucher['berlaku_sampai']);
+      if (DateTime.now().isAfter(expiredAt)) throw 'Voucher ini sudah expired (hangus).';
+
+      // Kalkulasi diskon
+      final reward = voucher['rewards_catalog'];
+      double diskon = 0;
+      if (reward['tipe_reward'] == 'diskon_persen') {
+        diskon = _subtotal * (reward['nilai_reward'] / 100);
+      } else if (reward['tipe_reward'] == 'diskon_nominal' || reward['tipe_reward'] == 'gratis_layanan') {
+        diskon = (reward['nilai_reward'] as num).toDouble();
+      }
+
+      if (diskon > _subtotal) diskon = _subtotal; // Maksimal diskon sebesar tagihan
+
+      setState(() {
+        _voucherData = voucher;
+        _voucherCode = kode;
+        _diskonVoucher = diskon;
+      });
+      _showSnackBar('Berhasil! Diskon ${_formatRupiah(diskon)} diterapkan.', Colors.green);
+    } catch (e) {
+      _showSnackBar(e.toString(), Colors.red);
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // =========================================================
+  // LOGIKA SIMPAN ORDER & DISTRIBUSI POIN
+  // =========================================================
+  // =========================================================
+  // LOGIKA SIMPAN ORDER & DISTRIBUSI POIN (REVISI PIUTANG)
+  // =========================================================
   Future<void> _simpanOrder() async {
     setState(() => _isLoading = true);
     try {
@@ -171,6 +259,16 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         customerId = custData?['id'];
       }
 
+      // AMBIL PENGATURAN RUPIAH PER POIN DARI DB
+      final settingData = await _supabase.from('app_settings').select('value').eq('id', 'rupiah_per_poin').maybeSingle();
+      final double rupiahPerPoin = settingData != null ? (settingData['value'] as num).toDouble() : 50000.0;
+
+      // HITUNG POIN POTENSIAL (Hanya jika terdaftar)
+      int poinDidapat = 0;
+      if (customerId != null) {
+        poinDidapat = (_total / rupiahPerPoin).floor();
+      }
+
       final now = DateTime.now();
       final prefix = 'ORD-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
       final count = await _supabase.from('orders').select('id').like('nomor_order', '$prefix%');
@@ -178,7 +276,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
       final int totalDibayar = _tipeBayar == 'piutang' ? 0 : _total.toInt();
       final String metodeBayarFinal = _tipeBayar == 'piutang' ? 'piutang' : _metodeBayar;
-
       final orderPayload = <String, dynamic>{
         'nomor_order': nomorOrder,
         'customer_id': customerId,
@@ -188,32 +285,30 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         'total_dibayar': totalDibayar,
         'metode_bayar_awal': metodeBayarFinal,
         'is_piutang': _tipeBayar == 'piutang',
-        'created_at': _tglMasuk.toIso8601String(),
-        'estimasi_selesai': _estimasiSelesai?.toIso8601String(),
-        'jatuh_tempo': _tipeBayar == 'piutang' ? _jatuhTempo?.toIso8601String() : null,
+        'poin_didapat': poinDidapat, 
+        'poin_sudah_diberikan': (_tipeBayar == 'lunas' && customerId != null && poinDidapat > 0), 
+        
+        // 👇 TAMBAHKAN .toUtc() DI 3 BARIS INI AGAR SUPABASE TIDAK BINGUNG
+        'created_at': _tglMasuk.toUtc().toIso8601String(),
+        'estimasi_selesai': _estimasiSelesai?.toUtc().toIso8601String(),
+        'jatuh_tempo': _tipeBayar == 'piutang' ? _jatuhTempo?.toUtc().toIso8601String() : null,
       };
       
       if (_diskonVoucher > 0) orderPayload['diskon_voucher'] = _diskonVoucher.toInt();
       if (_voucherData != null) orderPayload['redemption_id'] = _voucherData!['id'];
 
+      // 1. BUAT NOTA TRANSAKSI
       final order = await _supabase.from('orders').insert(orderPayload).select().single();
 
       if (_tipeBayar != 'piutang' && totalDibayar > 0) {
-        await _supabase.from('order_payments').insert({
-          'order_id': order['id'],
-          'jumlah': totalDibayar,
-          'metode': metodeBayarFinal,
-          'diterima_oleh': kasirId,
-        });
+        await _supabase.from('order_payments').insert({'order_id': order['id'], 'jumlah': totalDibayar, 'metode': metodeBayarFinal, 'diterima_oleh': kasirId});
       }
 
+      // 2. INPUT BARANG & POTONG STOK INVENTORY
       for (final item in _cart) {
         await _supabase.from('order_items').insert({
-          'order_id': order['id'],
-          'service_id': item['service']['id'],
-          'jumlah': item['qty'],
-          'harga_satuan': (item['service']['harga_per_satuan'] as num).toInt(),
-          'subtotal': (item['subtotal'] as double).toInt(),
+          'order_id': order['id'], 'service_id': item['service']['id'], 'jumlah': item['qty'],
+          'harga_satuan': (item['service']['harga_per_satuan'] as num).toInt(), 'subtotal': (item['subtotal'] as double).toInt(),
         });
 
         if (item['service']['tipe'] == 'produk' && item['service']['inventory_id'] != null) {
@@ -227,17 +322,32 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
           await _supabase.from('inventory').update({'stok_saat_ini': stokAfter}).eq('id', invId);
           await _supabase.from('inventory_log').insert({
-            'inventory_id': invId, 'tipe': 'keluar', 'qty': qtyKurang,
-            'stok_sebelum': stokBefore, 'stok_sesudah': stokAfter,
-            'keterangan': 'Order $nomorOrder', 'order_id': order['id'], 'created_by': kasirId,
+            'inventory_id': invId, 'tipe': 'keluar', 'qty': qtyKurang, 'stok_sebelum': stokBefore, 
+            'stok_sesudah': stokAfter, 'keterangan': 'Order $nomorOrder', 'order_id': order['id'], 'created_by': kasirId,
           });
         }
       }
 
+      // 3. TAMBAHKAN POIN LOYALITAS (HANYA JIKA LUNAS)
+      if (customerId != null && poinDidapat > 0 && _tipeBayar == 'lunas') {
+        final cust = await _supabase.from('customers').select('poin_saldo').eq('id', customerId).single();
+        final saldoSebelum = (cust['poin_saldo'] as num).toInt();
+        final saldoSesudah = saldoSebelum + poinDidapat;
+
+        await _supabase.from('customers').update({'poin_saldo': saldoSesudah}).eq('id', customerId);
+        await _supabase.from('points_ledger').insert({
+          'customer_id': customerId, 'tipe': 'earned', 'jumlah': poinDidapat,
+          'saldo_sebelum': saldoSebelum, 'saldo_sesudah': saldoSesudah,
+          'order_id': order['id'], 'dilakukan_oleh': kasirId, 'catatan': 'Poin dari $nomorOrder',
+        });
+      }
+
+      // 4. HANGUSKAN/PAKAI VOUCHER
       if (_voucherData != null) {
         await _supabase.from('reward_redemptions').update({'status': 'dipakai', 'dipakai_di_order': order['id'], 'dipakai_at': now.toIso8601String()}).eq('id', _voucherData!['id']);
       }
 
+      // PINDAH KE CETAK INVOICE
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -370,7 +480,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _DS.ground, // BACKGROUND KONSISTEN
+      backgroundColor: _DS.ground, 
       appBar: AppBar(
         backgroundColor: _DS.navy, foregroundColor: Colors.white, elevation: 0,
         title: Text(_step == 1 ? 'Pilih Pelanggan' : _step == 2 ? 'Pilih Layanan' : 'Detail & Pembayaran', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
@@ -423,7 +533,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               ),
               const SizedBox(height: 16),
               
-              // KARTU PELANGGAN UMUM
               Container(
                 decoration: BoxDecoration(color: _DS.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: _DS.border, width: 1.5), boxShadow: _DS.cardShadow),
                 child: Material(
@@ -617,6 +726,26 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               children: [
                 ..._cart.map((item) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(children: [Expanded(child: Text('${item['service']['nama']} × ${item['qty']}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _DS.textPrimary))), Text(_formatRupiah(item['subtotal']), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: _DS.textPrimary))]))),
                 const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider(color: _DS.border)),
+                
+                // BARIS INPUT VOUCHER
+                if (_selectedCustomer != null) ...[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(children: [
+                        Icon(Icons.local_offer_rounded, color: _voucherData == null ? _DS.textHint : Colors.green, size: 18),
+                        const SizedBox(width: 8),
+                        Text(_voucherData == null ? 'Punya Voucher?' : 'Voucher Dipakai', style: TextStyle(color: _voucherData == null ? _DS.textSecondary : Colors.green, fontWeight: FontWeight.w600, fontSize: 13)),
+                      ]),
+                      if (_voucherData == null)
+                        TextButton(onPressed: _pakaiVoucher, style: TextButton.styleFrom(minimumSize: Size.zero, padding: EdgeInsets.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap), child: const Text('Gunakan', style: TextStyle(color: _DS.blue, fontWeight: FontWeight.w700)))
+                      else
+                        TextButton(onPressed: () => setState(() { _voucherData = null; _voucherCode = null; _diskonVoucher = 0; }), style: TextButton.styleFrom(minimumSize: Size.zero, padding: EdgeInsets.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap), child: const Text('Batal', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w700))),
+                    ]
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Subtotal', style: TextStyle(color: _DS.textSecondary, fontWeight: FontWeight.w600)), Text(_formatRupiah(_subtotal), style: const TextStyle(fontWeight: FontWeight.w700))]),
                 if (_diskonVoucher > 0) ...[const SizedBox(height: 8), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Diskon Voucher', style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600)), Text('- ${_formatRupiah(_diskonVoucher)}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w700))])],
                 const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider(color: _DS.border)),
