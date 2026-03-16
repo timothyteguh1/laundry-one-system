@@ -45,9 +45,21 @@ class _CustomerNotificationScreenState extends State<CustomerNotificationScreen>
         _notifications = List<Map<String, dynamic>>.from(notifResponse);
       });
 
-      // Opsional: Tandai semua sebagai sudah dibaca
+      // 👇 UPDATE: Logika pembersih badge yang disempurnakan
       if (_notifications.any((n) => n['is_read'] == false)) {
-        await _supabase.from('notifications').update({'is_read': true}).eq('customer_id', customerId);
+        // 1. Update di Database Supabase
+        await _supabase
+            .from('notifications')
+            .update({'is_read': true})
+            .eq('customer_id', customerId)
+            .eq('is_read', false); 
+            
+        // 2. Update status lokal agar titik merah di layar ini langsung hilang seketika
+        setState(() {
+          for (var n in _notifications) {
+            n['is_read'] = true;
+          }
+        });
       }
     } catch (e) {
       debugPrint("Gagal mengambil notifikasi: $e");
@@ -67,7 +79,7 @@ class _CustomerNotificationScreenState extends State<CustomerNotificationScreen>
     }
   }
 
-  // Tentukan Warna berdasarkan Tipe (Menggunakan tema milik Toti)
+  // Tentukan Warna berdasarkan Tipe (Menggunakan tema)
   Color _getColorForType(String type) {
     switch (type) {
       case 'promo': return Colors.orange;
@@ -95,7 +107,7 @@ class _CustomerNotificationScreenState extends State<CustomerNotificationScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: CustomerTheme.ground, // Mengikuti CustomerTheme kamu
+      backgroundColor: CustomerTheme.ground, 
       appBar: AppBar(
         title: const Text('Kotak Masuk', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: CustomerTheme.textPrimary)),
         backgroundColor: CustomerTheme.surface,

@@ -1,57 +1,78 @@
-import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class NotificationService {
+  static final FirebaseMessaging _fcm = FirebaseMessaging.instance;
+  static final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
+
   static Future<void> setupPushNotifications() async {
-    // 1. Lewati jika di platform yang tidak didukung Firebase Messaging
-    if (kIsWeb || (!kIsWeb && Platform.isWindows)) {
-      print('ℹ️ NotificationService: Skip platform Desktop/Web');
-      return; 
+    // 1. Minta Izin Notifikasi ke HP Pelanggan
+    NotificationSettings settings = await _fcm.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
+    if (settings.authorizationStatus != AuthorizationStatus.authorized) {
+      debugPrint('Izin notifikasi ditolak oleh pengguna.');
+      return;
     }
 
-    try {
-      FirebaseMessaging messaging = FirebaseMessaging.instance;
+    // 2. Persiapan "Jalur Khusus" Android
+    const AndroidInitializationSettings androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initSettings = InitializationSettings(android: androidInit);
+    
+    // 👇 FIX FINAL: Tambahkan label "settings:" di depan initSettings
+    await _localNotifications.initialize(
+      settings: initSettings, // <--- Ini yang bikin error tadi
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        debugPrint('Notifikasi di-klik: ${response.payload}');
+      },
+    );
 
-      // Minta izin
-      NotificationSettings settings = await messaging.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      'high_importance_channel', 
+      'Notifikasi Penting', 
+      description: 'Channel khusus untuk memunculkan pop-up notifikasi saat aplikasi dibuka.',
+      importance: Importance.max, 
+      playSound: true,
+    );
 
-      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        // Ambil Token unik HP
-        String? fcmToken = await messaging.getToken();
-        
-        if (fcmToken != null) {
-          print('🚀 FCM TOKEN HP INI: $fcmToken');
-          await _saveTokenToSupabase(fcmToken);
-        }
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
 
-        // Listener jika token berubah di masa depan
-        messaging.onTokenRefresh.listen((newToken) {
-          _saveTokenToSupabase(newToken);
-        });
+    // 3. LISTENER: Menangkap Notifikasi Saat Aplikasi Sedang Terbuka (Foreground)
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      
+      // 👇 ALAT SADAP (LOGGER) DITAMBAHKAN DI SINI 👇
+      debugPrint("====================================");
+      debugPrint("🔥 HORE! NOTIFIKASI MASUK KE HP: ${message.notification?.title}");
+      debugPrint("Isi Pesan: ${message.notification?.body}");
+      debugPrint("====================================");
+
+      RemoteNotification? notification = message.notification;
+      AndroidNotification? android = message.notification?.android;
+
+      if (notification != null && android != null) {
+        _localNotifications.show(
+          id: notification.hashCode,
+          title: notification.title,
+          body: notification.body,
+          notificationDetails: NotificationDetails(
+            android: AndroidNotificationDetails(
+              channel.id,
+              channel.name,
+              channelDescription: channel.description,
+              icon: '@mipmap/ic_launcher',
+              importance: Importance.max, 
+              priority: Priority.high,    
+              color: const Color(0xFF1565C0),
+            ),
+          ),
+        );
       }
-    } catch (e) {
-      print('⚠️ Firebase Messaging Error: $e');
-    }
-  }
-
-  static Future<void> _saveTokenToSupabase(String token) async {
-    try {
-      final currentUser = Supabase.instance.client.auth.currentUser;
-      if (currentUser != null) {
-        await Supabase.instance.client
-            .from('profiles')
-            .update({'fcm_token': token})
-            .eq('id', currentUser.id);
-        print('✅ Token berhasil sinkron ke Supabase');
-      }
-    } catch (e) {
-      print('❌ Gagal simpan token ke Supabase: $e');
-    }
+    });
   }
 }
