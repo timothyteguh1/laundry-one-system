@@ -2,16 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'package:laundry_one/features/auth/services/auth_service.dart';
+import 'package:laundry_one/features/auth/screens/register_screen.dart'; // [TAMBAHAN] Import ini agar tombol daftar jalan
 
 // ============================================================
 // LOGIN SCREEN — Industry-standard design
-//
-// BACKWARD COMPATIBLE:
-// secondaryColor → opsional, default gelap dari primaryColor
-// tagline        → opsional, default kosong
-// registerScreen → opsional
-//
-// Semua kode lama yang pakai LoginConfig TIDAK perlu diubah.
 // ============================================================
 
 class LoginConfig {
@@ -21,10 +15,10 @@ class LoginConfig {
   final String? hint;
   final TextInputType keyboardType;
   final Color primaryColor;
-  final Color? secondaryColor;  // ← OPSIONAL
+  final Color? secondaryColor; 
   final Color backgroundColor;
   final IconData icon;
-  final String? tagline;        // ← OPSIONAL
+  final String? tagline;        
   final Widget homeScreen;
   final bool showRegister;
   final Widget? registerScreen;
@@ -34,12 +28,12 @@ class LoginConfig {
     required this.roleDatabase,
     required this.labelIdentifier,
     this.hint,
-    this.keyboardType = TextInputType.text,
+    this.keyboardType = TextInputType.phone, // Default ganti ke phone
     required this.primaryColor,
-    this.secondaryColor,         // tidak required
+    this.secondaryColor,         
     required this.backgroundColor,
     required this.icon,
-    this.tagline,                // tidak required
+    this.tagline,                
     required this.homeScreen,
     required this.showRegister,
     this.registerScreen,
@@ -72,7 +66,6 @@ class _LoginScreenState extends State<LoginScreen>
 
   final AuthService _authService = AuthService();
 
-  // Warna secondary — kalau tidak diisi, pakai versi lebih gelap dari primary
   Color get _secondaryColor =>
       widget.config.secondaryColor ??
       Color.lerp(widget.config.primaryColor, Colors.black, 0.25)!;
@@ -132,10 +125,10 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _isLoading = true);
 
     try {
-      await _authService.loginWithRole(
+      // [UPDATE] Gunakan loginUniversal agar Admin/Kasir bisa pakai nomor HP
+      await _authService.loginUniversal(
         identifier: _identifierController.text.trim(),
         password: _passwordController.text.trim(),
-        expectedRole: widget.config.roleDatabase,
       );
 
       if (mounted) {
@@ -182,13 +175,16 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
+  // [UPDATE] Perbaikan fungsi tombol Daftar
   void _keRegister() {
-    if (widget.config.registerScreen == null) return;
     HapticFeedback.lightImpact();
+    // Gunakan fallback otomatis jika registerScreen kosong
+    Widget targetScreen = widget.config.registerScreen ?? const RegisterScreen();
+    
     Navigator.push(
       context,
       PageRouteBuilder(
-        pageBuilder: (_, animation, __) => widget.config.registerScreen!,
+        pageBuilder: (_, animation, __) => targetScreen,
         transitionsBuilder: (_, animation, __, child) => SlideTransition(
           position: Tween<Offset>(
             begin: const Offset(1, 0),
@@ -213,7 +209,6 @@ class _LoginScreenState extends State<LoginScreen>
         onTap: () => FocusScope.of(context).unfocus(),
         child: Stack(
           children: [
-            // Background dekorasi halus
             Positioned.fill(
               child: CustomPaint(
                 painter: _BgPainter(
@@ -226,7 +221,6 @@ class _LoginScreenState extends State<LoginScreen>
             SafeArea(
               child: Column(
                 children: [
-                  // Header — fade in
                   FadeTransition(
                     opacity: _headerAnim,
                     child: SizedBox(
@@ -238,7 +232,6 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
 
-                  // Form card — slide up
                   Expanded(
                     child: SlideTransition(
                       position: _formSlideAnim,
@@ -280,7 +273,6 @@ class _LoginScreenState extends State<LoginScreen>
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
                                   children: [
-                                    // Judul
                                     Text(
                                       'Masuk',
                                       style: TextStyle(
@@ -292,10 +284,7 @@ class _LoginScreenState extends State<LoginScreen>
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      widget.config.roleDatabase ==
-                                              'super_admin'
-                                          ? 'Login dengan email admin kamu'
-                                          : 'Login dengan nomor HP kamu',
+                                      'Login dengan nomor HP kamu', // Teks diseragamkan
                                       style: TextStyle(
                                         color: Colors.grey.shade500,
                                         fontSize: 14,
@@ -306,36 +295,17 @@ class _LoginScreenState extends State<LoginScreen>
                                     // Input identifier
                                     _buildInput(
                                       controller: _identifierController,
-                                      label: widget.config.labelIdentifier,
-                                      hint: widget.config.hint ?? '',
-                                      icon: widget.config.roleDatabase ==
-                                              'super_admin'
-                                          ? Icons.email_outlined
-                                          : Icons.phone_android_outlined,
-                                      keyboardType:
-                                          widget.config.keyboardType,
-                                      inputFormatters:
-                                          widget.config.keyboardType ==
-                                                  TextInputType.phone
-                                              ? [
-                                                  FilteringTextInputFormatter
-                                                      .digitsOnly
-                                                ]
-                                              : null,
+                                      label: 'Nomor HP', // Selalu minta Nomor HP
+                                      hint: '081234567890',
+                                      icon: Icons.phone_android_outlined,
+                                      keyboardType: TextInputType.phone,
+                                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                                       validator: (val) {
-                                        if (val == null ||
-                                            val.trim().isEmpty) {
+                                        if (val == null || val.trim().isEmpty) {
                                           return 'Wajib diisi';
                                         }
-                                        if (widget.config.roleDatabase ==
-                                                'super_admin' &&
-                                            !val.contains('@')) {
-                                          return 'Format email tidak valid';
-                                        }
-                                        if (widget.config.roleDatabase !=
-                                                'super_admin' &&
-                                            val.trim().length < 10) {
-                                          return 'Nomor HP minimal 10 digit';
+                                        if (val.trim().length < 9) {
+                                          return 'Nomor HP tidak valid';
                                         }
                                         return null;
                                       },
@@ -375,7 +345,6 @@ class _LoginScreenState extends State<LoginScreen>
                                     ),
                                     const SizedBox(height: 28),
 
-                                    // Tombol masuk
                                     SizedBox(
                                       height: 56,
                                       child: ElevatedButton(
@@ -427,7 +396,6 @@ class _LoginScreenState extends State<LoginScreen>
 
                                     const SizedBox(height: 20),
 
-                                    // Tombol daftar
                                     if (widget.config.showRegister)
                                       Row(
                                         mainAxisAlignment:
@@ -441,7 +409,7 @@ class _LoginScreenState extends State<LoginScreen>
                                             ),
                                           ),
                                           GestureDetector(
-                                            onTap: _keRegister,
+                                            onTap: _keRegister, // Tombol ini sekarang aktif!
                                             child: Text(
                                               'Daftar',
                                               style: TextStyle(
@@ -548,7 +516,6 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Gradient background
         Positioned.fill(
           child: Container(
             decoration: BoxDecoration(
@@ -560,8 +527,6 @@ class _Header extends StatelessWidget {
             ),
           ),
         ),
-
-        // Dekorasi lingkaran transparan
         Positioned(
           top: -30,
           right: -30,
@@ -598,8 +563,6 @@ class _Header extends StatelessWidget {
             ),
           ),
         ),
-
-        // Konten
         Positioned.fill(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(28, 20, 28, 24),
@@ -607,7 +570,6 @@ class _Header extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.end,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Icon
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
@@ -620,8 +582,6 @@ class _Header extends StatelessWidget {
                   child: Icon(config.icon, size: 30, color: Colors.white),
                 ),
                 const SizedBox(height: 14),
-
-                // Brand
                 const Text(
                   'Laundry One',
                   style: TextStyle(
@@ -631,8 +591,6 @@ class _Header extends StatelessWidget {
                     letterSpacing: -0.5,
                   ),
                 ),
-
-                // Tagline — hanya tampil kalau ada
                 if (config.tagline != null && config.tagline!.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
@@ -643,10 +601,7 @@ class _Header extends StatelessWidget {
                     ),
                   ),
                 ],
-
                 const SizedBox(height: 14),
-
-                // Badge role
                 Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 12, vertical: 5),

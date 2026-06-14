@@ -54,6 +54,13 @@ class HomeCashierScreen extends StatefulWidget {
 class _HomeCashierScreenState extends State<HomeCashierScreen>
     with SingleTickerProviderStateMixin {
   final _supabase = Supabase.instance.client;
+  
+  // ============================================================
+  // [TAMBAHAN BARU] Variabel State untuk Profil User (RBAC)
+  // ============================================================
+  Map<String, dynamic>? _userProfile;
+  final AuthService _authService = AuthService();
+
   int _currentTab = 0;
   AnimationController? _fabAnim;
 
@@ -79,6 +86,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   void initState() {
     super.initState();
     _fabAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 600))..forward();
+    _loadUserProfile(); // [TAMBAHAN BARU] Load Role User sebelum data lain
     _loadData();
     _subscribeRealtime();
   }
@@ -87,6 +95,129 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   void dispose() {
     _fabAnim?.dispose();
     super.dispose();
+  }
+
+  // ============================================================
+  // [TAMBAHAN BARU] Fungsi Load User Profile dari Supabase
+  // ============================================================
+  Future<void> _loadUserProfile() async {
+    try {
+      final profile = await _supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', _supabase.auth.currentUser!.id)
+          .single();
+      if (mounted) {
+        setState(() {
+          _userProfile = profile;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading profile: $e');
+    }
+  }
+
+  // ============================================================
+  // [TAMBAHAN BARU] DRAWER / SIDEBAR (Panel RBAC)
+  // ============================================================
+  Widget _buildDrawer() {
+    final role = _userProfile?['role'] ?? 'cashier';
+    final isAdmin = role == 'super_admin';
+    final nama = _userProfile?['nama_lengkap'] ?? _kasirNama ?? 'Memuat...';
+
+    return Drawer(
+      backgroundColor: _DS.surface,
+      child: Column(
+        children: [
+          UserAccountsDrawerHeader(
+            decoration: const BoxDecoration(color: _DS.navy),
+            currentAccountPicture: const CircleAvatar(
+              backgroundColor: Colors.white,
+              child: Icon(Icons.person, color: _DS.navy, size: 40),
+            ),
+            accountName: Text(nama, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            accountEmail: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: isAdmin ? Colors.orange : _DS.blue,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                isAdmin ? 'Super Admin' : 'Kasir',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(left: 16, top: 8, bottom: 8),
+                  child: Text('MENU KASIR', style: TextStyle(color: _DS.textSecondary, fontWeight: FontWeight.bold, fontSize: 12)),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.home_outlined, color: _DS.textPrimary),
+                  title: const Text('Beranda', style: TextStyle(color: _DS.textPrimary, fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    setState(() => _currentTab = 0);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.receipt_long_outlined, color: _DS.textPrimary),
+                  title: const Text('Riwayat Transaksi', style: TextStyle(color: _DS.textPrimary, fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    setState(() => _currentTab = 1);
+                  },
+                ),
+                
+                // PANEL ADMIN (HANYA MUNCUL JIKA SUPER ADMIN)
+                if (isAdmin) ...[
+                  const Divider(height: 32),
+                  const Padding(
+                    padding: EdgeInsets.only(left: 16, bottom: 8),
+                    child: Text('ADMIN MENU', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12)),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.bar_chart_rounded, color: Colors.red),
+                    title: const Text('Laporan Pendapatan & Koin', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      setState(() => _currentTab = 3);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.inventory_2_outlined, color: Colors.red),
+                    title: const Text('Master Data (Jasa & Barang)', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const InventoryScreen()));
+                    },
+                  ),
+                ],
+
+                const Divider(height: 32),
+                const Padding(
+                  padding: EdgeInsets.only(left: 16, bottom: 8),
+                  child: Text('SISTEM', style: TextStyle(color: _DS.textSecondary, fontWeight: FontWeight.bold, fontSize: 12)),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.logout, color: Colors.redAccent),
+                  title: const Text('Keluar', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
+                  onTap: () async {
+                    HapticFeedback.mediumImpact(); 
+                    await _authService.logout(); 
+                    if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen(config: LoginConfig(roleName: 'Staf Kasir', roleDatabase: 'cashier', labelIdentifier: 'Nomor HP', hint: '081234567890', keyboardType: TextInputType.phone, primaryColor: Color(0xFF1565C0), secondaryColor: Color(0xFF0D47A1), backgroundColor: Colors.white, icon: Icons.point_of_sale_rounded, tagline: 'Kelola pesanan dengan cepat & mudah', homeScreen: HomeCashierScreen(), showRegister: true))));
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   String _formatDateStr(DateTime d) {
@@ -322,6 +453,8 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _DS.ground,
+      // [TAMBAHAN BARU] Aktifkan Sidebar
+      drawer: _buildDrawer(),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 800),
@@ -409,6 +542,25 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
             children: [
               Row(
                 children: [
+                  // ============================================================
+                  // [TAMBAHAN BARU] Tombol Hamburger untuk buka Sidebar Drawer
+                  // Menggunakan Builder untuk mendapatkan context Scaffold terdekat
+                  // ============================================================
+                  Builder(
+                    builder: (ctx) => Material(
+                      color: Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      child: InkWell(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          Scaffold.of(ctx).openDrawer();
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: const Padding(padding: EdgeInsets.all(10), child: Icon(Icons.menu_rounded, color: Colors.white, size: 20)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -419,8 +571,13 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                       ],
                     ),
                   ),
-                  Material(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(12), child: InkWell(onTap: () { HapticFeedback.selectionClick(); Navigator.push(context, MaterialPageRoute(builder: (_) => const InventoryScreen())); }, borderRadius: BorderRadius.circular(12), child: const Padding(padding: EdgeInsets.all(10), child: Icon(Icons.inventory_2_outlined, color: Colors.white, size: 20)))),
-                  const SizedBox(width: 8),
+                  // ============================================================
+                  // [TAMBAHAN BARU] Batasi Icon Inventory Khusus Admin
+                  // ============================================================
+                  if (_userProfile?['role'] == 'super_admin') ...[
+                    Material(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(12), child: InkWell(onTap: () { HapticFeedback.selectionClick(); Navigator.push(context, MaterialPageRoute(builder: (_) => const InventoryScreen())); }, borderRadius: BorderRadius.circular(12), child: const Padding(padding: EdgeInsets.all(10), child: Icon(Icons.inventory_2_outlined, color: Colors.white, size: 20)))),
+                    const SizedBox(width: 8),
+                  ],
                   Material(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(12), child: InkWell(onTap: () async { HapticFeedback.mediumImpact(); await AuthService().logout(); if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen(config: LoginConfig(roleName: 'Staf Kasir', roleDatabase: 'cashier', labelIdentifier: 'Nomor HP', hint: '081234567890', keyboardType: TextInputType.phone, primaryColor: Color(0xFF1565C0), secondaryColor: Color(0xFF0D47A1), backgroundColor: Colors.white, icon: Icons.point_of_sale_rounded, tagline: 'Kelola pesanan dengan cepat & mudah', homeScreen: HomeCashierScreen(), showRegister: true)))); }, borderRadius: BorderRadius.circular(12), child: const Padding(padding: EdgeInsets.all(10), child: Icon(Icons.logout_rounded, color: Colors.white, size: 20)))),
                 ],
               ),
@@ -609,9 +766,27 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     return Expanded(flex: 2, child: GestureDetector(onTap: () { HapticFeedback.selectionClick(); setState(() => _currentTab = idx); }, behavior: HitTestBehavior.opaque, child: Stack(alignment: Alignment.center, children: [Column(mainAxisAlignment: MainAxisAlignment.center, children: [AnimatedContainer(duration: const Duration(milliseconds: 200), padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4), decoration: BoxDecoration(color: active ? _DS.sky : Colors.transparent, borderRadius: BorderRadius.circular(20)), child: Icon(active ? activeIcon : inactiveIcon, color: active ? _DS.blue : _DS.textHint, size: 22)), const SizedBox(height: 2), Text(label, style: TextStyle(fontSize: 10, fontWeight: active ? FontWeight.w800 : FontWeight.w600, color: active ? _DS.blue : _DS.textHint))]), if (badge != null) Positioned(top: 4, right: 14, child: Container(padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1), decoration: BoxDecoration(color: Colors.red.shade500, borderRadius: BorderRadius.circular(10)), child: Text(badge, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800))))]))); 
   }
   
+  // ============================================================
+  // [TAMBAHAN BARU] Penguncian Tab Laporan Khusus Admin
+  // ============================================================
   Widget _buildTabLaporan() { 
+    if (_userProfile?['role'] != 'super_admin') {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.lock_outline_rounded, size: 48, color: Colors.redAccent),
+            SizedBox(height: 16),
+            Text('Akses Ditolak', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.redAccent)),
+            SizedBox(height: 8),
+            Text('Tab ini khusus untuk Super Admin.', style: TextStyle(color: Colors.grey)),
+          ],
+        ),
+      );
+    }
     return const ReportTab(); 
   }
+
   String _greeting() { final hour = DateTime.now().hour; if (hour < 12) return 'Selamat Pagi'; if (hour < 15) return 'Selamat Siang'; if (hour < 18) return 'Selamat Sore'; return 'Selamat Malam'; }
   String _greetingEmoji() { final hour = DateTime.now().hour; if (hour < 12) return '☀️'; if (hour < 15) return '🌤️'; if (hour < 18) return '🌅'; return '🌙'; }
   String _formatRupiah(double amount) { final str = amount.toStringAsFixed(0); final buffer = StringBuffer(); for (int i = 0; i < str.length; i++) { if (i > 0 && (str.length - i) % 3 == 0) buffer.write('.'); buffer.write(str[i]); } return 'Rp ${buffer.toString()}'; }

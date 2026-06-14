@@ -5,10 +5,7 @@ class AuthService {
 
   // ============================================================
   // ATURAN LOGIN PER ROLE:
-  //
-  // Kasir      → login pakai NOMOR HP
-  // Pelanggan  → login pakai NOMOR HP
-  // Super Admin → login pakai EMAIL
+  // Semua role (Super Admin, Kasir, Pelanggan) login pakai NOMOR HP
   //
   // Di balik layar, nomor HP diubah jadi format email palsu:
   // 081234567890 → 081234567890@laundry.local
@@ -24,26 +21,15 @@ class AuthService {
 
   // ============================================================
   // LOGIN — verifikasi role sesuai aplikasi yang dibuka
-  // ============================================================x  x 
+  // ============================================================
   Future<Map<String, dynamic>> loginWithRole({
     required String identifier,
     required String password,
     required String expectedRole,
   }) async {
     try {
-      String authEmail;
-
-      if (expectedRole == 'super_admin') {
-        if (!identifier.contains('@')) {
-          throw Exception('Super Admin login menggunakan email, bukan nomor HP.');
-        }
-        authEmail = identifier.trim();
-      } else {
-        if (identifier.contains('@')) {
-          throw Exception('Login menggunakan Nomor HP, bukan email.');
-        }
-        authEmail = _hpKeEmail(identifier);
-      }
+      // Sekarang semuanya menggunakan nomor HP
+      String authEmail = _hpKeEmail(identifier);
 
       final res = await _supabase.auth.signInWithPassword(
         email: authEmail,
@@ -106,16 +92,6 @@ class AuthService {
 
   // ============================================================
   // REGISTER PELANGGAN
-  //
-  // Bisa dipanggil dari 2 tempat:
-  // 1. Aplikasi KASIR — kasir daftarkan pelanggan baru dari POS
-  //    → password default = nomor HP (pelanggan bisa ganti nanti)
-  // 2. Aplikasi PELANGGAN — pelanggan daftar sendiri dari HP
-  //    → password diisi sendiri oleh pelanggan
-  //
-  // Parameter password bersifat opsional:
-  // - Kalau diisi → pakai password itu
-  // - Kalau tidak diisi → pakai nomor HP sebagai password default
   // ============================================================
   Future<void> registerPelanggan({
     required String phone,
@@ -170,6 +146,66 @@ class AuthService {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return null;
+      return await _supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ============================================================
+  // [UPDATE] LOGIN UNIVERSAL UNTUK APP KASIR (ADMIN & KASIR)
+  // ============================================================
+  Future<Map<String, dynamic>> loginUniversal({
+    required String identifier,
+    required String password,
+  }) async {
+    try {
+      // Karena Admin dan Kasir sekarang pakai Nomor HP, kita konversi
+      final authEmail = _hpKeEmail(identifier); 
+      
+      final res = await _supabase.auth.signInWithPassword(
+        email: authEmail,
+        password: password,
+      );
+
+      if (res.user == null) throw Exception('Login gagal, coba lagi.');
+
+      // Cek Role di database
+      final profile = await _supabase
+          .from('profiles')
+          .select('role, nama_lengkap, nomor_hp, is_active')
+          .eq('id', res.user!.id)
+          .single();
+
+      if (profile['is_active'] == false) {
+        await _supabase.auth.signOut();
+        throw Exception('Akun Anda dinonaktifkan. Hubungi admin.');
+      }
+
+      final role = profile['role'];
+      
+      // Izinkan masuk JIKA dia cashier ATAU super_admin
+      if (role != 'cashier' && role != 'super_admin') {
+        await _supabase.auth.signOut();
+        throw Exception('Akses ditolak. Aplikasi ini hanya untuk Pegawai.');
+      }
+
+      return profile;
+    } on AuthException catch (e) {
+      throw Exception(_translateError(e.message));
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getCurrentUserProfile() async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return null;
+    try {
       return await _supabase
           .from('profiles')
           .select('*')
