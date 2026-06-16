@@ -31,7 +31,7 @@ class _KatalogTabState extends State<KatalogTab> {
   List<Map<String, dynamic>> _services = [];
   
   List<Map<String, dynamic>> _activeVouchers = []; 
-  Set<String> _usedRewardIds = {}; 
+  Map<String, DateTime> _lastUsedRewards = {}; 
   
   bool _isLoading = true;
   bool _isProcessing = false; 
@@ -49,19 +49,25 @@ class _KatalogTabState extends State<KatalogTab> {
       final resServices = await _supabase.from('services').select().eq('is_active', true).order('nama', ascending: true);
       
       List<Map<String, dynamic>> validVouchers = [];
-      Set<String> usedIds = {};
+      Map<String, DateTime> usedDates = {};
       
       if (widget.customerId != null) {
         final resVouchers = await _supabase
             .from('reward_redemptions')
-            .select('*, rewards_catalog(nama)')
+            .select('*, rewards_catalog(nama, tipe_reward)')
             .eq('customer_id', widget.customerId!);
 
         final nowUtc = DateTime.now().toUtc();
         
         for (var v in resVouchers) {
-          if (v['status'] == 'dipakai') {
-            usedIds.add(v['reward_id']); 
+          final safeRewardId = v['reward_id']?.toString() ?? '';
+
+          if (v['status'] == 'dipakai' && v['dipakai_at'] != null) {
+            final usedAt = DateTime.parse(v['dipakai_at']).toUtc();
+            final current = usedDates[safeRewardId];
+            if (current == null || usedAt.isAfter(current)) {
+              usedDates[safeRewardId] = usedAt;
+            }
           } else if (v['status'] == 'aktif') {
             final expiredAtUtc = DateTime.parse(v['berlaku_sampai']).toUtc();
             if (nowUtc.isAfter(expiredAtUtc)) {
@@ -78,7 +84,7 @@ class _KatalogTabState extends State<KatalogTab> {
           _rewards = resRewards;
           _services = resServices;
           _activeVouchers = validVouchers;
-          _usedRewardIds = usedIds;
+          _lastUsedRewards = usedDates;
           _isLoading = false;
         });
       }
@@ -90,29 +96,33 @@ class _KatalogTabState extends State<KatalogTab> {
   Future<void> _tukarPoin(Map<String, dynamic> reward) async {
     if (widget.customerId == null) return;
     
-    // Cek apakah ini barang fisik atau voucher diskon
     final bool isBarang = reward['tipe_reward'] == 'gratis_layanan';
+    final String safeRewardId = reward['id']?.toString() ?? '';
+    final poinDibutuhkan = int.tryParse(reward['poin_dibutuhkan']?.toString() ?? '0') ?? 0;
+    final namaReward = reward['nama']?.toString() ?? 'Hadiah';
 
-    // Aturan Limit & One-Time Use HANYA berlaku untuk Voucher Diskon
+    // Pengecekan Limit & Cooldown HANYA untuk Voucher Diskon
     if (!isBarang) {
-      if (_usedRewardIds.contains(reward['id'])) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anda sudah pernah menggunakan promo ini sebelumnya!'), backgroundColor: Colors.orange));
-        return;
+      if (_lastUsedRewards.containsKey(safeRewardId)) {
+        final lastUsed = _lastUsedRewards[safeRewardId]!;
+        final cooldownEnd = lastUsed.add(const Duration(days: 90)); // 3 Bulan Cooldown
+        if (DateTime.now().toUtc().isBefore(cooldownEnd)) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Voucher ini baru bisa ditukar lagi setelah 3 bulan!'), backgroundColor: Colors.orange));
+          return;
+        }
       }
+
       if (_activeVouchers.length >= 2) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Limit Tercapai! Maksimal hanya boleh memiliki 2 voucher aktif.'), backgroundColor: Colors.orange));
         return;
       }
-      final hasActive = _activeVouchers.any((v) => v['reward_id'] == reward['id']);
-      if (hasActive) {
+      
+      if (_activeVouchers.any((v) => v['reward_id']?.toString() == safeRewardId)) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anda masih memiliki voucher jenis ini yang sedang aktif!'), backgroundColor: Colors.orange));
         return;
       }
     }
 
-    final poinDibutuhkan = reward['poin_dibutuhkan'] as int;
-
-    // Tampilkan Dialog Konfirmasi yang Berbeda
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -120,8 +130,8 @@ class _KatalogTabState extends State<KatalogTab> {
         title: const Text('Tukar Poin?', style: TextStyle(fontWeight: FontWeight.w800, color: CustomerTheme.textPrimary)),
         content: Text(
           isBarang 
-            ? 'Tukar $poinDibutuhkan koin untuk "${reward['nama']}"?\n\nSetelah ditukar, segera tunjukkan Riwayat Mutasi Poin ke Kasir untuk mengambil barang fisik Anda.'
-            : 'Tukar $poinDibutuhkan koin untuk "${reward['nama']}"?\n\nVoucher hanya berlaku selama 5 Menit!'
+            ? 'Tukar $poinDibutuhkan koin untuk "$namaReward"?\n\nTunjukkan bukti potong koin di menu Riwayat ke Kasir untuk mengambil barang.'
+            : 'Tukar $poinDibutuhkan koin untuk "$namaReward"?\n\nVoucher hanya berlaku selama 5 Menit!'
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal', style: TextStyle(color: CustomerTheme.textSecondary))),
@@ -139,10 +149,11 @@ class _KatalogTabState extends State<KatalogTab> {
     setState(() => _isProcessing = true);
     try {
       final custData = await _supabase.from('customers').select('poin_saldo').eq('id', widget.customerId!).single();
-      final currentDbPoin = custData['poin_saldo'] as int;
+      final currentDbPoin = int.tryParse(custData['poin_saldo']?.toString() ?? '0') ?? 0;
       
       if (currentDbPoin < poinDibutuhkan) throw Exception('Poin di database tidak mencukupi.');
 
+      final newSaldo = currentDbPoin - poinDibutuhkan;
       final randomCode = isBarang 
           ? 'BRG-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}'
           : 'VCH-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
@@ -150,38 +161,35 @@ class _KatalogTabState extends State<KatalogTab> {
       final nowUtcStr = DateTime.now().toUtc().toIso8601String();
       final expiredTimeUtc = DateTime.now().toUtc().add(const Duration(minutes: 5)).toIso8601String();
 
-      // Logika Insert Database yang Dibedakan
+      // [PERBAIKAN] Barang Fisik langsung berstatus 'dipakai' agar masuk History
       if (isBarang) {
-        // Barang langsung ditandai "dipakai" agar masuk history riwayat offline
         await _supabase.from('reward_redemptions').insert({
           'customer_id': widget.customerId,
-          'reward_id': reward['id'],
+          'reward_id': safeRewardId,
           'kode_voucher': randomCode,
-          'berlaku_sampai': nowUtcStr, 
-          'status': 'dipakai', 
+          'status': 'dipakai',
           'dipakai_at': nowUtcStr,
+          'berlaku_sampai': nowUtcStr, 
           'poin_digunakan': poinDibutuhkan,
         });
       } else {
-        // Voucher diskon tetap pakai timer 5 menit (status 'aktif')
         await _supabase.from('reward_redemptions').insert({
           'customer_id': widget.customerId,
-          'reward_id': reward['id'],
+          'reward_id': safeRewardId,
           'kode_voucher': randomCode,
+          'status': 'aktif',
           'berlaku_sampai': expiredTimeUtc, 
           'poin_digunakan': poinDibutuhkan,
         });
       }
 
-      // Potong Koin
-      final newSaldo = currentDbPoin - poinDibutuhkan;
       await _supabase.from('points_ledger').insert({
         'customer_id': widget.customerId,
         'tipe': 'redeemed',
         'jumlah': poinDibutuhkan,
         'saldo_sebelum': currentDbPoin,
         'saldo_sesudah': newSaldo,
-        'catatan': isBarang ? 'Ambil Barang: ${reward['nama']}' : 'Tukar Voucher: ${reward['nama']}'
+        'catatan': isBarang ? 'Ambil Barang: $namaReward' : 'Tukar Voucher: $namaReward'
       });
 
       await _supabase.from('customers').update({'poin_saldo': newSaldo}).eq('id', widget.customerId!);
@@ -191,11 +199,7 @@ class _KatalogTabState extends State<KatalogTab> {
 
       if (mounted) {
         HapticFeedback.heavyImpact();
-        if (isBarang) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Berhasil! Cek Mutasi Poin dan tunjukkan ke Kasir.'), backgroundColor: Colors.green));
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Berhasil! Tunjukkan kode ke Kasir sebelum hangus.'), backgroundColor: Colors.green));
-        }
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isBarang ? 'Berhasil! Cek Mutasi Poin dan tunjukkan ke Kasir.' : 'Berhasil! Tunjukkan kode ke Kasir.'), backgroundColor: Colors.green));
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menukarkan: $e'), backgroundColor: Colors.red));
@@ -297,11 +301,16 @@ class _KatalogTabState extends State<KatalogTab> {
     final bool isBarangTab = _selectedFilter == 1;
     final isLimitReached = _activeVouchers.length >= 2;
 
-    // Filter daftar reward sesuai tab yang aktif
     final displayRewards = _rewards.where((r) {
       final tipe = r['tipe_reward'];
-      if (isBarangTab) return tipe == 'gratis_layanan'; // Tab Barang
-      return tipe == 'diskon_nominal' || tipe == 'diskon_persen'; // Tab Diskon
+      if (isBarangTab) return tipe == 'gratis_layanan'; 
+      return tipe == 'diskon_nominal' || tipe == 'diskon_persen'; 
+    }).toList();
+
+    // Pastikan voucher aktif hanya muncul di Tab Diskon
+    final displayVouchers = _activeVouchers.where((v) {
+      final tipe = v['rewards_catalog']?['tipe_reward'];
+      return tipe == 'diskon_nominal' || tipe == 'diskon_persen';
     }).toList();
 
     return Stack(
@@ -313,11 +322,11 @@ class _KatalogTabState extends State<KatalogTab> {
             physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
             children: [
-              if (!isBarangTab && _activeVouchers.isNotEmpty) ...[
+              if (!isBarangTab && displayVouchers.isNotEmpty) ...[
                 const Text('Voucher Aktif Saya', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: CustomerTheme.textPrimary)),
                 const SizedBox(height: 12),
                 
-                ..._activeVouchers.map((v) => ActiveVoucherCard(
+                ...displayVouchers.map((v) => ActiveVoucherCard(
                   voucherData: v,
                   onExpired: () async {
                     await _fetchData();
@@ -335,27 +344,35 @@ class _KatalogTabState extends State<KatalogTab> {
                 Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(isBarangTab ? 'Belum ada barang fisik.' : 'Belum ada voucher diskon.')))
               else
                 ...displayRewards.map((r) {
-                  final poinDibutuhkan = r['poin_dibutuhkan'] ?? 0;
+                  final poinDibutuhkan = int.tryParse(r['poin_dibutuhkan']?.toString() ?? '0') ?? 0;
                   final bisaDitebus = widget.currentPoin >= poinDibutuhkan;
                   
-                  final isAlreadyUsed = _usedRewardIds.contains(r['id']);
-                  final isAlreadyActive = _activeVouchers.any((v) => v['reward_id'] == r['id']);
+                  final String safeRewardId = r['id']?.toString() ?? '';
+                  final isAlreadyActive = _activeVouchers.any((v) => v['reward_id']?.toString() == safeRewardId);
                   
-                  // Logika Tombol Disable
+                  bool isCooldown = false;
+                  int daysLeft = 0;
+                  if (!isBarangTab && _lastUsedRewards.containsKey(safeRewardId)) {
+                    final lastUsed = _lastUsedRewards[safeRewardId]!;
+                    final expiryDate = lastUsed.add(const Duration(days: 90)); 
+                    if (DateTime.now().toUtc().isBefore(expiryDate)) {
+                      isCooldown = true;
+                      daysLeft = expiryDate.difference(DateTime.now().toUtc()).inDays;
+                    }
+                  }
+
                   bool isButtonDisabled = !bisaDitebus;
                   String btnText;
 
                   if (isBarangTab) {
-                    // Barang bebas ditukar berkali-kali selama koin cukup
                     if (!bisaDitebus) {
                       btnText = 'Butuh $poinDibutuhkan Koin';
                     } else {
                       btnText = 'Tukar $poinDibutuhkan Koin';
                     }
                   } else {
-                    // Diskon kena aturan ketat limit
-                    if (isAlreadyUsed) {
-                      btnText = 'Pernah Dipakai'; isButtonDisabled = true;
+                    if (isCooldown) {
+                      btnText = 'Tersedia dlm $daysLeft hari'; isButtonDisabled = true;
                     } else if (isAlreadyActive) {
                       btnText = 'Sedang Aktif'; isButtonDisabled = true;
                     } else if (isLimitReached) {
@@ -383,9 +400,9 @@ class _KatalogTabState extends State<KatalogTab> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(r['nama'] ?? '-', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: CustomerTheme.textPrimary)),
+                              Text(r['nama']?.toString() ?? '-', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: CustomerTheme.textPrimary)),
                               const SizedBox(height: 4),
-                              Text(r['deskripsi'] ?? '', style: const TextStyle(fontSize: 12, color: CustomerTheme.textSecondary), maxLines: 2, overflow: TextOverflow.ellipsis),
+                              Text(r['deskripsi']?.toString() ?? '', style: const TextStyle(fontSize: 12, color: CustomerTheme.textSecondary), maxLines: 2, overflow: TextOverflow.ellipsis),
                               const SizedBox(height: 12),
                               
                               SizedBox(
@@ -424,7 +441,6 @@ class _KatalogTabState extends State<KatalogTab> {
     if (_services.isEmpty) {
       return const EmptyState(icon: Icons.list_alt_rounded, message: 'Katalog Kosong', sub: 'Daftar harga layanan belum tersedia.');
     }
-
     return RefreshIndicator(
       color: CustomerTheme.primary,
       onRefresh: _fetchData,
@@ -434,6 +450,7 @@ class _KatalogTabState extends State<KatalogTab> {
         itemCount: _services.length,
         itemBuilder: (context, index) {
           final s = _services[index];
+          final harga = int.tryParse(s['harga_per_satuan']?.toString() ?? '0') ?? 0;
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: CustomerTheme.menuDecoration,
@@ -444,13 +461,13 @@ class _KatalogTabState extends State<KatalogTab> {
                 decoration: BoxDecoration(color: CustomerTheme.ground, borderRadius: BorderRadius.circular(10)),
                 child: const Icon(Icons.local_laundry_service_rounded, color: CustomerTheme.textSecondary),
               ),
-              title: Text(s['nama'] ?? '-', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: CustomerTheme.textPrimary)),
+              title: Text(s['nama']?.toString() ?? '-', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: CustomerTheme.textPrimary)),
               subtitle: Text('Estimasi: ${s['estimasi_hari']} hari', style: const TextStyle(fontSize: 12, color: CustomerTheme.textHint)),
               trailing: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(_formatCurrency(s['harga_per_satuan'] ?? 0), style: const TextStyle(fontWeight: FontWeight.w800, color: CustomerTheme.primary, fontSize: 14)),
+                  Text(_formatCurrency(harga), style: const TextStyle(fontWeight: FontWeight.w800, color: CustomerTheme.primary, fontSize: 14)),
                   Text('/ ${s['satuan']}', style: const TextStyle(fontSize: 10, color: CustomerTheme.textSecondary)),
                 ],
               ),
@@ -536,9 +553,9 @@ class _ActiveVoucherCardState extends State<ActiveVoucherCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(widget.voucherData['rewards_catalog']?['nama'] ?? 'Voucher', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w600)),
+                Text(widget.voucherData['rewards_catalog']?['nama']?.toString() ?? 'Voucher', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
-                Text(widget.voucherData['kode_voucher'] ?? '-', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 2)),
+                Text(widget.voucherData['kode_voucher']?.toString() ?? '-', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 2)),
                 const SizedBox(height: 4),
                 Row(
                   children: [
