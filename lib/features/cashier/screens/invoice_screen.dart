@@ -5,6 +5,7 @@ import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:laundry_one/features/cashier/screens/printer_selection_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // [TAMBAHAN] Wajib untuk database
 
 // ============================================================
 // DESIGN SYSTEM - KONSISTEN
@@ -87,10 +88,93 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   BluetoothDevice? _selectedDevice;
   bool _connected = false;
 
+  // [TAMBAHAN] Variabel Admin & Supabase
+  bool _isAdmin = false;
+  final _supabase = Supabase.instance.client;
+
   @override
   void initState() {
     super.initState();
     _initBluetooth();
+    _checkAdminRole(); // [TAMBAHAN] Cek Otoritas
+  }
+
+  // [TAMBAHAN] Cek Otoritas Admin
+  Future<void> _checkAdminRole() async {
+    try {
+      final myId = _supabase.auth.currentUser!.id;
+      final profile = await _supabase.from('profiles').select('role').eq('id', myId).single();
+      if (mounted) setState(() => _isAdmin = profile['role'] == 'super_admin');
+    } catch (e) {
+      debugPrint('Error role check: $e');
+    }
+  }
+
+  // [TAMBAHAN] Fungsi Void / Hapus Nota
+  Future<void> _hapusNota() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(children: [Icon(Icons.warning_amber_rounded, color: Colors.red), SizedBox(width: 8), Text('Hapus Permanen?', style: TextStyle(fontWeight: FontWeight.bold))]),
+        content: const Text('Yakin ingin menghapus nota ini secara permanen? Data pembayaran, nota, dan audit akan terhapus. (Poin & Voucher akan dikembalikan ke pelanggan otomatis).'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Ya, Hapus'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      HapticFeedback.heavyImpact();
+      // Tampilkan Loading
+      showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)));
+      
+      try {
+        final orderId = widget.orderId;
+        
+        // 1. Tarik Poin (jika pelanggan sudah terlanjur dapat poin dari nota ini)
+        final orderData = await _supabase.from('orders').select('customer_id, poin_didapat, poin_sudah_diberikan').eq('id', orderId).single();
+        final custId = orderData['customer_id'];
+        final int poin = orderData['poin_didapat'] ?? 0;
+        final bool poinDiberikan = orderData['poin_sudah_diberikan'] == true;
+
+        if (custId != null && poinDiberikan && poin > 0) {
+          final custData = await _supabase.from('customers').select('poin_saldo').eq('id', custId).single();
+          final int saldoSaatIni = custData['poin_saldo'] ?? 0;
+          final int saldoBaru = (saldoSaatIni - poin < 0) ? 0 : saldoSaatIni - poin;
+          await _supabase.from('customers').update({'poin_saldo': saldoBaru}).eq('id', custId);
+        }
+
+        // 2. Kembalikan Status Voucher (jika nota ini memotong voucher pelanggan)
+        final redemptions = await _supabase.from('reward_redemptions').select('id').eq('dipakai_di_order', orderId);
+        for (var red in redemptions) {
+          await _supabase.from('reward_redemptions').update({
+            'status': 'aktif', 
+            'dipakai_di_order': null, 
+            'dipakai_at': null
+          }).eq('id', red['id']);
+        }
+
+        // 3. Eksekusi Hapus Nota (Tabel item & ledger akan bersih karena CASCADE)
+        await _supabase.from('orders').delete().eq('id', orderId);
+
+        if (mounted) {
+          Navigator.pop(context); // Tutup loading
+          Navigator.pop(context, 'dihapus'); // Keluar dan beritahu beranda agar refresh
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Nota berhasil dibatalkan dan dihapus!'), backgroundColor: Colors.green));
+        }
+      } catch (e) {
+        if (mounted) {
+          Navigator.pop(context); // Tutup loading
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus: $e'), backgroundColor: Colors.red));
+        }
+      }
+    }
   }
 
   Future<void> _initBluetooth() async {
@@ -801,6 +885,25 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                       ),
                     ),
                   ],
+
+                  // [TAMBAHAN BARU] TOMBOL HAPUS KHUSUS ADMIN
+                  if (_isAdmin) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.delete_forever_rounded, color: Colors.red),
+                        label: const Text('Hapus Nota (Permanen)', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 15)),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Colors.red.shade50,
+                          side: BorderSide(color: Colors.red.shade200, width: 1.5),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        onPressed: _hapusNota,
+                      ),
+                    ),
+                  ]
                 ],
               ),
             ),

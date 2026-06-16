@@ -59,12 +59,16 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   DateTime? _jatuhTempo;
 
   bool _isLoading = false;
+  
+  // [TAMBAHAN] Variabel untuk menampung rasio poin
+  double _rupiahPerPoin = 50000.0;
 
   @override
   void initState() {
     super.initState();
     _loadServices();
     _loadCustomers();
+    _loadSettings(); // Panggil data setting
     _estimasiSelesai = _tglMasuk.add(const Duration(days: 2));
     _jatuhTempo = _tglMasuk.add(const Duration(days: 7));
   }
@@ -74,6 +78,16 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     _searchCtrl.dispose();
     super.dispose();
   }
+  
+  // [TAMBAHAN] Membaca aturan koin dari database
+  Future<void> _loadSettings() async {
+    try {
+      final settingData = await _supabase.from('app_settings').select('value').eq('id', 'rupiah_per_poin').maybeSingle();
+      if (settingData != null && mounted) {
+        setState(() => _rupiahPerPoin = (settingData['value'] as num).toDouble());
+      }
+    } catch (_) {}
+  }
 
   Future<void> _loadServices() async {
     final data = await _supabase.from('services').select('id, nama, harga_per_satuan, satuan, tipe, is_active, inventory_id, qty_per_unit').eq('is_active', true).order('nama');
@@ -81,7 +95,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   }
 
   Future<void> _loadCustomers() async {
-    final data = await _supabase.from('profiles').select('id, nama_lengkap, nomor_hp').eq('role', 'customer').order('nama_lengkap');
+    final data = await _supabase.from('profiles').select('id, nama_lengkap, nomor_hp').eq('role', 'customer').eq('is_active', true).order('nama_lengkap');
     if (mounted) {
       setState(() {
         _allCustomers = List<Map<String, dynamic>>.from(data);
@@ -224,7 +238,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         diskon = (reward['nilai_reward'] as num).toDouble();
       }
 
-      if (diskon > _subtotal) diskon = _subtotal; // Maksimal diskon sebesar tagihan
+      if (diskon > _subtotal) diskon = _subtotal; 
 
       setState(() {
         _voucherData = voucher;
@@ -239,12 +253,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     }
   }
 
-  // =========================================================
-  // LOGIKA SIMPAN ORDER & DISTRIBUSI POIN
-  // =========================================================
-  // =========================================================
-  // LOGIKA SIMPAN ORDER & DISTRIBUSI POIN (REVISI PIUTANG)
-  // =========================================================
   Future<void> _simpanOrder() async {
     setState(() => _isLoading = true);
     try {
@@ -259,14 +267,10 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         customerId = custData?['id'];
       }
 
-      // AMBIL PENGATURAN RUPIAH PER POIN DARI DB
-      final settingData = await _supabase.from('app_settings').select('value').eq('id', 'rupiah_per_poin').maybeSingle();
-      final double rupiahPerPoin = settingData != null ? (settingData['value'] as num).toDouble() : 50000.0;
-
-      // HITUNG POIN POTENSIAL (Hanya jika terdaftar)
+      // HITUNG POIN POTENSIAL (Menggunakan State _rupiahPerPoin)
       int poinDidapat = 0;
       if (customerId != null) {
-        poinDidapat = (_total / rupiahPerPoin).floor();
+        poinDidapat = (_total / _rupiahPerPoin).floor();
       }
 
       final now = DateTime.now();
@@ -288,7 +292,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         'poin_didapat': poinDidapat, 
         'poin_sudah_diberikan': (_tipeBayar == 'lunas' && customerId != null && poinDidapat > 0), 
         
-        // 👇 TAMBAHKAN .toUtc() DI 3 BARIS INI AGAR SUPABASE TIDAK BINGUNG
         'created_at': _tglMasuk.toUtc().toIso8601String(),
         'estimasi_selesai': _estimasiSelesai?.toUtc().toIso8601String(),
         'jatuh_tempo': _tipeBayar == 'piutang' ? _jatuhTempo?.toUtc().toIso8601String() : null,
@@ -347,7 +350,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         await _supabase.from('reward_redemptions').update({'status': 'dipakai', 'dipakai_di_order': order['id'], 'dipakai_at': now.toIso8601String()}).eq('id', _voucherData!['id']);
       }
 
-      // PINDAH KE CETAK INVOICE
       if (mounted) {
         Navigator.pushReplacement(
           context,
@@ -370,7 +372,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     }
   }
 
-  // DESAIN INPUT MODERN UNTUK FORM
   InputDecoration _modernInputDecoration(String label, {IconData? icon}) {
     return InputDecoration(
       labelText: label,
@@ -680,6 +681,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   }
 
   Widget _buildStep3Bayar() {
+    // [TAMBAHAN] Menghitung estimasi poin yang akan didapat (Otomatis menyesuaikan dengan settingan)
+    final int potensiPoin = (_total / _rupiahPerPoin).floor();
+
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(20),
@@ -727,7 +731,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 ..._cart.map((item) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(children: [Expanded(child: Text('${item['service']['nama']} × ${item['qty']}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _DS.textPrimary))), Text(_formatRupiah(item['subtotal']), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: _DS.textPrimary))]))),
                 const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider(color: _DS.border)),
                 
-                // BARIS INPUT VOUCHER
                 if (_selectedCustomer != null) ...[
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -750,6 +753,33 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 if (_diskonVoucher > 0) ...[const SizedBox(height: 8), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Diskon Voucher', style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600)), Text('- ${_formatRupiah(_diskonVoucher)}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w700))])],
                 const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider(color: _DS.border)),
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('TOTAL TAGIHAN', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: _DS.textPrimary)), Text(_formatRupiah(_total), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 22, color: _DS.blue, letterSpacing: -0.5))]),
+                
+                // ==============================================================
+                // [TAMBAHAN UI BARU] NOTIFIKASI POTENSI POIN UNTUK PELANGGAN
+                // ==============================================================
+                if (_selectedCustomer != null && potensiPoin > 0) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber.shade200, width: 1.5)),
+                    child: Row(
+                      children: [
+                        Icon(Icons.stars_rounded, color: Colors.amber.shade600, size: 24),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Poin Loyalitas', style: TextStyle(color: Colors.amber.shade900, fontSize: 12, fontWeight: FontWeight.w700)),
+                              Text(_tipeBayar == 'lunas' ? 'Otomatis masuk ke dompet pelanggan' : 'Poin masuk saat tagihan dilunasi', style: TextStyle(color: Colors.amber.shade800, fontSize: 10, height: 1.2)),
+                            ],
+                          ),
+                        ),
+                        Text('+$potensiPoin Poin', style: TextStyle(color: Colors.amber.shade800, fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                      ],
+                    ),
+                  )
+                ]
               ],
             ),
           ),
@@ -828,7 +858,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   }
 }
 
-// WIDGET TILE SERVICE MENGAMBANG
 class _ServiceTile extends StatelessWidget {
   final Map<String, dynamic> service;
   final int qty;
@@ -876,7 +905,6 @@ class _ServiceTile extends StatelessWidget {
   }
 }
 
-// WIDGET METODE PEMBAYARAN MENGAMBANG
 class _PayOption extends StatelessWidget {
   final String label; final IconData icon; final bool selected; final Color color; final Color bgColor; final VoidCallback onTap;
   const _PayOption({required this.label, required this.icon, required this.selected, required this.onTap, required this.color, this.bgColor = Colors.white});

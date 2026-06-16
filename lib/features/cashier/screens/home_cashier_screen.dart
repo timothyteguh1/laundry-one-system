@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:laundry_one/features/cashier/screens/point_settings_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:laundry_one/features/auth/services/auth_service.dart';
 import 'package:laundry_one/features/auth/screens/login_screen.dart';
@@ -55,9 +56,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     with SingleTickerProviderStateMixin {
   final _supabase = Supabase.instance.client;
   
-  // ============================================================
-  // [TAMBAHAN BARU] Variabel State untuk Profil User (RBAC)
-  // ============================================================
   Map<String, dynamic>? _userProfile;
   final AuthService _authService = AuthService();
 
@@ -86,7 +84,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   void initState() {
     super.initState();
     _fabAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 600))..forward();
-    _loadUserProfile(); // [TAMBAHAN BARU] Load Role User sebelum data lain
+    _loadUserProfile(); 
     _loadData();
     _subscribeRealtime();
   }
@@ -97,9 +95,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     super.dispose();
   }
 
-  // ============================================================
-  // [TAMBAHAN BARU] Fungsi Load User Profile dari Supabase
-  // ============================================================
   Future<void> _loadUserProfile() async {
     try {
       final profile = await _supabase
@@ -117,9 +112,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     }
   }
 
-  // ============================================================
-  // [TAMBAHAN BARU] DRAWER / SIDEBAR (Panel RBAC)
-  // ============================================================
   Widget _buildDrawer() {
     final role = _userProfile?['role'] ?? 'cashier';
     final isAdmin = role == 'super_admin';
@@ -173,7 +165,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                   },
                 ),
                 
-                // PANEL ADMIN (HANYA MUNCUL JIKA SUPER ADMIN)
                 if (isAdmin) ...[
                   const Divider(height: 32),
                   const Padding(
@@ -194,6 +185,14 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.push(context, MaterialPageRoute(builder: (_) => const InventoryScreen()));
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.settings_suggest_rounded, color: Colors.red),
+                    title: const Text('Pengaturan Koin', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const PointSettingsScreen())); // Pastikan Anda meng-import file di atas!
                     },
                   ),
                 ],
@@ -259,7 +258,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       final todayStart = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}T00:00:00';
       final todayEnd = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}T23:59:59';
 
-      // PENTING: Tambahan customer_id, poin_didapat, dan poin_sudah_diberikan agar tidak error saat pelunasan
       final queryStr = 'id, nomor_order, status, total_harga, is_piutang, metode_bayar_awal, created_at, estimasi_selesai, jatuh_tempo, customer_id, poin_didapat, poin_sudah_diberikan, customers(profiles(nama_lengkap, nomor_hp)), order_items(jumlah, harga_satuan, services(nama))';
 
       final results = await Future.wait([
@@ -385,7 +383,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                       String newStatus = currentStatus;
                       if (currentStatus == 'selesai') newStatus = 'dibayar_lunas'; 
 
-                      // PENARIKAN DATA UNTUK POIN
                       final orderId = order['id'];
                       final kasirId = _supabase.auth.currentUser!.id;
                       final customerId = order['customer_id'];
@@ -393,7 +390,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                       final poinSudahDiberikan = order['poin_sudah_diberikan'] == true;
                       final nomorOrder = order['nomor_order'];
 
-                      // 1. UPDATE ORDER
                       await _supabase.from('orders').update({
                         'status': newStatus, 
                         'is_piutang': false, 
@@ -401,7 +397,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                         'poin_sudah_diberikan': true
                       }).eq('id', orderId);
                       
-                      // 2. CATAT PEMBAYARAN
                       await _supabase.from('order_payments').insert({
                         'order_id': orderId, 
                         'jumlah': total.toInt(), 
@@ -409,7 +404,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                         'diterima_oleh': kasirId
                       });
 
-                      // 3. PENCAIRAN POIN OTOMATIS
                       if (customerId != null && poinDidapat > 0 && !poinSudahDiberikan) {
                         final cust = await _supabase.from('customers').select('poin_saldo').eq('id', customerId).single();
                         final saldoSebelum = (cust['poin_saldo'] as num).toInt();
@@ -453,7 +447,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _DS.ground,
-      // [TAMBAHAN BARU] Aktifkan Sidebar
       drawer: _buildDrawer(),
       body: Center(
         child: ConstrainedBox(
@@ -542,10 +535,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
             children: [
               Row(
                 children: [
-                  // ============================================================
-                  // [TAMBAHAN BARU] Tombol Hamburger untuk buka Sidebar Drawer
-                  // Menggunakan Builder untuk mendapatkan context Scaffold terdekat
-                  // ============================================================
                   Builder(
                     builder: (ctx) => Material(
                       color: Colors.white.withOpacity(0.1),
@@ -571,9 +560,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                       ],
                     ),
                   ),
-                  // ============================================================
-                  // [TAMBAHAN BARU] Batasi Icon Inventory Khusus Admin
-                  // ============================================================
                   if (_userProfile?['role'] == 'super_admin') ...[
                     Material(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(12), child: InkWell(onTap: () { HapticFeedback.selectionClick(); Navigator.push(context, MaterialPageRoute(builder: (_) => const InventoryScreen())); }, borderRadius: BorderRadius.circular(12), child: const Padding(padding: EdgeInsets.all(10), child: Icon(Icons.inventory_2_outlined, color: Colors.white, size: 20)))),
                     const SizedBox(width: 8),
@@ -736,6 +722,8 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       _handleUpdateStatus(order, 'selesai');
     } else if (action == 'dibayar_lunas') {
       _handleUpdateStatus(order, 'dibayar_lunas');
+    } else if (action == 'dihapus') {
+      _loadData(); // Jika dihapus oleh admin, reload data
     }
   }
 
@@ -767,23 +755,10 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   }
   
   // ============================================================
-  // [TAMBAHAN BARU] Penguncian Tab Laporan Khusus Admin
+  // [UPDATE] MENGEMBALIKAN AKSES TAB LAPORAN UNTUK KASIR
+  // Kasir sekarang bisa masuk tab ini (melihat laporan/buka menu)
   // ============================================================
   Widget _buildTabLaporan() { 
-    if (_userProfile?['role'] != 'super_admin') {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.lock_outline_rounded, size: 48, color: Colors.redAccent),
-            SizedBox(height: 16),
-            Text('Akses Ditolak', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.redAccent)),
-            SizedBox(height: 8),
-            Text('Tab ini khusus untuk Super Admin.', style: TextStyle(color: Colors.grey)),
-          ],
-        ),
-      );
-    }
     return const ReportTab(); 
   }
 
@@ -1137,18 +1112,34 @@ class _PelangganTabState extends State<_PelangganTab> {
   final _supabase = Supabase.instance.client;
   List<Map<String, dynamic>> _list = [];
   bool _loading = true;
+  bool _isAdmin = false;
   final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _checkRoleAndLoad();
+  }
+
+  Future<void> _checkRoleAndLoad() async {
+    try {
+      final myId = _supabase.auth.currentUser!.id;
+      final myProfile = await _supabase.from('profiles').select('role').eq('id', myId).single();
+      _isAdmin = myProfile['role'] == 'super_admin';
+    } catch (e) {
+      debugPrint('Role check error: $e');
+    }
     _load();
   }
 
   Future<void> _load([String q = '']) async {
     setState(() => _loading = true);
     try {
-      var query = _supabase.from('profiles').select('id, nama_lengkap, nomor_hp, customers(id, poin_saldo)').eq('role', 'customer');
+      var query = _supabase.from('profiles')
+          .select('id, nama_lengkap, nomor_hp, customers(id, poin_saldo)')
+          .eq('role', 'customer')
+          .eq('is_active', true); 
+
       if (q.isNotEmpty) query = query.or('nama_lengkap.ilike.%$q%,nomor_hp.ilike.%$q%');
       final data = await query.order('nama_lengkap');
       if (mounted) {
@@ -1160,6 +1151,154 @@ class _PelangganTabState extends State<_PelangganTab> {
     } catch (e) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _hapusPelanggan(String profileId, String nama) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(children: [Icon(Icons.warning_amber_rounded, color: Colors.red), SizedBox(width: 8), Text('Hapus Pelanggan?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))]),
+        content: Text('Yakin ingin menghapus $nama? Data pelanggan akan disembunyikan tapi nota lama tetap aman.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+            onPressed: () => Navigator.pop(ctx, true), 
+            child: const Text('Hapus', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      HapticFeedback.heavyImpact();
+      try {
+        await _supabase.from('profiles').update({'is_active': false}).eq('id', profileId);
+        _load(_searchCtrl.text); 
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Pelanggan berhasil dihapus'), backgroundColor: Colors.green));
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus: $e'), backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  void _showAdjustPointsSheet(String custId, String nama, int currentPoin) {
+    int tipeAdjust = 1; 
+    final amtCtrl = TextEditingController();
+    final noteCtrl = TextEditingController();
+    bool isSubmitting = false;
+
+    showModalBottomSheet(
+      context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Container(
+          padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(ctx).viewInsets.bottom + 32),
+          decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+          child: Column(
+            mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 20), 
+              Text('Koreksi Poin: $nama', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _DS.textPrimary)), 
+              const SizedBox(height: 4), 
+              Text('Poin pelanggan saat ini: $currentPoin', style: const TextStyle(color: _DS.textSecondary, fontSize: 14)), 
+              const SizedBox(height: 24),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () { HapticFeedback.selectionClick(); setModalState(() => tipeAdjust = 1); },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(color: tipeAdjust == 1 ? Colors.green.shade50 : Colors.white, border: Border.all(color: tipeAdjust == 1 ? Colors.green : _DS.border), borderRadius: BorderRadius.circular(12)),
+                        child: Center(child: Text('+ Tambah Poin', style: TextStyle(color: tipeAdjust == 1 ? Colors.green.shade700 : _DS.textSecondary, fontWeight: FontWeight.w700))),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () { HapticFeedback.selectionClick(); setModalState(() => tipeAdjust = -1); },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(color: tipeAdjust == -1 ? Colors.red.shade50 : Colors.white, border: Border.all(color: tipeAdjust == -1 ? Colors.red : _DS.border), borderRadius: BorderRadius.circular(12)),
+                        child: Center(child: Text('- Kurangi Poin', style: TextStyle(color: tipeAdjust == -1 ? Colors.red.shade700 : _DS.textSecondary, fontWeight: FontWeight.w700))),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              
+              TextField(
+                controller: amtCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(labelText: 'Jumlah Poin', hintText: 'Contoh: 10', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: noteCtrl,
+                decoration: InputDecoration(labelText: 'Catatan/Alasan (Wajib)', hintText: 'Contoh: Kompensasi cucian tertukar', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+              ),
+              const SizedBox(height: 32),
+
+              SizedBox(
+                width: double.infinity, height: 52,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0),
+                  onPressed: isSubmitting ? null : () async {
+                    final val = int.tryParse(amtCtrl.text.trim()) ?? 0;
+                    final note = noteCtrl.text.trim();
+                    
+                    if (val <= 0 || note.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Jumlah poin harus lebih dari 0 dan Catatan wajib diisi!'), backgroundColor: Colors.orange));
+                      return;
+                    }
+                    
+                    final saldoSesudah = currentPoin + (val * tipeAdjust);
+                    if (saldoSesudah < 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Koreksi gagal: Poin pelanggan tidak boleh minus!'), backgroundColor: Colors.red));
+                      return;
+                    }
+
+                    HapticFeedback.heavyImpact();
+                    setModalState(() => isSubmitting = true);
+                    
+                    try {
+                      final adminId = _supabase.auth.currentUser!.id;
+                      
+                      await _supabase.from('customers').update({'poin_saldo': saldoSesudah}).eq('id', custId);
+                      
+                      await _supabase.from('points_ledger').insert({
+                        'customer_id': custId,
+                        'tipe': 'adjusted',
+                        'jumlah': val, 
+                        'saldo_sebelum': currentPoin,
+                        'saldo_sesudah': saldoSesudah,
+                        'dilakukan_oleh': adminId,
+                        'catatan': note
+                      });
+                      
+                      if (mounted) {
+                        Navigator.pop(ctx);
+                        _load(_searchCtrl.text); 
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Poin berhasil dikoreksi!'), backgroundColor: Colors.green));
+                      }
+                    } catch (e) {
+                      setModalState(() => isSubmitting = false);
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+                    }
+                  },
+                  child: isSubmitting ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Simpan Perubahan', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -1201,7 +1340,21 @@ class _PelangganTabState extends State<_PelangganTab> {
                           itemCount: _list.length,
                           itemBuilder: (_, i) {
                             final c = _list[i];
-                            final poin = c['customers']?[0]?['poin_saldo'] ?? 0;
+                            
+                            final custData = c['customers'];
+                            int poin = 0;
+                            String? custId;
+
+                            if (custData != null) {
+                              if (custData is List && custData.isNotEmpty) {
+                                poin = custData[0]['poin_saldo'] ?? 0;
+                                custId = custData[0]['id'];
+                              } else if (custData is Map) {
+                                poin = custData['poin_saldo'] ?? 0;
+                                custId = custData['id'];
+                              }
+                            }
+
                             final isNamaValid = c['nama_lengkap'] != null && c['nama_lengkap'].toString().trim().isNotEmpty;
                             final inisial = isNamaValid ? c['nama_lengkap'].toString().trim()[0].toUpperCase() : '?';
 
@@ -1213,17 +1366,43 @@ class _PelangganTabState extends State<_PelangganTab> {
                                 leading: Container(width: 44, height: 44, decoration: BoxDecoration(color: _DS.sky, borderRadius: BorderRadius.circular(12)), child: Center(child: Text(inisial, style: const TextStyle(color: _DS.blue, fontWeight: FontWeight.w800, fontSize: 16)))),
                                 title: Text(c['nama_lengkap'] ?? '-', style: const TextStyle(fontWeight: FontWeight.w800, color: _DS.textPrimary, fontSize: 14)),
                                 subtitle: Text(c['nomor_hp'] ?? '-', style: const TextStyle(color: _DS.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)),
-                                trailing: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                  decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.amber.shade200)),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.stars_rounded, color: Colors.amber.shade600, size: 14),
-                                      const SizedBox(width: 4),
-                                      Text('$poin', style: TextStyle(color: Colors.amber.shade700, fontWeight: FontWeight.w800, fontSize: 12)),
-                                    ],
-                                  ),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                      decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.amber.shade200)),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.stars_rounded, color: Colors.amber.shade600, size: 14),
+                                          const SizedBox(width: 4),
+                                          Text('$poin', style: TextStyle(color: Colors.amber.shade700, fontWeight: FontWeight.w800, fontSize: 12)),
+                                        ],
+                                      ),
+                                    ),
+                                    if (_isAdmin) ...[
+                                      const SizedBox(width: 8),
+                                      PopupMenuButton<String>(
+                                        icon: const Icon(Icons.more_vert_rounded, color: _DS.textHint),
+                                        onSelected: (val) {
+                                          if (val == 'edit_poin') {
+                                            if (custId != null) {
+                                              _showAdjustPointsSheet(custId, c['nama_lengkap'], poin);
+                                            } else {
+                                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Data pelanggan belum lengkap (Dompet Poin kosong).'), backgroundColor: Colors.orange));
+                                            }
+                                          } else if (val == 'hapus') {
+                                            _hapusPelanggan(c['id'], c['nama_lengkap']);
+                                          }
+                                        },
+                                        itemBuilder: (context) => [
+                                          const PopupMenuItem(value: 'edit_poin', child: Row(children: [Icon(Icons.edit_note_rounded, color: _DS.blue, size: 20), SizedBox(width: 8), Text('Koreksi Poin')])),
+                                          const PopupMenuItem(value: 'hapus', child: Row(children: [Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20), SizedBox(width: 8), Text('Hapus Akun', style: TextStyle(color: Colors.red))])),
+                                        ],
+                                      )
+                                    ]
+                                  ],
                                 ),
                               ),
                             );

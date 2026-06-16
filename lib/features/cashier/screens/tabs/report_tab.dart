@@ -4,6 +4,7 @@ import 'package:laundry_one/features/cashier/screens/inventory_screen.dart';
 import 'package:laundry_one/features/cashier/screens/services_management_screen.dart';
 import 'package:laundry_one/features/cashier/screens/reports/report_product_sales_screen.dart';
 import 'package:laundry_one/features/cashier/screens/reports/report_cash_flow_screen.dart';
+import 'package:laundry_one/features/cashier/screens/reports/report_coin_screen.dart'; // [TAMBAHAN]
 
 // ============================================================
 // DESIGN SYSTEM - MODERN & CLEAR
@@ -12,13 +13,12 @@ class _DS {
   static const navy = Color(0xFF0F2557);
   static const blue = Color(0xFF1565C0);
   static const sky = Color(0xFFE8F0FE);
-  static const ground = Color(0xFFEAF0F6); // Sesuai parameter kamu
+  static const ground = Color(0xFFEAF0F6);
   static const surface = Colors.white;
-  static const border = Color(0xFFD2DCE8); // Sesuai parameter kamu
+  static const border = Color(0xFFD2DCE8); 
   static const textPrimary = Color(0xFF0F2557);
   static const textSecondary = Color(0xFF6B7A99);
 
-  // MENGGUNAKAN PARAMETER SHADOW YANG KAMU KIRIM
   static List<BoxShadow> cardShadow = [
     BoxShadow(
       color: const Color(0xFF0F2557).withOpacity(0.09), 
@@ -81,7 +81,7 @@ class ReportTab extends StatelessWidget {
                   _buildMenuCard(
                     context, 
                     icon: Icons.inventory_2_rounded, iconColor: Colors.brown.shade600, bgColor: Colors.brown.shade50,
-                    title: 'Stok Barang Fisik', subtitle: 'Atur produk jualan & barang gudang',
+                    title: 'Stok Barang Fisik', subtitle: 'Atur produk jualan & restock barang',
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InventoryScreen())),
                   ),
                   const SizedBox(height: 12),
@@ -119,17 +119,8 @@ class ReportTab extends StatelessWidget {
                   _buildMenuCard(
                     context, 
                     icon: Icons.monetization_on_rounded, iconColor: Colors.orange.shade600, bgColor: Colors.orange.shade50,
-                    title: 'Laporan Koin', subtitle: 'Riwayat top-up deposit pelanggan',
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: const Text('Fitur Laporan Koin segera hadir!', 
-                          style: TextStyle(fontWeight: FontWeight.w600)), 
-                        backgroundColor: Colors.orange.shade800, 
-                        behavior: SnackBarBehavior.floating, 
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ));
-                    },
+                    title: 'Laporan Koin', subtitle: 'Riwayat top-up & penukaran koin loyalitas',
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportCoinScreen())),
                   ),
                 ],
               ),
@@ -145,8 +136,8 @@ class ReportTab extends StatelessWidget {
       decoration: BoxDecoration(
         color: _DS.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _DS.border, width: 1.5), // Mengikuti parameter border kamu
-        boxShadow: _DS.cardShadow, // Menggunakan cardShadow yang kamu minta
+        border: Border.all(color: _DS.border, width: 1.5), 
+        boxShadow: _DS.cardShadow, 
       ),
       child: Material(
         color: Colors.transparent,
