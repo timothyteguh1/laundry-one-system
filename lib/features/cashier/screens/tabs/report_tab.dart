@@ -5,6 +5,7 @@ import 'package:laundry_one/features/cashier/screens/services_management_screen.
 import 'package:laundry_one/features/cashier/screens/reports/report_product_sales_screen.dart';
 import 'package:laundry_one/features/cashier/screens/reports/report_cash_flow_screen.dart';
 import 'package:laundry_one/features/cashier/screens/reports/report_coin_screen.dart'; // [TAMBAHAN]
+import 'package:laundry_one/features/cashier/screens/reward_management_screen.dart'; // [TAMBAHAN]
 
 // ============================================================
 // DESIGN SYSTEM - MODERN & CLEAR
@@ -122,6 +123,18 @@ class ReportTab extends StatelessWidget {
                     title: 'Laporan Koin', subtitle: 'Riwayat top-up & penukaran koin loyalitas',
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportCoinScreen())),
                   ),
+                  const SizedBox(height: 12),
+
+                  // JANGAN LUPA IMPORT INI DI PALING ATAS FILE:
+// import 'package:laundry_one/features/cashier/screens/reward_management_screen.dart';
+
+                  _buildMenuCard(
+                    context, 
+                    icon: Icons.card_giftcard_rounded, iconColor: Colors.pink.shade600, bgColor: Colors.pink.shade50,
+                    title: 'Katalog Hadiah (Rewards)', subtitle: 'Atur daftar voucher diskon untuk pelanggan',
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RewardManagementScreen())), 
+                  ),
+                  const SizedBox(height: 12),
                 ],
               ),
             )

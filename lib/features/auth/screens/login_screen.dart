@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'package:laundry_one/features/auth/services/auth_service.dart';
-import 'package:laundry_one/features/auth/screens/register_screen.dart'; // [TAMBAHAN] Import ini agar tombol daftar jalan
 
 // ============================================================
 // LOGIN SCREEN — Industry-standard design
@@ -15,7 +14,7 @@ class LoginConfig {
   final String? hint;
   final TextInputType keyboardType;
   final Color primaryColor;
-  final Color? secondaryColor; 
+  final Color? secondaryColor;  
   final Color backgroundColor;
   final IconData icon;
   final String? tagline;        
@@ -28,7 +27,7 @@ class LoginConfig {
     required this.roleDatabase,
     required this.labelIdentifier,
     this.hint,
-    this.keyboardType = TextInputType.phone, // Default ganti ke phone
+    this.keyboardType = TextInputType.text,
     required this.primaryColor,
     this.secondaryColor,         
     required this.backgroundColor,
@@ -125,11 +124,23 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _isLoading = true);
 
     try {
-      // [UPDATE] Gunakan loginUniversal agar Admin/Kasir bisa pakai nomor HP
-      await _authService.loginUniversal(
-        identifier: _identifierController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
+      // =========================================================
+      // [PERBAIKAN] Logika Cerdas Pembagi Aplikasi
+      // =========================================================
+      if (widget.config.roleDatabase == 'customer') {
+        // Jika dibuka di Aplikasi Pelanggan
+        await _authService.loginWithRole(
+          identifier: _identifierController.text.trim(),
+          password: _passwordController.text.trim(),
+          expectedRole: 'customer',
+        );
+      } else {
+        // Jika dibuka di Aplikasi Kasir/Admin
+        await _authService.loginUniversal(
+          identifier: _identifierController.text.trim(),
+          password: _passwordController.text.trim(),
+        );
+      }
 
       if (mounted) {
         HapticFeedback.mediumImpact();
@@ -175,16 +186,13 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  // [UPDATE] Perbaikan fungsi tombol Daftar
   void _keRegister() {
+    if (widget.config.registerScreen == null) return;
     HapticFeedback.lightImpact();
-    // Gunakan fallback otomatis jika registerScreen kosong
-    Widget targetScreen = widget.config.registerScreen ?? const RegisterScreen();
-    
     Navigator.push(
       context,
       PageRouteBuilder(
-        pageBuilder: (_, animation, __) => targetScreen,
+        pageBuilder: (_, animation, __) => widget.config.registerScreen!,
         transitionsBuilder: (_, animation, __, child) => SlideTransition(
           position: Tween<Offset>(
             begin: const Offset(1, 0),
@@ -284,7 +292,10 @@ class _LoginScreenState extends State<LoginScreen>
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      'Login dengan nomor HP kamu', // Teks diseragamkan
+                                      widget.config.roleDatabase ==
+                                              'super_admin'
+                                          ? 'Login dengan email admin kamu'
+                                          : 'Login dengan nomor HP kamu',
                                       style: TextStyle(
                                         color: Colors.grey.shade500,
                                         fontSize: 14,
@@ -292,27 +303,44 @@ class _LoginScreenState extends State<LoginScreen>
                                     ),
                                     const SizedBox(height: 28),
 
-                                    // Input identifier
                                     _buildInput(
                                       controller: _identifierController,
-                                      label: 'Nomor HP', // Selalu minta Nomor HP
-                                      hint: '081234567890',
-                                      icon: Icons.phone_android_outlined,
-                                      keyboardType: TextInputType.phone,
-                                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                      label: widget.config.labelIdentifier,
+                                      hint: widget.config.hint ?? '',
+                                      icon: widget.config.roleDatabase ==
+                                              'super_admin'
+                                          ? Icons.email_outlined
+                                          : Icons.phone_android_outlined,
+                                      keyboardType:
+                                          widget.config.keyboardType,
+                                      inputFormatters:
+                                          widget.config.keyboardType ==
+                                                  TextInputType.phone
+                                              ? [
+                                                  FilteringTextInputFormatter
+                                                      .digitsOnly
+                                                ]
+                                              : null,
                                       validator: (val) {
-                                        if (val == null || val.trim().isEmpty) {
+                                        if (val == null ||
+                                            val.trim().isEmpty) {
                                           return 'Wajib diisi';
                                         }
-                                        if (val.trim().length < 9) {
-                                          return 'Nomor HP tidak valid';
+                                        if (widget.config.roleDatabase ==
+                                                'super_admin' &&
+                                            !val.contains('@')) {
+                                          return 'Format email tidak valid';
+                                        }
+                                        if (widget.config.roleDatabase !=
+                                                'super_admin' &&
+                                            val.trim().length < 10) {
+                                          return 'Nomor HP minimal 10 digit';
                                         }
                                         return null;
                                       },
                                     ),
                                     const SizedBox(height: 14),
 
-                                    // Input password
                                     _buildInput(
                                       controller: _passwordController,
                                       label: 'Password',
@@ -409,7 +437,7 @@ class _LoginScreenState extends State<LoginScreen>
                                             ),
                                           ),
                                           GestureDetector(
-                                            onTap: _keRegister, // Tombol ini sekarang aktif!
+                                            onTap: _keRegister,
                                             child: Text(
                                               'Daftar',
                                               style: TextStyle(
@@ -503,9 +531,6 @@ class _LoginScreenState extends State<LoginScreen>
   }
 }
 
-// ============================================================
-// HEADER — gradient + dekorasi lingkaran + logo + tagline
-// ============================================================
 class _Header extends StatelessWidget {
   final LoginConfig config;
   final Color secondaryColor;
@@ -631,9 +656,6 @@ class _Header extends StatelessWidget {
   }
 }
 
-// ============================================================
-// BACKGROUND PAINTER — dekorasi halus di area form
-// ============================================================
 class _BgPainter extends CustomPainter {
   final Color primary;
   final Color secondary;

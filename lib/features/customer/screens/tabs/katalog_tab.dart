@@ -1,4 +1,4 @@
-import 'dart:async'; // TAMBAHAN: Wajib untuk fungsi Timer
+import 'dart:async'; 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -23,6 +23,8 @@ class KatalogTab extends StatefulWidget {
 
 class _KatalogTabState extends State<KatalogTab> {
   final _supabase = Supabase.instance.client;
+  
+  // 0 = Voucher Diskon, 1 = Tukar Barang, 2 = Daftar Harga
   int _selectedFilter = 0; 
 
   List<Map<String, dynamic>> _rewards = [];
@@ -63,8 +65,6 @@ class _KatalogTabState extends State<KatalogTab> {
           } else if (v['status'] == 'aktif') {
             final expiredAtUtc = DateTime.parse(v['berlaku_sampai']).toUtc();
             if (nowUtc.isAfter(expiredAtUtc)) {
-              // Jika sudah lewat waktunya, hanguskan di database
-              // Ini akan otomatis memicu Trigger DB untuk refund poin!
               await _supabase.from('reward_redemptions').update({'status': 'expired'}).eq('id', v['id']);
             } else {
               validVouchers.add(v);
@@ -90,30 +90,39 @@ class _KatalogTabState extends State<KatalogTab> {
   Future<void> _tukarPoin(Map<String, dynamic> reward) async {
     if (widget.customerId == null) return;
     
-    if (_usedRewardIds.contains(reward['id'])) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anda sudah pernah menggunakan promo ini sebelumnya!'), backgroundColor: Colors.orange));
-      return;
-    }
+    // Cek apakah ini barang fisik atau voucher diskon
+    final bool isBarang = reward['tipe_reward'] == 'gratis_layanan';
 
-    if (_activeVouchers.length >= 2) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Limit Tercapai! Maksimal hanya boleh memiliki 2 voucher aktif.'), backgroundColor: Colors.orange));
-      return;
-    }
-
-    final hasActive = _activeVouchers.any((v) => v['reward_id'] == reward['id']);
-    if (hasActive) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anda masih memiliki voucher jenis ini yang sedang aktif!'), backgroundColor: Colors.orange));
-      return;
+    // Aturan Limit & One-Time Use HANYA berlaku untuk Voucher Diskon
+    if (!isBarang) {
+      if (_usedRewardIds.contains(reward['id'])) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anda sudah pernah menggunakan promo ini sebelumnya!'), backgroundColor: Colors.orange));
+        return;
+      }
+      if (_activeVouchers.length >= 2) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Limit Tercapai! Maksimal hanya boleh memiliki 2 voucher aktif.'), backgroundColor: Colors.orange));
+        return;
+      }
+      final hasActive = _activeVouchers.any((v) => v['reward_id'] == reward['id']);
+      if (hasActive) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anda masih memiliki voucher jenis ini yang sedang aktif!'), backgroundColor: Colors.orange));
+        return;
+      }
     }
 
     final poinDibutuhkan = reward['poin_dibutuhkan'] as int;
 
+    // Tampilkan Dialog Konfirmasi yang Berbeda
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Tukar Poin?', style: TextStyle(fontWeight: FontWeight.w800, color: CustomerTheme.textPrimary)),
-        content: Text('Tukar $poinDibutuhkan koin untuk "${reward['nama']}"?\n\nVoucher hanya berlaku selama 5 Menit!'),
+        content: Text(
+          isBarang 
+            ? 'Tukar $poinDibutuhkan koin untuk "${reward['nama']}"?\n\nSetelah ditukar, segera tunjukkan Riwayat Mutasi Poin ke Kasir untuk mengambil barang fisik Anda.'
+            : 'Tukar $poinDibutuhkan koin untuk "${reward['nama']}"?\n\nVoucher hanya berlaku selama 5 Menit!'
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal', style: TextStyle(color: CustomerTheme.textSecondary))),
           ElevatedButton(
@@ -134,18 +143,37 @@ class _KatalogTabState extends State<KatalogTab> {
       
       if (currentDbPoin < poinDibutuhkan) throw Exception('Poin di database tidak mencukupi.');
 
-      final randomCode = 'VCH-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+      final randomCode = isBarang 
+          ? 'BRG-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}'
+          : 'VCH-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
       
+      final nowUtcStr = DateTime.now().toUtc().toIso8601String();
       final expiredTimeUtc = DateTime.now().toUtc().add(const Duration(minutes: 5)).toIso8601String();
 
-      await _supabase.from('reward_redemptions').insert({
-        'customer_id': widget.customerId,
-        'reward_id': reward['id'],
-        'kode_voucher': randomCode,
-        'berlaku_sampai': expiredTimeUtc, 
-        'poin_digunakan': poinDibutuhkan,
-      });
+      // Logika Insert Database yang Dibedakan
+      if (isBarang) {
+        // Barang langsung ditandai "dipakai" agar masuk history riwayat offline
+        await _supabase.from('reward_redemptions').insert({
+          'customer_id': widget.customerId,
+          'reward_id': reward['id'],
+          'kode_voucher': randomCode,
+          'berlaku_sampai': nowUtcStr, 
+          'status': 'dipakai', 
+          'dipakai_at': nowUtcStr,
+          'poin_digunakan': poinDibutuhkan,
+        });
+      } else {
+        // Voucher diskon tetap pakai timer 5 menit (status 'aktif')
+        await _supabase.from('reward_redemptions').insert({
+          'customer_id': widget.customerId,
+          'reward_id': reward['id'],
+          'kode_voucher': randomCode,
+          'berlaku_sampai': expiredTimeUtc, 
+          'poin_digunakan': poinDibutuhkan,
+        });
+      }
 
+      // Potong Koin
       final newSaldo = currentDbPoin - poinDibutuhkan;
       await _supabase.from('points_ledger').insert({
         'customer_id': widget.customerId,
@@ -153,7 +181,7 @@ class _KatalogTabState extends State<KatalogTab> {
         'jumlah': poinDibutuhkan,
         'saldo_sebelum': currentDbPoin,
         'saldo_sesudah': newSaldo,
-        'catatan': 'Tukar voucher: ${reward['nama']}'
+        'catatan': isBarang ? 'Ambil Barang: ${reward['nama']}' : 'Tukar Voucher: ${reward['nama']}'
       });
 
       await _supabase.from('customers').update({'poin_saldo': newSaldo}).eq('id', widget.customerId!);
@@ -163,7 +191,11 @@ class _KatalogTabState extends State<KatalogTab> {
 
       if (mounted) {
         HapticFeedback.heavyImpact();
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Berhasil! Tunjukkan kode ke Kasir sebelum hangus.'), backgroundColor: Colors.green));
+        if (isBarang) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Berhasil! Cek Mutasi Poin dan tunjukkan ke Kasir.'), backgroundColor: Colors.green));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Berhasil! Tunjukkan kode ke Kasir sebelum hangus.'), backgroundColor: Colors.green));
+        }
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menukarkan: $e'), backgroundColor: Colors.red));
@@ -193,7 +225,7 @@ class _KatalogTabState extends State<KatalogTab> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Rewards & Katalog', style: TextStyle(color: CustomerTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w800)),
+                const Text('Katalog', style: TextStyle(color: CustomerTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w800)),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(color: Colors.amber.shade100, borderRadius: BorderRadius.circular(20)),
@@ -216,8 +248,9 @@ class _KatalogTabState extends State<KatalogTab> {
               decoration: BoxDecoration(color: CustomerTheme.border.withOpacity(0.4), borderRadius: BorderRadius.circular(12)),
               child: Row(
                 children: [
-                  _buildToggleBtn(0, 'Tukar Poin', Icons.card_giftcard_rounded),
-                  _buildToggleBtn(1, 'Daftar Harga', Icons.list_alt_rounded),
+                  _buildToggleBtn(0, 'Diskon', Icons.percent_rounded),
+                  _buildToggleBtn(1, 'Barang', Icons.inventory_2_rounded),
+                  _buildToggleBtn(2, 'Harga', Icons.list_alt_rounded),
                 ],
               ),
             ),
@@ -227,7 +260,7 @@ class _KatalogTabState extends State<KatalogTab> {
           Expanded(
             child: _isLoading 
                 ? const Center(child: CircularProgressIndicator(color: CustomerTheme.primary))
-                : _selectedFilter == 0 ? _buildListRewards() : _buildListHarga(),
+                : _selectedFilter == 2 ? _buildListHarga() : _buildListRewards(),
           )
         ],
       ),
@@ -250,9 +283,9 @@ class _KatalogTabState extends State<KatalogTab> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 16, color: isActive ? CustomerTheme.primary : CustomerTheme.textSecondary),
-              const SizedBox(width: 8),
-              Text(title, style: TextStyle(fontWeight: isActive ? FontWeight.w800 : FontWeight.w600, color: isActive ? CustomerTheme.primary : CustomerTheme.textSecondary, fontSize: 13)),
+              Icon(icon, size: 14, color: isActive ? CustomerTheme.primary : CustomerTheme.textSecondary),
+              const SizedBox(width: 4),
+              Text(title, style: TextStyle(fontWeight: isActive ? FontWeight.w800 : FontWeight.w600, color: isActive ? CustomerTheme.primary : CustomerTheme.textSecondary, fontSize: 12)),
             ],
           ),
         ),
@@ -261,7 +294,15 @@ class _KatalogTabState extends State<KatalogTab> {
   }
 
   Widget _buildListRewards() {
+    final bool isBarangTab = _selectedFilter == 1;
     final isLimitReached = _activeVouchers.length >= 2;
+
+    // Filter daftar reward sesuai tab yang aktif
+    final displayRewards = _rewards.where((r) {
+      final tipe = r['tipe_reward'];
+      if (isBarangTab) return tipe == 'gratis_layanan'; // Tab Barang
+      return tipe == 'diskon_nominal' || tipe == 'diskon_persen'; // Tab Diskon
+    }).toList();
 
     return Stack(
       children: [
@@ -272,47 +313,58 @@ class _KatalogTabState extends State<KatalogTab> {
             physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
             children: [
-              if (_activeVouchers.isNotEmpty) ...[
+              if (!isBarangTab && _activeVouchers.isNotEmpty) ...[
                 const Text('Voucher Aktif Saya', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: CustomerTheme.textPrimary)),
                 const SizedBox(height: 12),
                 
-                // 👇 DI SINI KITA GUNAKAN WIDGET TIMER KITA 👇
                 ..._activeVouchers.map((v) => ActiveVoucherCard(
                   voucherData: v,
                   onExpired: () async {
-                    // Ketika waktu habis, jalankan fetch data agar UI dan Database terupdate otomatis!
                     await _fetchData();
-                    await widget.onRefresh(); // Supaya poin di header Beranda juga ikut ter-update
+                    await widget.onRefresh(); 
                   },
                 )),
                 
                 const Divider(height: 32, color: CustomerTheme.border, thickness: 1.5),
               ],
 
-              const Text('Katalog Hadiah', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: CustomerTheme.textPrimary)),
+              Text(isBarangTab ? 'Tukar Barang Fisik' : 'Katalog Diskon', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: CustomerTheme.textPrimary)),
               const SizedBox(height: 12),
-              if (_rewards.isEmpty)
-                const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('Belum ada katalog hadiah.')))
+              
+              if (displayRewards.isEmpty)
+                Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(isBarangTab ? 'Belum ada barang fisik.' : 'Belum ada voucher diskon.')))
               else
-                ..._rewards.map((r) {
+                ...displayRewards.map((r) {
                   final poinDibutuhkan = r['poin_dibutuhkan'] ?? 0;
                   final bisaDitebus = widget.currentPoin >= poinDibutuhkan;
                   
                   final isAlreadyUsed = _usedRewardIds.contains(r['id']);
                   final isAlreadyActive = _activeVouchers.any((v) => v['reward_id'] == r['id']);
-                  final isButtonDisabled = !bisaDitebus || isAlreadyActive || isLimitReached || isAlreadyUsed;
-
+                  
+                  // Logika Tombol Disable
+                  bool isButtonDisabled = !bisaDitebus;
                   String btnText;
-                  if (isAlreadyUsed) {
-                    btnText = 'Pernah Dipakai';
-                  } else if (isAlreadyActive) {
-                    btnText = 'Sedang Aktif';
-                  } else if (isLimitReached) {
-                    btnText = 'Limit Tercapai';
-                  } else if (!bisaDitebus) {
-                    btnText = 'Butuh $poinDibutuhkan Koin';
+
+                  if (isBarangTab) {
+                    // Barang bebas ditukar berkali-kali selama koin cukup
+                    if (!bisaDitebus) {
+                      btnText = 'Butuh $poinDibutuhkan Koin';
+                    } else {
+                      btnText = 'Tukar $poinDibutuhkan Koin';
+                    }
                   } else {
-                    btnText = 'Tukar $poinDibutuhkan Koin';
+                    // Diskon kena aturan ketat limit
+                    if (isAlreadyUsed) {
+                      btnText = 'Pernah Dipakai'; isButtonDisabled = true;
+                    } else if (isAlreadyActive) {
+                      btnText = 'Sedang Aktif'; isButtonDisabled = true;
+                    } else if (isLimitReached) {
+                      btnText = 'Limit Tercapai'; isButtonDisabled = true;
+                    } else if (!bisaDitebus) {
+                      btnText = 'Butuh $poinDibutuhkan Koin';
+                    } else {
+                      btnText = 'Tukar $poinDibutuhkan Koin';
+                    }
                   }
 
                   return Container(
@@ -324,7 +376,7 @@ class _KatalogTabState extends State<KatalogTab> {
                         Container(
                           width: 60, height: 60,
                           decoration: BoxDecoration(color: CustomerTheme.primaryLight, borderRadius: BorderRadius.circular(12)),
-                          child: const Icon(Icons.discount_rounded, color: CustomerTheme.primary, size: 32),
+                          child: Icon(isBarangTab ? Icons.inventory_2_rounded : Icons.discount_rounded, color: CustomerTheme.primary, size: 32),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -438,18 +490,15 @@ class _ActiveVoucherCardState extends State<ActiveVoucherCard> {
   }
 
   void _startCountdown() {
-    // Ambil waktu dari database yang sudah dalam format UTC
     final expiredAtUtc = DateTime.parse(widget.voucherData['berlaku_sampai']).toUtc();
     
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       final nowUtc = DateTime.now().toUtc();
       
       if (nowUtc.isAfter(expiredAtUtc)) {
-        // Waktu habis! Matikan timer dan panggil fungsi onExpired (fetch data)
         _timer?.cancel();
         widget.onExpired();
       } else {
-        // Hitung selisih waktu untuk ditampilkan
         if (mounted) {
           setState(() {
             _timeLeft = expiredAtUtc.difference(nowUtc);
@@ -461,13 +510,12 @@ class _ActiveVoucherCardState extends State<ActiveVoucherCard> {
 
   @override
   void dispose() {
-    _timer?.cancel(); // Sangat penting agar tidak memory leak
+    _timer?.cancel(); 
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Format timer (04:59)
     final minutes = _timeLeft.inMinutes.remainder(60).toString().padLeft(2, '0');
     final seconds = _timeLeft.inSeconds.remainder(60).toString().padLeft(2, '0');
     final timeString = _timeLeft.isNegative ? "00:00" : "$minutes:$seconds";
@@ -492,7 +540,6 @@ class _ActiveVoucherCardState extends State<ActiveVoucherCard> {
                 const SizedBox(height: 4),
                 Text(widget.voucherData['kode_voucher'] ?? '-', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 2)),
                 const SizedBox(height: 4),
-                // Tampilkan hitung mundur yang berjalan
                 Row(
                   children: [
                     const Icon(Icons.timer_outlined, color: Colors.amber, size: 14),
