@@ -164,6 +164,14 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                     setState(() => _currentTab = 1);
                   },
                 ),
+                ListTile(
+                  leading: const Icon(Icons.qr_code_scanner_rounded, color: Color(0xFF0F2557)),
+                  title: const Text('Proses Voucher (VCH)', style: TextStyle(color: Color(0xFF0F2557), fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showRedeemVoucherDialog();
+                  },
+                ),
                 
                 if (isAdmin) ...[
                   const Divider(height: 32),
@@ -242,6 +250,75 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       setState(() { _startDate = picked.start; _endDate = picked.end; });
       await _loadData(); 
     }
+  }
+  Future<void> _showRedeemVoucherDialog() async {
+    final codeCtrl = TextEditingController();
+    bool isSubmitting = false;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Cek & Gunakan Voucher', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Masukkan kode (VCH-xxxx) yang ada di HP Pelanggan:', style: TextStyle(fontSize: 13, color: Colors.black54)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: codeCtrl, textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  hintText: 'Contoh: VCH-123456',
+                  filled: true, fillColor: Colors.grey.shade100,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none)
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1565C0), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              onPressed: isSubmitting ? null : () async {
+                final kode = codeCtrl.text.trim();
+                if (kode.isEmpty) return;
+                
+                setModalState(() => isSubmitting = true);
+                try {
+                  // Cek validitas voucher
+                  final res = await _supabase.from('reward_redemptions')
+                      .select('*, rewards_catalog(nama)')
+                      .eq('kode_voucher', kode).eq('status', 'aktif').maybeSingle();
+
+                  if (res == null) throw 'Voucher tidak ditemukan, palsu, atau sudah hangus (lewat 5 menit)!';
+
+                  // Ubah status jadi dipakai
+                  await _supabase.from('reward_redemptions').update({
+                    'status': 'dipakai',
+                    'dipakai_at': DateTime.now().toUtc().toIso8601String()
+                  }).eq('id', res['id']);
+
+                  if (mounted) {
+                    Navigator.pop(ctx);
+                    final namaDiskon = res['rewards_catalog']['nama'];
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text('✅ Valid! Berikan diskon "$namaDiskon" pada pesanan ini.', style: const TextStyle(fontWeight: FontWeight.bold)), 
+                      backgroundColor: Colors.green, duration: const Duration(seconds: 5)
+                    ));
+                  }
+                } catch (e) {
+                  setModalState(() => isSubmitting = false);
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.red));
+                }
+              },
+              child: isSubmitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Verifikasi', style: TextStyle(color: Colors.white)),
+            )
+          ],
+        ),
+      )
+    );
   }
 
   Future<void> _loadData() async {
@@ -1653,4 +1730,5 @@ class _OrderDetailSheet extends StatelessWidget {
       ),
     );
   }
+  
 }

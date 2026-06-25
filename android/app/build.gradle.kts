@@ -26,7 +26,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.laundry_one"
+        applicationId = "com.example.laundry_one.cashier"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -41,7 +41,7 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
-}
+}   
 
 flutter {
     source = "../.."

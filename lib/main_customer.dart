@@ -42,6 +42,7 @@ class CustomerApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF00897B)),
         useMaterial3: true,
       ),
+      navigatorKey: GlobalKey<NavigatorState>(),
       home: const _SplashRouter(),
     );
   }
@@ -59,17 +60,29 @@ class _SplashRouterState extends State<_SplashRouter> {
   void initState() {
     super.initState();
     _checkSession();
+    _setupAuthListener();
+  }
+
+  // [TAMBAHAN] Pendeteksi Sesi Otomatis
+  void _setupAuthListener() {
+    Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      final AuthChangeEvent event = data.event;
+      if (event == AuthChangeEvent.signedOut) {
+        if (mounted) _keLogin();
+      }
+    });
   }
 
   Future<void> _checkSession() async {
     await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
     final auth = AuthService();
+    
+    // Supabase otomatis mengingat sesi user di HP ini
     if (auth.isLoggedIn()) {
       final role = await auth.getMyRole();
       if (!mounted) return;
       if (role == 'customer') {
-        // Ambil token notifikasi segera setelah sesi terdeteksi
         NotificationService.setupPushNotifications();
         
         Navigator.pushReplacement(context,

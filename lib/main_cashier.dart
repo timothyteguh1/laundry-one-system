@@ -28,6 +28,8 @@ class CashierApp extends StatelessWidget {
             ColorScheme.fromSeed(seedColor: const Color(0xFF1565C0)),
         useMaterial3: true,
       ),
+      // Set Global Key untuk Navigasi Global
+      navigatorKey: GlobalKey<NavigatorState>(),
       home: const _SplashRouter(),
     );
   }
@@ -45,20 +47,35 @@ class _SplashRouterState extends State<_SplashRouter> {
   void initState() {
     super.initState();
     _checkSession();
+    _setupAuthListener();
+  }
+
+  // [TAMBAHAN] Pendeteksi Sesi Otomatis
+  void _setupAuthListener() {
+    Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      final AuthChangeEvent event = data.event;
+      if (event == AuthChangeEvent.signedOut) {
+        // Jika token mati/logout, otomatis lempar ke Login
+        if (mounted) _keLogin();
+      }
+    });
   }
 
   Future<void> _checkSession() async {
     await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
     final auth = AuthService();
+    
+    // Supabase otomatis menyimpan sesi di local storage, kita tinggal cek
     if (auth.isLoggedIn()) {
       final role = await auth.getMyRole();
       if (!mounted) return;
-      if (role == 'cashier') {
+      if (role == 'cashier' || role == 'super_admin') {
         Navigator.pushReplacement(context,
             MaterialPageRoute(builder: (_) => const HomeCashierScreen()));
         return;
       }
+      // Jika role tidak sesuai, paksa logout
       await auth.logout();
     }
     if (!mounted) return;
