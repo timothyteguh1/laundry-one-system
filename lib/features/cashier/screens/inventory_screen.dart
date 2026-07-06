@@ -44,6 +44,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
   bool _isLoading = true;
   bool _isAdmin = false; 
 
+  // 👇 [BARU] Menyimpan hubungan inventory_id -> data services (id & status pin)
+  // agar kita tahu barang mana yang punya entri di layar kasir, dan status pin-nya.
+  Map<String, Map<String, dynamic>> _serviceLinks = {};
+
   @override
   void initState() {
     super.initState();
@@ -65,9 +69,50 @@ class _InventoryScreenState extends State<InventoryScreen> {
     setState(() => _isLoading = true);
     try {
       final data = await _supabase.from('inventory').select().eq('is_active', true).order('nama_item');
-      if (mounted) setState(() { _inventory = List<Map<String, dynamic>>.from(data); _isLoading = false; });
+      final inventoryList = List<Map<String, dynamic>>.from(data);
+
+      // 👇 [BARU] Ambil data services terkait (untuk tahu status Pin & apakah dijual di kasir)
+      Map<String, Map<String, dynamic>> links = {};
+      if (inventoryList.isNotEmpty) {
+        final ids = inventoryList.map((e) => e['id']).toList();
+        final svcData = await _supabase
+            .from('services')
+            .select('id, inventory_id, is_pinned')
+            .inFilter('inventory_id', ids)
+            .eq('is_active', true);
+        for (final s in svcData) {
+          if (s['inventory_id'] != null) {
+            links[s['inventory_id'].toString()] = Map<String, dynamic>.from(s);
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _inventory = inventoryList;
+          _serviceLinks = links;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // 👇 [BARU] Toggle status Pin barang di layar Kasir
+  Future<void> _togglePin(String serviceId, bool current) async {
+    HapticFeedback.lightImpact();
+    try {
+      await _supabase.from('services').update({'is_pinned': !current}).eq('id', serviceId);
+      _loadInventory();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(!current ? '📌 Barang di-Pin ke layar Kasir' : 'Pin dilepas'),
+          backgroundColor: !current ? Colors.amber.shade700 : Colors.grey,
+        ));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal update pin: $e'), backgroundColor: Colors.red));
     }
   }
 
@@ -85,7 +130,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   // ====================================================================
-  // [UPDATE TERBARU] FITUR HAPUS BARANG (KHUSUS ADMIN)
+  // FITUR HAPUS BARANG (KHUSUS ADMIN)
   // ====================================================================
   Future<void> _hapusBarang(String id, String nama) async {
     final confirm = await showDialog<bool>(
@@ -124,6 +169,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   // FITUR TAMBAH BARANG (DENGAN LOGIKA EXPENSES)
+  // 👇 [UI DIRAPIKAN] Hanya perubahan tampilan (spacing, insetPadding, ukuran field) — logika simpan TIDAK berubah.
   void _showAddBarangDialog() {
     final namaCtrl = TextEditingController();
     final stokCtrl = TextEditingController();
@@ -139,24 +185,27 @@ class _InventoryScreenState extends State<InventoryScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => AlertDialog(
           backgroundColor: _DS.surface,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: const Text('Tambah Barang Fisik', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: _DS.textPrimary)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 TextField(controller: namaCtrl, decoration: _modernInputDecoration('Nama Barang (Cth: Deterjen)')),
-                const SizedBox(height: 12),
-                Row(
+                const SizedBox(height: 14),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: TextField(controller: stokCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Stok Awal'))),
-                    const SizedBox(width: 12),
-                    Expanded(flex: 2, child: TextField(controller: modalCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Total Modal / Harga Beli (Rp)', icon: Icons.payments_outlined))),
+                    TextField(controller: stokCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Stok Awal')),
+                    const SizedBox(height: 12),
+                    TextField(controller: modalCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Total Modal / Harga Beli (Rp)', icon: Icons.payments_outlined)),
                   ],
                 ),
-                const SizedBox(height: 6),
-                const Text('*Modal akan tercatat otomatis di Pengeluaran Kasir', style: TextStyle(fontSize: 10, color: Colors.orange, fontStyle: FontStyle.italic)),
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
+                const Text('*Modal akan tercatat otomatis di Pengeluaran Kasir', style: TextStyle(fontSize: 11, color: Colors.orange, fontStyle: FontStyle.italic)),
+                const SizedBox(height: 18),
                 
                 // TOGGLE JUAL DI KASIR
                 Container(
@@ -168,22 +217,22 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     activeColor: _DS.blue,
                     onChanged: (val) => setModalState(() => isDijual = val ?? false),
                     controlAffinity: ListTileControlAffinity.leading,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   ),
                 ),
                 
                 if (isDijual) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
                   TextField(controller: hargaJualCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Harga Jual per Pcs (Rp)', icon: Icons.sell_outlined)),
                 ]
               ],
             ),
           ),
-          actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
           actions: [
             TextButton(onPressed: isSubmitting ? null : () => Navigator.pop(ctx), child: const Text('Batal', style: TextStyle(color: _DS.textSecondary, fontWeight: FontWeight.w600))),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), elevation: 0),
+              style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14), elevation: 0),
               onPressed: isSubmitting ? null : () async {
                 if (namaCtrl.text.isEmpty || stokCtrl.text.isEmpty || modalCtrl.text.isEmpty) return;
                 if (isDijual && hargaJualCtrl.text.isEmpty) return; 
@@ -280,19 +329,32 @@ class _InventoryScreenState extends State<InventoryScreen> {
             itemBuilder: (ctx, i) {
               final item = _inventory[i];
               final stok = (item['stok_saat_ini'] as num).toInt();
+
+              // 👇 [BARU] Cek apakah barang ini punya entri di layar Kasir (services)
+              final serviceLink = _serviceLinks[item['id'].toString()];
+              final bool isPinned = serviceLink != null && serviceLink['is_pinned'] == true;
+
               return Container(
                 margin: const EdgeInsets.only(bottom: 14),
                 decoration: BoxDecoration(
                   color: _DS.surface,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: _DS.border, width: 1.5),
+                  border: Border.all(color: isPinned ? Colors.amber.shade400 : _DS.border, width: isPinned ? 2 : 1.5),
                   boxShadow: _DS.cardShadow,
                 ),
                 child: Material(
                   color: Colors.transparent,
                   child: ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    title: Text(item['nama_item'], style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _DS.textPrimary)),
+                    title: Row(
+                      children: [
+                        if (isPinned) const Padding(
+                          padding: EdgeInsets.only(right: 6),
+                          child: Icon(Icons.push_pin_rounded, size: 15, color: Colors.amber),
+                        ),
+                        Flexible(child: Text(item['nama_item'], style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _DS.textPrimary))),
+                      ],
+                    ),
                     subtitle: Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: Text('Sisa Stok: $stok ${item['satuan']}', style: TextStyle(color: stok <= 5 ? Colors.red.shade600 : _DS.textSecondary, fontWeight: FontWeight.w600, fontSize: 12)),
@@ -300,6 +362,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        // 👇 [BARU] Tombol Pin — hanya tampil jika barang ini dijual di Kasir (punya service link)
+                        if (serviceLink != null)
+                          IconButton(
+                            tooltip: isPinned ? 'Lepas Pin' : 'Pin ke Layar Kasir',
+                            icon: Icon(
+                              isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+                              color: isPinned ? Colors.amber.shade700 : _DS.textHint,
+                            ),
+                            onPressed: () => _togglePin(serviceLink['id'], isPinned),
+                          ),
                         ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _DS.sky, 
@@ -343,6 +415,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
 // ============================================================================
 // KOMPONEN BOTTOM SHEET RIWAYAT & UPDATE STOK
+// (TIDAK ADA PERUBAHAN LOGIKA DI BAWAH INI)
 // ============================================================================
 class _StockHistorySheet extends StatefulWidget {
   final Map<String, dynamic> item;
@@ -417,6 +490,7 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => AlertDialog(
           backgroundColor: _DS.surface,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: Text(widget.isAdmin ? 'Koreksi Stok Fisik' : 'Tambah Stok Masuk', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: _DS.textPrimary)),
           content: SingleChildScrollView(

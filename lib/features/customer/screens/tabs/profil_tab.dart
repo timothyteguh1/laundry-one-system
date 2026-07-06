@@ -25,11 +25,11 @@ class ProfilTab extends StatefulWidget {
 
 class _ProfilTabState extends State<ProfilTab> {
   final _supabase = Supabase.instance.client;
-  bool _isUploading = false; // Status loading upload foto
+  bool _isUploading = false; 
 
-  // ==========================================
+  // ==========================================\
   // FUNGSI CHAT ADMIN (WHATSAPP)
-  // ==========================================
+  // ==========================================\
   Future<void> _hubungiAdmin() async {
     final Uri url = Uri.parse('https://wa.me/6281248004818?text=Halo%20Admin%20Laundry%20One,%20saya%20butuh%20bantuan%20terkait%20cucian%20saya.');
     try {
@@ -41,73 +41,150 @@ class _ProfilTabState extends State<ProfilTab> {
     }
   }
 
-  // ==========================================
-  // FUNGSI UPLOAD FOTO PROFIL
-  // ==========================================
-  Future<void> _uploadFoto(ImageSource source) async {
-    Navigator.pop(context); // Tutup bottom sheet pilihan kamera/galeri
+  // ==========================================\
+  // FUNGSI GANTI PASSWORD (MANDIRI)
+  // ==========================================\
+  void _showGantiPasswordDialog() {
+    final oldPassCtrl = TextEditingController();
+    final newPassCtrl = TextEditingController();
+    final confirmPassCtrl = TextEditingController();
     
-    final picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: source, imageQuality: 70);
-    
-    if (image == null) return; // User batal memilih foto
+    bool isSubmitting = false;
+    bool obscureOld = true;
+    bool obscureNew = true;
+    bool obscureConfirm = true;
 
-    setState(() => _isUploading = true);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Container(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 24, right: 24, top: 16),
+          decoration: const BoxDecoration(color: CustomerTheme.surface, borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+          child: Column(
+            mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 20),
+              const Text('Ganti Password Keamanan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: CustomerTheme.textPrimary)),
+              const SizedBox(height: 8),
+              const Text('Masukkan password lama Anda untuk mengatur password yang baru.', style: TextStyle(color: CustomerTheme.textSecondary, fontSize: 13)),
+              const SizedBox(height: 24),
 
-    try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) throw Exception('User tidak valid');
+              // PASSWORD LAMA
+              TextField(
+                controller: oldPassCtrl, obscureText: obscureOld,
+                decoration: InputDecoration(
+                  labelText: 'Password Saat Ini', filled: true, fillColor: CustomerTheme.ground,
+                  prefixIcon: const Icon(Icons.lock_clock_rounded, color: CustomerTheme.textHint),
+                  suffixIcon: IconButton(icon: Icon(obscureOld ? Icons.visibility_off : Icons.visibility, color: CustomerTheme.textHint), onPressed: () => setModalState(() => obscureOld = !obscureOld)),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+              ),
+              const SizedBox(height: 12),
 
-      final file = File(image.path);
-      final fileExt = image.path.split('.').last;
-      final fileName = '${user.id}_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+              // PASSWORD BARU
+              TextField(
+                controller: newPassCtrl, obscureText: obscureNew,
+                decoration: InputDecoration(
+                  labelText: 'Password Baru', filled: true, fillColor: CustomerTheme.ground,
+                  prefixIcon: const Icon(Icons.lock_reset_rounded, color: CustomerTheme.textHint),
+                  suffixIcon: IconButton(icon: Icon(obscureNew ? Icons.visibility_off : Icons.visibility, color: CustomerTheme.textHint), onPressed: () => setModalState(() => obscureNew = !obscureNew)),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+              ),
+              const SizedBox(height: 12),
 
-      // 1. Upload ke Supabase Storage (Bucket: avatars)
-      await _supabase.storage.from('avatars').upload(fileName, file, fileOptions: const FileOptions(upsert: true));
+              // KONFIRMASI PASSWORD BARU
+              TextField(
+                controller: confirmPassCtrl, obscureText: obscureConfirm,
+                decoration: InputDecoration(
+                  labelText: 'Ulangi Password Baru', filled: true, fillColor: CustomerTheme.ground,
+                  prefixIcon: const Icon(Icons.lock_rounded, color: CustomerTheme.textHint),
+                  suffixIcon: IconButton(icon: Icon(obscureConfirm ? Icons.visibility_off : Icons.visibility, color: CustomerTheme.textHint), onPressed: () => setModalState(() => obscureConfirm = !obscureConfirm)),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+              ),
+              
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity, height: 52,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: CustomerTheme.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0),
+                  onPressed: isSubmitting ? null : () async {
+                    if (oldPassCtrl.text.isEmpty || newPassCtrl.text.isEmpty || confirmPassCtrl.text.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Semua kolom wajib diisi.'), backgroundColor: Colors.red)); return;
+                    }
+                    if (newPassCtrl.text != confirmPassCtrl.text) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password baru tidak cocok!'), backgroundColor: Colors.red)); return;
+                    }
+                    if (newPassCtrl.text.length < 6) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password baru minimal 6 karakter.'), backgroundColor: Colors.red)); return;
+                    }
 
-      // 2. Dapatkan URL Public dari foto tersebut
-      final imageUrl = _supabase.storage.from('avatars').getPublicUrl(fileName);
+                    setModalState(() => isSubmitting = true);
+                    try {
+                      final email = _supabase.auth.currentUser!.email!;
+                      
+                      // 1. Verifikasi Password Lama (Auth Sign In)
+                      await _supabase.auth.signInWithPassword(email: email, password: oldPassCtrl.text);
 
-      // 3. Update url di tabel profiles
-      await _supabase.from('profiles').update({'avatar_url': imageUrl}).eq('id', user.id);
+                      // 2. Update Password Baru
+                      await _supabase.auth.updateUser(UserAttributes(password: newPassCtrl.text));
 
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Foto profil berhasil diperbarui!', style: TextStyle(color: Colors.white)), backgroundColor: CustomerTheme.primary));
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal upload: $e')));
-    } finally {
-      if (mounted) setState(() => _isUploading = false);
-    }
+                      if (mounted) {
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Password berhasil diganti!'), backgroundColor: Colors.green));
+                      }
+                    } catch (e) {
+                      setModalState(() => isSubmitting = false);
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal: Password lama salah atau jaringan error.'), backgroundColor: Colors.red));
+                    }
+                  },
+                  child: isSubmitting ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Simpan Password Baru', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
-  void _showGantiFotoDialog() {
-    showModalBottomSheet(
-      context: context, backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(color: CustomerTheme.surface, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: CustomerTheme.border, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 24),
-            const Text('Ganti Foto Profil', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: CustomerTheme.textPrimary)),
-            const SizedBox(height: 24),
-            ListTile(
-              leading: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: CustomerTheme.primaryLight, borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.camera_alt_rounded, color: CustomerTheme.primary)),
-              title: const Text('Ambil dari Kamera', style: TextStyle(fontWeight: FontWeight.w700, color: CustomerTheme.textPrimary)),
-              onTap: () => _uploadFoto(ImageSource.camera),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: CustomerTheme.primaryLight, borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.photo_library_rounded, color: CustomerTheme.primary)),
-              title: const Text('Pilih dari Galeri', style: TextStyle(fontWeight: FontWeight.w700, color: CustomerTheme.textPrimary)),
-              onTap: () => _uploadFoto(ImageSource.gallery),
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      )
-    );
+  // ==========================================\
+  // GANTI FOTO PROFIL
+  // ==========================================\
+  Future<void> _pickAndUploadImage() async {
+    final picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 800);
+    if (image == null) return;
+    
+    setState(() => _isUploading = true);
+    try {
+      final file = File(image.path);
+      final userId = _supabase.auth.currentUser!.id;
+      final fileExt = image.name.split('.').last;
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+      final filePath = '$userId/$fileName';
+
+      await _supabase.storage.from('avatars').upload(filePath, file, fileOptions: const FileOptions(upsert: true));
+      final String publicUrl = _supabase.storage.from('avatars').getPublicUrl(filePath);
+
+      await _supabase.from('profiles').update({'avatar_url': publicUrl}).eq('id', userId);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Foto profil berhasil diperbarui! 🎉'), backgroundColor: Colors.green, behavior: SnackBarBehavior.floating));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal upload: $e'), backgroundColor: Colors.red, behavior: SnackBarBehavior.floating));
+    } finally {
+      setState(() => _isUploading = false);
+    }
   }
 
   // ==========================================
@@ -228,12 +305,13 @@ class _ProfilTabState extends State<ProfilTab> {
                 children: [
                   // AVATAR AREA
                   GestureDetector(
-                    onTap: _isUploading ? null : _showGantiFotoDialog,
+                    onTap: _isUploading ? null : _pickAndUploadImage,
                     child: Stack(
                       children: [
                         Container(
                           width: 64, height: 64, 
                           decoration: BoxDecoration(
+                            // 👇 FIX: Error Theme warna diubah ke primaryLight
                             color: CustomerTheme.primaryLight, 
                             shape: BoxShape.circle,
                             image: widget.avatarUrl != null 
@@ -283,6 +361,7 @@ class _ProfilTabState extends State<ProfilTab> {
             const SizedBox(height: 12),
             
             _buildProfileMenu(Icons.headset_mic_rounded, 'Bantuan & Chat Admin', _hubungiAdmin),
+            _buildProfileMenu(Icons.lock_reset_rounded, 'Keamanan & Ganti Password', _showGantiPasswordDialog),
             _buildProfileMenu(Icons.shield_outlined, 'Kebijakan Privasi', _showKebijakanPrivasi),
             
             const Spacer(),
