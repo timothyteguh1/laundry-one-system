@@ -39,7 +39,7 @@ class _RewardManagementScreenState extends State<RewardManagementScreen> {
   bool _isLoading = true;
   bool _isAdmin = false; 
   
-  // [TAMBAHAN] 0 = Diskon, 1 = Barang Fisik
+  // 0 = Diskon, 1 = Barang Fisik
   int _selectedTab = 0; 
 
   @override
@@ -120,7 +120,10 @@ class _RewardManagementScreenState extends State<RewardManagementScreen> {
     final poinCtrl = TextEditingController(text: isEdit ? (reward['poin_dibutuhkan']?.toString() ?? '') : '');
     final nilaiCtrl = TextEditingController(text: isEdit ? (reward['nilai_reward']?.toString() ?? '') : '');
     
-    // [UPDATE] Jika Tab Barang sedang terbuka dan bukan mode edit, otomatis pilih tipe Gratis Layanan
+    // [UPDATE REVISI] Controller untuk Min Transaksi & Maks Diskon
+    final minTransaksiCtrl = TextEditingController(text: isEdit ? (reward['min_transaksi']?.toString() ?? '0') : '0');
+    final maksDiskonCtrl = TextEditingController(text: isEdit ? (reward['maks_diskon']?.toString() ?? '0') : '0');
+    
     String tipeSelected = isEdit 
         ? (reward['tipe_reward']?.toString() ?? 'diskon_nominal') 
         : (_selectedTab == 1 ? 'gratis_layanan' : 'diskon_nominal');
@@ -168,6 +171,16 @@ class _RewardManagementScreenState extends State<RewardManagementScreen> {
                 ),
                 const SizedBox(height: 12),
                 TextField(controller: nilaiCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration(tipeSelected == 'diskon_persen' ? 'Nilai Diskon (Cth: 10 untuk 10%)' : 'Nilai Hadiah (Cth: 10000 untuk Rp 10.000)')),
+                
+                // [UPDATE REVISI] Kolom Khusus Aturan Diskon
+                if (tipeSelected != 'gratis_layanan') ...[
+                  const SizedBox(height: 12),
+                  TextField(controller: minTransaksiCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Minimal Transaksi (Rp) - Isi 0 jika tanpa batas')),
+                ],
+                if (tipeSelected == 'diskon_persen') ...[
+                  const SizedBox(height: 12),
+                  TextField(controller: maksDiskonCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Maksimal Diskon (Rp) - Isi 0 jika tanpa batas')),
+                ],
               ],
             ),
           ),
@@ -182,12 +195,15 @@ class _RewardManagementScreenState extends State<RewardManagementScreen> {
                 
                 final String? deskripsiFinal = deskripsiCtrl.text.trim().isNotEmpty ? deskripsiCtrl.text.trim() : null;
 
+                // [UPDATE REVISI] Payload ditambahkan min_transaksi dan maks_diskon
                 final payload = {
                   'nama': namaCtrl.text.trim(),
                   'deskripsi': deskripsiFinal,
                   'poin_dibutuhkan': int.tryParse(poinCtrl.text.trim()) ?? 0,
                   'tipe_reward': tipeSelected,
                   'nilai_reward': int.tryParse(nilaiCtrl.text.trim()) ?? 0,
+                  'min_transaksi': int.tryParse(minTransaksiCtrl.text.trim()) ?? 0,
+                  'maks_diskon': int.tryParse(maksDiskonCtrl.text.trim()) ?? 0,
                   'is_active': true,
                 };
 
@@ -226,19 +242,34 @@ class _RewardManagementScreenState extends State<RewardManagementScreen> {
     return 'Rp ${buffer.toString()}';
   }
 
+  // [UPDATE REVISI] Tampilan Deskripsi diubah agar memperlihatkan Min/Maks
   String _getSubtitle(Map<String, dynamic> r) {
-    final deskripsiManual = r['deskripsi']?.toString() ?? '';
-    if (deskripsiManual.isNotEmpty) return deskripsiManual;
-
     final tipe = r['tipe_reward']?.toString() ?? '';
     final nilai = int.tryParse(r['nilai_reward']?.toString() ?? '0') ?? 0;
+    final minTx = int.tryParse(r['min_transaksi']?.toString() ?? '0') ?? 0;
+    final maksD = int.tryParse(r['maks_diskon']?.toString() ?? '0') ?? 0;
     
-    if (tipe == 'diskon_nominal') return 'Memotong tagihan sebesar ${_formatRupiah(nilai)}';
-    if (tipe == 'diskon_persen') return 'Diskon sebesar $nilai% dari total transaksi';
-    return 'Mendapatkan barang/layanan senilai ${_formatRupiah(nilai)}';
+    String hasil = '';
+    
+    if (tipe == 'diskon_nominal') {
+      hasil = 'Memotong tagihan sebesar ${_formatRupiah(nilai)}';
+      if (minTx > 0) hasil += '\n(Min. Transaksi ${_formatRupiah(minTx)})';
+    } else if (tipe == 'diskon_persen') {
+      hasil = 'Diskon sebesar $nilai% dari total transaksi';
+      if (maksD > 0) hasil += ' (Maks. ${_formatRupiah(maksD)})';
+      if (minTx > 0) hasil += '\n(Min. Transaksi ${_formatRupiah(minTx)})';
+    } else {
+      hasil = 'Mendapatkan barang/layanan senilai ${_formatRupiah(nilai)}';
+    }
+
+    final deskripsiManual = r['deskripsi']?.toString() ?? '';
+    if (deskripsiManual.isNotEmpty) {
+      return '$deskripsiManual\n\n*Info Sistem:\n$hasil';
+    }
+    
+    return hasil;
   }
 
-  // [TAMBAHAN] Widget Tombol Tab
   Widget _buildTabBtn(int index, String title, IconData icon) {
     final isActive = _selectedTab == index;
     return Expanded(
@@ -267,7 +298,6 @@ class _RewardManagementScreenState extends State<RewardManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Memfilter data berdasarkan Tab yang aktif
     final isBarangTab = _selectedTab == 1;
     final displayRewards = _rewards.where((r) {
       final tipe = r['tipe_reward'];
@@ -280,7 +310,6 @@ class _RewardManagementScreenState extends State<RewardManagementScreen> {
       appBar: AppBar(title: const Text('Katalog Hadiah', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)), backgroundColor: _DS.navy, foregroundColor: Colors.white, elevation: 0),
       body: Column(
         children: [
-          // UI Tab Selector
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
             child: Container(
@@ -295,7 +324,6 @@ class _RewardManagementScreenState extends State<RewardManagementScreen> {
             ),
           ),
           
-          // List Katalog
           Expanded(
             child: _isLoading 
               ? const Center(child: CircularProgressIndicator(color: _DS.blue)) 

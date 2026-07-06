@@ -7,6 +7,7 @@ import 'package:laundry_one/features/auth/screens/login_screen.dart';
 import 'package:laundry_one/features/cashier/screens/create_order_screen.dart';
 import 'package:laundry_one/features/cashier/screens/inventory_screen.dart';
 import 'package:laundry_one/features/cashier/screens/tabs/report_tab.dart';
+import 'package:laundry_one/features/cashier/screens/tabs/pelanggan_tab.dart'; // [UPDATE] Import Tab Pelanggan Baru
 import 'package:laundry_one/features/cashier/screens/invoice_screen.dart';
 
 // ============================================================
@@ -200,7 +201,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                     title: const Text('Pengaturan Koin', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
                     onTap: () {
                       Navigator.pop(context);
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const PointSettingsScreen())); // Pastikan Anda meng-import file di atas!
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const PointSettingsScreen())); 
                     },
                   ),
                 ],
@@ -287,14 +288,12 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                 
                 setModalState(() => isSubmitting = true);
                 try {
-                  // Cek validitas voucher
                   final res = await _supabase.from('reward_redemptions')
                       .select('*, rewards_catalog(nama)')
                       .eq('kode_voucher', kode).eq('status', 'aktif').maybeSingle();
 
                   if (res == null) throw 'Voucher tidak ditemukan, palsu, atau sudah hangus (lewat 5 menit)!';
 
-                  // Ubah status jadi dipakai
                   await _supabase.from('reward_redemptions').update({
                     'status': 'dipakai',
                     'dipakai_at': DateTime.now().toUtc().toIso8601String()
@@ -533,7 +532,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
             children: [
               _buildTabBeranda(),
               _PesananTab(orders: _tabOrders, isLoading: _isLoading, onRefresh: _loadData, onUpdate: _handleUpdateStatus, onDetail: _showDetail, dateText: _dateRangeText, onPickDate: _pickDate),
-              const _PelangganTab(),
+              const PelangganTab(), // [UPDATE] Panggil Tab Pelanggan Baru di Sini
               _buildTabLaporan(),
             ],
           ),
@@ -800,7 +799,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     } else if (action == 'dibayar_lunas') {
       _handleUpdateStatus(order, 'dibayar_lunas');
     } else if (action == 'dihapus') {
-      _loadData(); // Jika dihapus oleh admin, reload data
+      _loadData(); 
     }
   }
 
@@ -831,10 +830,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     return Expanded(flex: 2, child: GestureDetector(onTap: () { HapticFeedback.selectionClick(); setState(() => _currentTab = idx); }, behavior: HitTestBehavior.opaque, child: Stack(alignment: Alignment.center, children: [Column(mainAxisAlignment: MainAxisAlignment.center, children: [AnimatedContainer(duration: const Duration(milliseconds: 200), padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4), decoration: BoxDecoration(color: active ? _DS.sky : Colors.transparent, borderRadius: BorderRadius.circular(20)), child: Icon(active ? activeIcon : inactiveIcon, color: active ? _DS.blue : _DS.textHint, size: 22)), const SizedBox(height: 2), Text(label, style: TextStyle(fontSize: 10, fontWeight: active ? FontWeight.w800 : FontWeight.w600, color: active ? _DS.blue : _DS.textHint))]), if (badge != null) Positioned(top: 4, right: 14, child: Container(padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1), decoration: BoxDecoration(color: Colors.red.shade500, borderRadius: BorderRadius.circular(10)), child: Text(badge, style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800))))]))); 
   }
   
-  // ============================================================
-  // [UPDATE] MENGEMBALIKAN AKSES TAB LAPORAN UNTUK KASIR
-  // Kasir sekarang bisa masuk tab ini (melihat laporan/buka menu)
-  // ============================================================
   Widget _buildTabLaporan() { 
     return const ReportTab(); 
   }
@@ -1176,324 +1171,6 @@ class _PesananTabState extends State<_PesananTab> with SingleTickerProviderState
 }
 
 // ============================================================
-// TAB: PELANGGAN
-// ============================================================
-
-class _PelangganTab extends StatefulWidget {
-  const _PelangganTab();
-  @override
-  State<_PelangganTab> createState() => _PelangganTabState();
-}
-
-class _PelangganTabState extends State<_PelangganTab> {
-  final _supabase = Supabase.instance.client;
-  List<Map<String, dynamic>> _list = [];
-  bool _loading = true;
-  bool _isAdmin = false;
-  final _searchCtrl = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _checkRoleAndLoad();
-  }
-
-  Future<void> _checkRoleAndLoad() async {
-    try {
-      final myId = _supabase.auth.currentUser!.id;
-      final myProfile = await _supabase.from('profiles').select('role').eq('id', myId).single();
-      _isAdmin = myProfile['role'] == 'super_admin';
-    } catch (e) {
-      debugPrint('Role check error: $e');
-    }
-    _load();
-  }
-
-  Future<void> _load([String q = '']) async {
-    setState(() => _loading = true);
-    try {
-      var query = _supabase.from('profiles')
-          .select('id, nama_lengkap, nomor_hp, customers(id, poin_saldo)')
-          .eq('role', 'customer')
-          .eq('is_active', true); 
-
-      if (q.isNotEmpty) query = query.or('nama_lengkap.ilike.%$q%,nomor_hp.ilike.%$q%');
-      final data = await query.order('nama_lengkap');
-      if (mounted) {
-        setState(() {
-          _list = List<Map<String, dynamic>>.from(data);
-          _loading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _hapusPelanggan(String profileId, String nama) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(children: [Icon(Icons.warning_amber_rounded, color: Colors.red), SizedBox(width: 8), Text('Hapus Pelanggan?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))]),
-        content: Text('Yakin ingin menghapus $nama? Data pelanggan akan disembunyikan tapi nota lama tetap aman.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal', style: TextStyle(color: Colors.grey))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-            onPressed: () => Navigator.pop(ctx, true), 
-            child: const Text('Hapus', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      HapticFeedback.heavyImpact();
-      try {
-        await _supabase.from('profiles').update({'is_active': false}).eq('id', profileId);
-        _load(_searchCtrl.text); 
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Pelanggan berhasil dihapus'), backgroundColor: Colors.green));
-      } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus: $e'), backgroundColor: Colors.red));
-      }
-    }
-  }
-
-  void _showAdjustPointsSheet(String custId, String nama, int currentPoin) {
-    int tipeAdjust = 1; 
-    final amtCtrl = TextEditingController();
-    final noteCtrl = TextEditingController();
-    bool isSubmitting = false;
-
-    showModalBottomSheet(
-      context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) => Container(
-          padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(ctx).viewInsets.bottom + 32),
-          decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-          child: Column(
-            mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
-              const SizedBox(height: 20), 
-              Text('Koreksi Poin: $nama', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _DS.textPrimary)), 
-              const SizedBox(height: 4), 
-              Text('Poin pelanggan saat ini: $currentPoin', style: const TextStyle(color: _DS.textSecondary, fontSize: 14)), 
-              const SizedBox(height: 24),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () { HapticFeedback.selectionClick(); setModalState(() => tipeAdjust = 1); },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(color: tipeAdjust == 1 ? Colors.green.shade50 : Colors.white, border: Border.all(color: tipeAdjust == 1 ? Colors.green : _DS.border), borderRadius: BorderRadius.circular(12)),
-                        child: Center(child: Text('+ Tambah Poin', style: TextStyle(color: tipeAdjust == 1 ? Colors.green.shade700 : _DS.textSecondary, fontWeight: FontWeight.w700))),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () { HapticFeedback.selectionClick(); setModalState(() => tipeAdjust = -1); },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(color: tipeAdjust == -1 ? Colors.red.shade50 : Colors.white, border: Border.all(color: tipeAdjust == -1 ? Colors.red : _DS.border), borderRadius: BorderRadius.circular(12)),
-                        child: Center(child: Text('- Kurangi Poin', style: TextStyle(color: tipeAdjust == -1 ? Colors.red.shade700 : _DS.textSecondary, fontWeight: FontWeight.w700))),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              
-              TextField(
-                controller: amtCtrl,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: 'Jumlah Poin', hintText: 'Contoh: 10', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: noteCtrl,
-                decoration: InputDecoration(labelText: 'Catatan/Alasan (Wajib)', hintText: 'Contoh: Kompensasi cucian tertukar', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-              ),
-              const SizedBox(height: 32),
-
-              SizedBox(
-                width: double.infinity, height: 52,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0),
-                  onPressed: isSubmitting ? null : () async {
-                    final val = int.tryParse(amtCtrl.text.trim()) ?? 0;
-                    final note = noteCtrl.text.trim();
-                    
-                    if (val <= 0 || note.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Jumlah poin harus lebih dari 0 dan Catatan wajib diisi!'), backgroundColor: Colors.orange));
-                      return;
-                    }
-                    
-                    final saldoSesudah = currentPoin + (val * tipeAdjust);
-                    if (saldoSesudah < 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Koreksi gagal: Poin pelanggan tidak boleh minus!'), backgroundColor: Colors.red));
-                      return;
-                    }
-
-                    HapticFeedback.heavyImpact();
-                    setModalState(() => isSubmitting = true);
-                    
-                    try {
-                      final adminId = _supabase.auth.currentUser!.id;
-                      
-                      await _supabase.from('customers').update({'poin_saldo': saldoSesudah}).eq('id', custId);
-                      
-                      await _supabase.from('points_ledger').insert({
-                        'customer_id': custId,
-                        'tipe': 'adjusted',
-                        'jumlah': val, 
-                        'saldo_sebelum': currentPoin,
-                        'saldo_sesudah': saldoSesudah,
-                        'dilakukan_oleh': adminId,
-                        'catatan': note
-                      });
-                      
-                      if (mounted) {
-                        Navigator.pop(ctx);
-                        _load(_searchCtrl.text); 
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Poin berhasil dikoreksi!'), backgroundColor: Colors.green));
-                      }
-                    } catch (e) {
-                      setModalState(() => isSubmitting = false);
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
-                    }
-                  },
-                  child: isSubmitting ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Simpan Perubahan', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Column(
-        children: [
-          Container(
-            decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF0F2557), Color(0xFF1565C0)], begin: Alignment.topLeft, end: Alignment.bottomRight)),
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Pelanggan', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 16),
-                Container(
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.12), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withOpacity(0.2))),
-                  child: TextField(
-                    controller: _searchCtrl,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
-                    decoration: InputDecoration(hintText: 'Cari nama atau nomor HP...', hintStyle: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14), prefixIcon: Icon(Icons.search_rounded, color: Colors.white.withOpacity(0.5), size: 20), border: InputBorder.none, contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14)),
-                    onChanged: (v) => _load(v),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator(color: _DS.blue))
-                : _list.isEmpty
-                    ? const _EmptyState(icon: Icons.people_outline_rounded, message: 'Tidak ada pelanggan', sub: 'Daftarkan pelanggan saat buat pesanan')
-                    : RefreshIndicator(
-                        onRefresh: () => _load(_searchCtrl.text),
-                        color: _DS.blue,
-                        child: ListView.builder(
-                          physics: const BouncingScrollPhysics(),
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                          itemCount: _list.length,
-                          itemBuilder: (_, i) {
-                            final c = _list[i];
-                            
-                            final custData = c['customers'];
-                            int poin = 0;
-                            String? custId;
-
-                            if (custData != null) {
-                              if (custData is List && custData.isNotEmpty) {
-                                poin = custData[0]['poin_saldo'] ?? 0;
-                                custId = custData[0]['id'];
-                              } else if (custData is Map) {
-                                poin = custData['poin_saldo'] ?? 0;
-                                custId = custData['id'];
-                              }
-                            }
-
-                            final isNamaValid = c['nama_lengkap'] != null && c['nama_lengkap'].toString().trim().isNotEmpty;
-                            final inisial = isNamaValid ? c['nama_lengkap'].toString().trim()[0].toUpperCase() : '?';
-
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 10),
-                              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _DS.border), boxShadow: _DS.softShadow),
-                              child: ListTile(
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                leading: Container(width: 44, height: 44, decoration: BoxDecoration(color: _DS.sky, borderRadius: BorderRadius.circular(12)), child: Center(child: Text(inisial, style: const TextStyle(color: _DS.blue, fontWeight: FontWeight.w800, fontSize: 16)))),
-                                title: Text(c['nama_lengkap'] ?? '-', style: const TextStyle(fontWeight: FontWeight.w800, color: _DS.textPrimary, fontSize: 14)),
-                                subtitle: Text(c['nomor_hp'] ?? '-', style: const TextStyle(color: _DS.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                      decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.amber.shade200)),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(Icons.stars_rounded, color: Colors.amber.shade600, size: 14),
-                                          const SizedBox(width: 4),
-                                          Text('$poin', style: TextStyle(color: Colors.amber.shade700, fontWeight: FontWeight.w800, fontSize: 12)),
-                                        ],
-                                      ),
-                                    ),
-                                    if (_isAdmin) ...[
-                                      const SizedBox(width: 8),
-                                      PopupMenuButton<String>(
-                                        icon: const Icon(Icons.more_vert_rounded, color: _DS.textHint),
-                                        onSelected: (val) {
-                                          if (val == 'edit_poin') {
-                                            if (custId != null) {
-                                              _showAdjustPointsSheet(custId, c['nama_lengkap'], poin);
-                                            } else {
-                                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Data pelanggan belum lengkap (Dompet Poin kosong).'), backgroundColor: Colors.orange));
-                                            }
-                                          } else if (val == 'hapus') {
-                                            _hapusPelanggan(c['id'], c['nama_lengkap']);
-                                          }
-                                        },
-                                        itemBuilder: (context) => [
-                                          const PopupMenuItem(value: 'edit_poin', child: Row(children: [Icon(Icons.edit_note_rounded, color: _DS.blue, size: 20), SizedBox(width: 8), Text('Koreksi Poin')])),
-                                          const PopupMenuItem(value: 'hapus', child: Row(children: [Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20), SizedBox(width: 8), Text('Hapus Akun', style: TextStyle(color: Colors.red))])),
-                                        ],
-                                      )
-                                    ]
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ============================================================
 // WIDGET CARD
 // ============================================================
 
@@ -1563,172 +1240,4 @@ class _PremiumOrderCard extends StatelessWidget {
   String? _next(String s, bool p) { if (s == 'diproses') return 'selesai'; if (s == 'selesai' && p) return 'dibayar_lunas'; return null; }
   String _nextLabel(String s, bool p) { if (s == 'diproses') return 'Tandai Selesai'; if (s == 'selesai' && p) return 'Lunasi Piutang'; return ''; }
   String _fmt(double a) { final str = a.toStringAsFixed(0); final b = StringBuffer(); for (int i = 0; i < str.length; i++) { if (i > 0 && (str.length - i) % 3 == 0) b.write('.'); b.write(str[i]); } return 'Rp ${b.toString()}'; }
-}
-
-// ============================================================
-// DESAIN NOTA DIGITAL (KERTAS STRUK)
-// ============================================================
-
-class _OrderDetailSheet extends StatelessWidget {
-  final Map<String, dynamic> order;
-  final Function(String) onUpdateStatus;
-
-  const _OrderDetailSheet({required this.order, required this.onUpdateStatus});
-
-  String _formatDateTime(String? isoString) {
-    if (isoString == null) return '-';
-    final d = DateTime.parse(isoString).toLocal();
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
-    final jam = d.hour.toString().padLeft(2, '0');
-    final mnt = d.minute.toString().padLeft(2, '0');
-    return '${d.day} ${months[d.month - 1]} ${d.year}, $jam:$mnt';
-  }
-
-  String _fmt(double a) { final str = a.toStringAsFixed(0); final b = StringBuffer(); for (int i = 0; i < str.length; i++) { if (i > 0 && (str.length - i) % 3 == 0) b.write('.'); b.write(str[i]); } return 'Rp ${b.toString()}'; }
-
-  @override
-  Widget build(BuildContext context) {
-    final status = order['status'] ?? 'diproses';
-    final isPiutang = order['is_piutang'] == true;
-    final hp = order['customers']?['profiles']?['nomor_hp'] ?? '-';
-    final nama = order['customers']?['profiles']?['nama_lengkap'] ?? 'Umum';
-
-    return Container(
-      decoration: const BoxDecoration(color: Color(0xFFF4F7FB), borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      padding: const EdgeInsets.only(top: 12),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
-          const SizedBox(height: 16),
-          
-          // KERTAS NOTA
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: _DS.border), boxShadow: _DS.softShadow),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // HEADER NOTA
-                Center(
-                  child: Column(
-                    children: [
-                      const Icon(Icons.receipt_long_rounded, color: Color(0xFF1565C0), size: 32),
-                      const SizedBox(height: 8),
-                      const Text('NOTA PESANAN', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, letterSpacing: 1)),
-                      Text(order['nomor_order'], style: const TextStyle(color: Colors.grey, fontSize: 13)),
-                    ],
-                  ),
-                ),
-                
-                const SizedBox(height: 20),
-                const Divider(color: Colors.black12, thickness: 1),
-                const SizedBox(height: 16),
-
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Pelanggan', style: TextStyle(color: Colors.grey, fontSize: 12)), Text(nama, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))]),
-                const SizedBox(height: 8),
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('No. HP', style: TextStyle(color: Colors.grey, fontSize: 12)), Text(hp, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))]),
-                const SizedBox(height: 8),
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Waktu Masuk', style: TextStyle(color: Colors.grey, fontSize: 12)), Text(_formatDateTime(order['created_at']), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))]),
-                const SizedBox(height: 8),
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Est. Selesai', style: TextStyle(color: Colors.grey, fontSize: 12)), Text(_formatDateTime(order['estimasi_selesai']), style: const TextStyle(color: Color(0xFF1565C0), fontWeight: FontWeight.w700, fontSize: 13))]),
-                
-                if (isPiutang) ...[
-                  const SizedBox(height: 8),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Jatuh Tempo', style: TextStyle(color: Colors.grey, fontSize: 12)), Text(_formatDateTime(order['jatuh_tempo']), style: TextStyle(color: Colors.orange.shade800, fontWeight: FontWeight.w800, fontSize: 13))]),
-                ],
-                
-                const SizedBox(height: 16),
-                const Divider(color: Colors.black12, thickness: 1),
-                const SizedBox(height: 16),
-
-                const Text('Detail Layanan:', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Colors.grey)),
-                const SizedBox(height: 8),
-                ...(order['order_items'] as List? ?? []).map((item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6), 
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('${item['jumlah']}x ', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                      Expanded(child: Text('${item['services']?['nama']}', style: const TextStyle(fontSize: 13))), 
-                      Text(_fmt((item['harga_satuan'] ?? 0).toDouble() * (item['jumlah'] ?? 0)), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))
-                    ]
-                  )
-                )),
-                
-                const SizedBox(height: 16),
-                const Divider(color: Colors.black12, thickness: 1),
-                const SizedBox(height: 12),
-
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween, 
-                  children: [
-                    const Text('TOTAL TAGIHAN', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)), 
-                    Text(_fmt((order['total_harga'] ?? 0).toDouble()), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20, color: Color(0xFF1565C0)))
-                  ]
-                ),
-                
-                if (isPiutang)
-                  Container(
-                    margin: const EdgeInsets.only(top: 12), padding: const EdgeInsets.symmetric(vertical: 8), width: double.infinity,
-                    decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red.shade200)),
-                    child: Text('BELUM LUNAS (UNPAID)', textAlign: TextAlign.center, style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 1)),
-                  )
-                else
-                  Container(
-                    margin: const EdgeInsets.only(top: 12), padding: const EdgeInsets.symmetric(vertical: 8), width: double.infinity,
-                    decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.green.shade200)),
-                    child: Text('LUNAS (PAID)', textAlign: TextAlign.center, style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 1)),
-                  ),
-              ],
-            ),
-          ),
-          
-          // ACTION BUTTONS DI BAWAH NOTA 
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(child: OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.share, size: 18), label: const Text('Share'), style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF1565C0), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))))),
-                    const SizedBox(width: 12),
-                    Expanded(child: OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.print, size: 18), label: const Text('Print'), style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF1565C0), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))))),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                
-                // TOMBOL SELESAI CUCIAN (KHUSUS PROSES PAKAIAN)
-                if (status == 'diproses')
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: SizedBox(
-                      width: double.infinity, height: 50,
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.check_circle_outline), label: const Text('Cucian Selesai (Siap Ambil)', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1565C0), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
-                        onPressed: () { HapticFeedback.heavyImpact(); onUpdateStatus('selesai'); },
-                      ),
-                    ),
-                  ),
-
-                // TOMBOL BAYAR UANG (KHUSUS KEUANGAN)
-                if (isPiutang)
-                  SizedBox(
-                    width: double.infinity, height: 50,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.payments_outlined), label: const Text('Bayar / Lunasi Tagihan', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
-                      onPressed: () { HapticFeedback.heavyImpact(); onUpdateStatus('dibayar_lunas'); }, 
-                    ),
-                  )
-              ],
-            ),
-          )
-        ],
-      ),
-    );
-  }
-  
 }

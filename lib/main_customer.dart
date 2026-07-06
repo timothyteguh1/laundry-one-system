@@ -16,9 +16,16 @@ void main() async {
 
   // 1. Inisialisasi Firebase (Hanya di Android/iOS/Web)
   if (kIsWeb || Platform.isAndroid || Platform.isIOS) {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    } catch (e) {
+      // Jika sistem native Android sudah menyalakannya duluan, abaikan error duplikat ini
+      if (!e.toString().contains('duplicate-app')) {
+        rethrow; // Lemparkan error jika itu masalah lain, bukan masalah duplikat
+      }
+    }
   }
 
   // 2. Inisialisasi Supabase

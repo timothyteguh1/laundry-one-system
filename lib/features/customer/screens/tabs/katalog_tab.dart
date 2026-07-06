@@ -186,7 +186,7 @@ class _KatalogTabState extends State<KatalogTab> {
       await _supabase.from('points_ledger').insert({
         'customer_id': widget.customerId,
         'tipe': 'redeemed',
-        'jumlah': poinDibutuhkan,
+        'jumlah': -poinDibutuhkan,
         'saldo_sebelum': currentDbPoin,
         'saldo_sesudah': newSaldo,
         'catatan': isBarang ? 'Ambil Barang: $namaReward' : 'Tukar Voucher: $namaReward'

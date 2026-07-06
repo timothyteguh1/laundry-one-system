@@ -42,7 +42,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   final _supabase = Supabase.instance.client;
   List<Map<String, dynamic>> _inventory = [];
   bool _isLoading = true;
-  bool _isAdmin = false; // [TAMBAHAN] Cek Otoritas Admin
+  bool _isAdmin = false; 
 
   @override
   void initState() {
@@ -50,7 +50,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
     _checkRoleAndLoad();
   }
 
-  // [TAMBAHAN] Cek role sebelum load
   Future<void> _checkRoleAndLoad() async {
     try {
       final myId = _supabase.auth.currentUser!.id;
@@ -65,7 +64,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
   Future<void> _loadInventory() async {
     setState(() => _isLoading = true);
     try {
-      // [UPDATE] Hanya ambil barang yang is_active = true
       final data = await _supabase.from('inventory').select().eq('is_active', true).order('nama_item');
       if (mounted) setState(() { _inventory = List<Map<String, dynamic>>.from(data); _isLoading = false; });
     } catch (e) {
@@ -86,14 +84,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
-  // FITUR HAPUS BARANG (KHUSUS ADMIN)
+  // ====================================================================
+  // [UPDATE TERBARU] FITUR HAPUS BARANG (KHUSUS ADMIN)
+  // ====================================================================
   Future<void> _hapusBarang(String id, String nama) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(children: [Icon(Icons.warning_amber_rounded, color: Colors.red), SizedBox(width: 8), Text('Hapus Barang?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))]),
-        content: Text('Yakin ingin menghapus $nama dari gudang? Barang ini tidak akan muncul lagi di kasir.'),
+        content: Text('Yakin ingin menghapus $nama dari gudang? Barang ini akan otomatis disembunyikan dari layar penjualan Kasir.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal', style: TextStyle(color: Colors.grey))),
           ElevatedButton(
@@ -108,9 +108,15 @@ class _InventoryScreenState extends State<InventoryScreen> {
     if (confirm == true) {
       HapticFeedback.heavyImpact();
       try {
+        // 1. Soft-Delete dari Gudang (Inventory)
         await _supabase.from('inventory').update({'is_active': false}).eq('id', id);
+        
+        // 2. OTOMATIS Soft-Delete dari Etalase Kasir (Services) agar tak bisa dijual lagi
+        // Menggunakan update is_active: false untuk menghindari error Foreign Key Constraint!
+        await _supabase.from('services').update({'is_active': false}).eq('inventory_id', id);
+
         _loadInventory();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Barang dihapus'), backgroundColor: Colors.green));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Barang & Akses Kasir berhasil ditutup!'), backgroundColor: Colors.green));
       } catch (e) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus: $e'), backgroundColor: Colors.red));
       }
@@ -121,7 +127,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   void _showAddBarangDialog() {
     final namaCtrl = TextEditingController();
     final stokCtrl = TextEditingController();
-    final modalCtrl = TextEditingController(); // Untuk Total Biaya Beli (Expenses)
+    final modalCtrl = TextEditingController(); 
     final hargaJualCtrl = TextEditingController();
     
     bool isSubmitting = false;
@@ -247,7 +253,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => _StockHistorySheet(
         item: item, 
-        isAdmin: _isAdmin, // [KIRIM DATA ADMIN KE RIWAYAT]
+        isAdmin: _isAdmin,
         onUpdateFinished: () {
           _loadInventory(); 
         }
@@ -306,7 +312,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           icon: const Icon(Icons.history_rounded, size: 16),
                           label: const Text('Update & Riwayat', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
                         ),
-                        // [TOMBOL HAPUS HANYA UNTUK ADMIN]
                         if (_isAdmin) ...[
                           const SizedBox(width: 8),
                           IconButton(
@@ -321,7 +326,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
               );
             },
           ),
-      // [TOMBOL TAMBAH BARANG HANYA UNTUK ADMIN]
       floatingActionButton: _isAdmin ? Container(
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), boxShadow: _DS.fabShadow),
@@ -342,7 +346,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
 // ============================================================================
 class _StockHistorySheet extends StatefulWidget {
   final Map<String, dynamic> item;
-  final bool isAdmin; // Cek peran
+  final bool isAdmin; 
   final VoidCallback onUpdateFinished;
 
   const _StockHistorySheet({required this.item, required this.isAdmin, required this.onUpdateFinished});
@@ -400,13 +404,11 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
     );
   }
 
-  // UPDATE STOK (DENGAN LOGIKA KASIR VS ADMIN)
   void _showUpdateStokDialog() {
     final qtyCtrl = TextEditingController();
     final ketCtrl = TextEditingController();
     final modalCtrl = TextEditingController(); 
     
-    // Default masuk. Jika Kasir, tidak bisa diubah ke keluar
     String tipe = 'masuk'; 
     bool isSubmitting = false;
 
@@ -421,7 +423,6 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Jika Admin, bisa milih keluar / masuk (Koreksi). Jika Kasir, otomatis disembunyikan dan di-lock ke 'masuk'.
                 if (widget.isAdmin) ...[
                   Row(
                     children: [
