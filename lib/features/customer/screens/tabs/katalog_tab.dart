@@ -24,12 +24,9 @@ class KatalogTab extends StatefulWidget {
 class _KatalogTabState extends State<KatalogTab> {
   final _supabase = Supabase.instance.client;
   
-  // 0 = Voucher Diskon, 1 = Tukar Barang, 2 = Daftar Harga
   int _selectedFilter = 0; 
-
   List<Map<String, dynamic>> _rewards = [];
   List<Map<String, dynamic>> _services = [];
-  
   List<Map<String, dynamic>> _activeVouchers = []; 
   Map<String, DateTime> _lastUsedRewards = {}; 
   
@@ -101,11 +98,10 @@ class _KatalogTabState extends State<KatalogTab> {
     final poinDibutuhkan = int.tryParse(reward['poin_dibutuhkan']?.toString() ?? '0') ?? 0;
     final namaReward = reward['nama']?.toString() ?? 'Hadiah';
 
-    // Pengecekan Limit & Cooldown HANYA untuk Voucher Diskon
     if (!isBarang) {
       if (_lastUsedRewards.containsKey(safeRewardId)) {
         final lastUsed = _lastUsedRewards[safeRewardId]!;
-        final cooldownEnd = lastUsed.add(const Duration(days: 90)); // 3 Bulan Cooldown
+        final cooldownEnd = lastUsed.add(const Duration(days: 90));
         if (DateTime.now().toUtc().isBefore(cooldownEnd)) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Voucher ini baru bisa ditukar lagi setelah 3 bulan!'), backgroundColor: Colors.orange));
           return;
@@ -161,7 +157,6 @@ class _KatalogTabState extends State<KatalogTab> {
       final nowUtcStr = DateTime.now().toUtc().toIso8601String();
       final expiredTimeUtc = DateTime.now().toUtc().add(const Duration(minutes: 5)).toIso8601String();
 
-      // [PERBAIKAN] Barang Fisik langsung berstatus 'dipakai' agar masuk History
       if (isBarang) {
         await _supabase.from('reward_redemptions').insert({
           'customer_id': widget.customerId,
@@ -220,54 +215,62 @@ class _KatalogTabState extends State<KatalogTab> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Katalog', style: TextStyle(color: CustomerTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w800)),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(color: Colors.amber.shade100, borderRadius: BorderRadius.circular(20)),
+    return Stack( // [UPDATE UX] BUNGKUS DENGAN STACK UNTUK OVERLAY
+      children: [
+        SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Katalog', style: TextStyle(color: CustomerTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w800)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(color: Colors.amber.shade100, borderRadius: BorderRadius.circular(20)),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.stars_rounded, color: Colors.amber, size: 16),
+                          const SizedBox(width: 6),
+                          Text('${widget.currentPoin} Koin', style: TextStyle(fontWeight: FontWeight.w800, color: Colors.amber.shade800, fontSize: 13)),
+                        ],
+                      ),
+                    )
+                  ],
+                ),
+              ),
+              
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(color: CustomerTheme.border.withOpacity(0.4), borderRadius: BorderRadius.circular(12)),
                   child: Row(
                     children: [
-                      const Icon(Icons.stars_rounded, color: Colors.amber, size: 16),
-                      const SizedBox(width: 6),
-                      Text('${widget.currentPoin} Koin', style: TextStyle(fontWeight: FontWeight.w800, color: Colors.amber.shade800, fontSize: 13)),
+                      _buildToggleBtn(0, 'Diskon', Icons.percent_rounded),
+                      _buildToggleBtn(1, 'Barang', Icons.inventory_2_rounded),
+                      _buildToggleBtn(2, 'Harga', Icons.list_alt_rounded),
                     ],
                   ),
-                )
-              ],
-            ),
-          ),
-          
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(color: CustomerTheme.border.withOpacity(0.4), borderRadius: BorderRadius.circular(12)),
-              child: Row(
-                children: [
-                  _buildToggleBtn(0, 'Diskon', Icons.percent_rounded),
-                  _buildToggleBtn(1, 'Barang', Icons.inventory_2_rounded),
-                  _buildToggleBtn(2, 'Harga', Icons.list_alt_rounded),
-                ],
+                ),
               ),
-            ),
+              const SizedBox(height: 16),
+              
+              Expanded(
+                child: _isLoading 
+                    ? const Center(child: ModernSpinner()) // [UPDATE UX]
+                    : _selectedFilter == 2 ? _buildListHarga() : _buildListRewards(),
+              )
+            ],
           ),
-          const SizedBox(height: 16),
-          
-          Expanded(
-            child: _isLoading 
-                ? const Center(child: CircularProgressIndicator(color: CustomerTheme.primary))
-                : _selectedFilter == 2 ? _buildListHarga() : _buildListRewards(),
-          )
-        ],
-      ),
+        ),
+        
+        // [UPDATE UX] OVERLAY SAAT PROSES TUKAR KOIN (Double-Tap Preventer)
+        if (_isProcessing)
+          const GlassmorphismOverlay(message: 'Memproses Penukaran...'),
+      ],
     );
   }
 
@@ -275,7 +278,7 @@ class _KatalogTabState extends State<KatalogTab> {
     final isActive = _selectedFilter == index;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _selectedFilter = index),
+        onTap: () { HapticFeedback.selectionClick(); setState(() => _selectedFilter = index); },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -307,133 +310,115 @@ class _KatalogTabState extends State<KatalogTab> {
       return tipe == 'diskon_nominal' || tipe == 'diskon_persen'; 
     }).toList();
 
-    // Pastikan voucher aktif hanya muncul di Tab Diskon
     final displayVouchers = _activeVouchers.where((v) {
       final tipe = v['rewards_catalog']?['tipe_reward'];
       return tipe == 'diskon_nominal' || tipe == 'diskon_persen';
     }).toList();
 
-    return Stack(
-      children: [
-        RefreshIndicator(
-          color: CustomerTheme.primary,
-          onRefresh: _fetchData,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-            children: [
-              if (!isBarangTab && displayVouchers.isNotEmpty) ...[
-                const Text('Voucher Aktif Saya', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: CustomerTheme.textPrimary)),
-                const SizedBox(height: 12),
-                
-                ...displayVouchers.map((v) => ActiveVoucherCard(
-                  voucherData: v,
-                  onExpired: () async {
-                    await _fetchData();
-                    await widget.onRefresh(); 
-                  },
-                )),
-                
-                const Divider(height: 32, color: CustomerTheme.border, thickness: 1.5),
-              ],
+    return RefreshIndicator(
+      color: CustomerTheme.primary,
+      onRefresh: _fetchData,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        children: [
+          if (!isBarangTab && displayVouchers.isNotEmpty) ...[
+            const Text('Voucher Aktif Saya', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: CustomerTheme.textPrimary)),
+            const SizedBox(height: 12),
+            
+            ...displayVouchers.map((v) => ActiveVoucherCard(
+              voucherData: v,
+              onExpired: () async {
+                await _fetchData();
+                await widget.onRefresh(); 
+              },
+            )),
+            
+            const Divider(height: 32, color: CustomerTheme.border, thickness: 1.5),
+          ],
 
-              Text(isBarangTab ? 'Tukar Barang Fisik' : 'Katalog Diskon', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: CustomerTheme.textPrimary)),
-              const SizedBox(height: 12),
+          Text(isBarangTab ? 'Tukar Barang Fisik' : 'Katalog Diskon', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: CustomerTheme.textPrimary)),
+          const SizedBox(height: 12),
+          
+          if (displayRewards.isEmpty)
+            Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(isBarangTab ? 'Belum ada barang fisik.' : 'Belum ada voucher diskon.')))
+          else
+            ...displayRewards.map((r) {
+              final poinDibutuhkan = int.tryParse(r['poin_dibutuhkan']?.toString() ?? '0') ?? 0;
+              final bisaDitebus = widget.currentPoin >= poinDibutuhkan;
+              final String safeRewardId = r['id']?.toString() ?? '';
+              final isAlreadyActive = _activeVouchers.any((v) => v['reward_id']?.toString() == safeRewardId);
               
-              if (displayRewards.isEmpty)
-                Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(isBarangTab ? 'Belum ada barang fisik.' : 'Belum ada voucher diskon.')))
-              else
-                ...displayRewards.map((r) {
-                  final poinDibutuhkan = int.tryParse(r['poin_dibutuhkan']?.toString() ?? '0') ?? 0;
-                  final bisaDitebus = widget.currentPoin >= poinDibutuhkan;
-                  
-                  final String safeRewardId = r['id']?.toString() ?? '';
-                  final isAlreadyActive = _activeVouchers.any((v) => v['reward_id']?.toString() == safeRewardId);
-                  
-                  bool isCooldown = false;
-                  int daysLeft = 0;
-                  if (!isBarangTab && _lastUsedRewards.containsKey(safeRewardId)) {
-                    final lastUsed = _lastUsedRewards[safeRewardId]!;
-                    final expiryDate = lastUsed.add(const Duration(days: 90)); 
-                    if (DateTime.now().toUtc().isBefore(expiryDate)) {
-                      isCooldown = true;
-                      daysLeft = expiryDate.difference(DateTime.now().toUtc()).inDays;
-                    }
-                  }
+              bool isCooldown = false;
+              int daysLeft = 0;
+              if (!isBarangTab && _lastUsedRewards.containsKey(safeRewardId)) {
+                final lastUsed = _lastUsedRewards[safeRewardId]!;
+                final expiryDate = lastUsed.add(const Duration(days: 90)); 
+                if (DateTime.now().toUtc().isBefore(expiryDate)) {
+                  isCooldown = true;
+                  daysLeft = expiryDate.difference(DateTime.now().toUtc()).inDays;
+                }
+              }
 
-                  bool isButtonDisabled = !bisaDitebus;
-                  String btnText;
+              bool isButtonDisabled = !bisaDitebus;
+              String btnText;
 
-                  if (isBarangTab) {
-                    if (!bisaDitebus) {
-                      btnText = 'Butuh $poinDibutuhkan Koin';
-                    } else {
-                      btnText = 'Tukar $poinDibutuhkan Koin';
-                    }
-                  } else {
-                    if (isCooldown) {
-                      btnText = 'Tersedia dlm $daysLeft hari'; isButtonDisabled = true;
-                    } else if (isAlreadyActive) {
-                      btnText = 'Sedang Aktif'; isButtonDisabled = true;
-                    } else if (isLimitReached) {
-                      btnText = 'Limit Tercapai'; isButtonDisabled = true;
-                    } else if (!bisaDitebus) {
-                      btnText = 'Butuh $poinDibutuhkan Koin';
-                    } else {
-                      btnText = 'Tukar $poinDibutuhkan Koin';
-                    }
-                  }
+              if (isBarangTab) {
+                if (!bisaDitebus) { btnText = 'Butuh $poinDibutuhkan Koin'; } else { btnText = 'Tukar $poinDibutuhkan Koin'; }
+              } else {
+                if (isCooldown) { btnText = 'Tersedia dlm $daysLeft hari'; isButtonDisabled = true; } 
+                else if (isAlreadyActive) { btnText = 'Sedang Aktif'; isButtonDisabled = true; } 
+                else if (isLimitReached) { btnText = 'Limit Tercapai'; isButtonDisabled = true; } 
+                else if (!bisaDitebus) { btnText = 'Butuh $poinDibutuhkan Koin'; } 
+                else { btnText = 'Tukar $poinDibutuhkan Koin'; }
+              }
 
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(16),
-                    decoration: CustomerTheme.cardDecoration,
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 60, height: 60,
-                          decoration: BoxDecoration(color: CustomerTheme.primaryLight, borderRadius: BorderRadius.circular(12)),
-                          child: Icon(isBarangTab ? Icons.inventory_2_rounded : Icons.discount_rounded, color: CustomerTheme.primary, size: 32),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(r['nama']?.toString() ?? '-', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: CustomerTheme.textPrimary)),
-                              const SizedBox(height: 4),
-                              Text(r['deskripsi']?.toString() ?? '', style: const TextStyle(fontSize: 12, color: CustomerTheme.textSecondary), maxLines: 2, overflow: TextOverflow.ellipsis),
-                              const SizedBox(height: 12),
-                              
-                              SizedBox(
-                                height: 36,
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: isButtonDisabled ? CustomerTheme.ground : CustomerTheme.primary,
-                                    foregroundColor: isButtonDisabled ? CustomerTheme.textHint : Colors.white,
-                                    elevation: 0,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
-                                  ),
-                                  onPressed: (isButtonDisabled || _isProcessing) ? null : () => _tukarPoin(r),
-                                  child: Text(
-                                    btnText, 
-                                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: isButtonDisabled ? CustomerTheme.textHint : Colors.white)
-                                  ),
-                                ),
-                              )
-                            ],
-                          ),
-                        )
-                      ],
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(16),
+                decoration: CustomerTheme.cardDecoration,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 60, height: 60,
+                      decoration: BoxDecoration(color: CustomerTheme.primaryLight, borderRadius: BorderRadius.circular(12)),
+                      child: Icon(isBarangTab ? Icons.inventory_2_rounded : Icons.discount_rounded, color: CustomerTheme.primary, size: 32),
                     ),
-                  );
-                }),
-            ],
-          ),
-        ),
-        if (_isProcessing)
-          Container(color: Colors.white.withOpacity(0.5), child: const Center(child: CircularProgressIndicator(color: CustomerTheme.primary)))
-      ],
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(r['nama']?.toString() ?? '-', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: CustomerTheme.textPrimary)),
+                          const SizedBox(height: 4),
+                          Text(r['deskripsi']?.toString() ?? '', style: const TextStyle(fontSize: 12, color: CustomerTheme.textSecondary), maxLines: 2, overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 12),
+                          
+                          SizedBox(
+                            height: 36,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isButtonDisabled ? CustomerTheme.ground : CustomerTheme.primary,
+                                foregroundColor: isButtonDisabled ? CustomerTheme.textHint : Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+                              ),
+                              onPressed: (isButtonDisabled || _isProcessing) ? null : () => _tukarPoin(r),
+                              child: Text(
+                                btnText, 
+                                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: isButtonDisabled ? CustomerTheme.textHint : Colors.white)
+                              ),
+                            ),
+                          )
+                        ],
+                      ),
+                    )
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
     );
   }
 
@@ -451,25 +436,28 @@ class _KatalogTabState extends State<KatalogTab> {
         itemBuilder: (context, index) {
           final s = _services[index];
           final harga = int.tryParse(s['harga_per_satuan']?.toString() ?? '0') ?? 0;
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: CustomerTheme.menuDecoration,
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: CustomerTheme.ground, borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.local_laundry_service_rounded, color: CustomerTheme.textSecondary),
-              ),
-              title: Text(s['nama']?.toString() ?? '-', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: CustomerTheme.textPrimary)),
-              subtitle: Text('Estimasi: ${s['estimasi_hari']} hari', style: const TextStyle(fontSize: 12, color: CustomerTheme.textHint)),
-              trailing: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(_formatCurrency(harga), style: const TextStyle(fontWeight: FontWeight.w800, color: CustomerTheme.primary, fontSize: 14)),
-                  Text('/ ${s['satuan']}', style: const TextStyle(fontSize: 10, color: CustomerTheme.textSecondary)),
-                ],
+          return FadeInAnimation( // [UPDATE UX]
+            delay: index * 50,
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: CustomerTheme.menuDecoration,
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: CustomerTheme.ground, borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.local_laundry_service_rounded, color: CustomerTheme.textSecondary),
+                ),
+                title: Text(s['nama']?.toString() ?? '-', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: CustomerTheme.textPrimary)),
+                subtitle: Text('Estimasi: ${s['estimasi_hari']} hari', style: const TextStyle(fontSize: 12, color: CustomerTheme.textHint)),
+                trailing: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(_formatCurrency(harga), style: const TextStyle(fontWeight: FontWeight.w800, color: CustomerTheme.primary, fontSize: 14)),
+                    Text('/ ${s['satuan']}', style: const TextStyle(fontSize: 10, color: CustomerTheme.textSecondary)),
+                  ],
+                ),
               ),
             ),
           );

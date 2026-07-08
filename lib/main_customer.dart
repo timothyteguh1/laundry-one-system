@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'firebase_options.dart';
 import 'package:laundry_one/features/customer/customer_theme.dart';
@@ -10,6 +11,14 @@ import 'package:laundry_one/features/customer/screens/home_customer_screen.dart'
 import 'package:laundry_one/features/customer/screens/register_customer_screen.dart';
 import 'package:laundry_one/features/auth/services/auth_service.dart';
 import 'package:laundry_one/features/auth/services/notification_service.dart';
+
+// Handler ini WAJIB top-level function (di luar class), tidak boleh di dalam widget/class.
+@pragma('vm:entry-point')
+Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
+  // Isolate terpisah dari UI, jadi cukup log ringan di sini.
+  // Jangan panggil setState/UI/Supabase auth di sini.
+  debugPrint('📩 Notifikasi diterima saat app background/terminated: ${message.messageId}');
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +35,9 @@ void main() async {
         rethrow; // Lemparkan error jika itu masalah lain, bukan masalah duplikat
       }
     }
+
+    // [TAMBAHAN] Daftarkan background handler SEBELUM runApp
+    FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
   }
 
   // 2. Inisialisasi Supabase
@@ -70,7 +82,6 @@ class _SplashRouterState extends State<_SplashRouter> {
     _setupAuthListener();
   }
 
-  // [TAMBAHAN] Pendeteksi Sesi Otomatis
   void _setupAuthListener() {
     Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       final AuthChangeEvent event = data.event;
@@ -84,14 +95,13 @@ class _SplashRouterState extends State<_SplashRouter> {
     await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
     final auth = AuthService();
-    
-    // Supabase otomatis mengingat sesi user di HP ini
+
     if (auth.isLoggedIn()) {
       final role = await auth.getMyRole();
       if (!mounted) return;
       if (role == 'customer') {
         NotificationService.setupPushNotifications();
-        
+
         Navigator.pushReplacement(context,
             MaterialPageRoute(builder: (_) => const HomeCustomerScreen()));
         return;
@@ -115,9 +125,9 @@ class _SplashRouterState extends State<_SplashRouter> {
             keyboardType: TextInputType.phone,
             primaryColor: CustomerTheme.primary,
             secondaryColor: CustomerTheme.primaryDark,
-            backgroundColor: CustomerTheme.surface, 
+            backgroundColor: CustomerTheme.surface,
             icon: Icons.local_laundry_service_rounded,
-            tagline: 'Lacak cucian & kumpulkan poinnya', 
+            tagline: 'Lacak cucian & kumpulkan poinnya',
             homeScreen: const HomeCustomerScreen(),
             showRegister: true,
             registerScreen: const RegisterCustomerScreen(),
