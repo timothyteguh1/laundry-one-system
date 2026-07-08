@@ -1860,7 +1860,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                     'Pesanan',
                     badge: _todayAktif > 0 ? '$_todayAktif' : null,
                   ),
-                  const Expanded(flex: 2, child: SizedBox()),
+                  // const Expanded(flex: 2, child: SizedBox()),
                   _buildNavItem(
                     2,
                     Icons.people_alt_rounded,

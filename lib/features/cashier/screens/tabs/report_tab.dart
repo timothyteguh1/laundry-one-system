@@ -4,8 +4,8 @@ import 'package:laundry_one/features/cashier/screens/inventory_screen.dart';
 import 'package:laundry_one/features/cashier/screens/services_management_screen.dart';
 import 'package:laundry_one/features/cashier/screens/reports/report_product_sales_screen.dart';
 import 'package:laundry_one/features/cashier/screens/reports/report_cash_flow_screen.dart';
-import 'package:laundry_one/features/cashier/screens/reports/report_coin_screen.dart'; // [TAMBAHAN]
-import 'package:laundry_one/features/cashier/screens/reward_management_screen.dart'; // [TAMBAHAN]
+import 'package:laundry_one/features/cashier/screens/reports/report_coin_screen.dart'; 
+import 'package:laundry_one/features/cashier/screens/reward_management_screen.dart'; 
 
 // ============================================================
 // DESIGN SYSTEM - MODERN & CLEAR
@@ -34,14 +34,38 @@ class _DS {
   ];
 }
 
-class ReportTab extends StatelessWidget {
+class ReportTab extends StatefulWidget {
   const ReportTab({super.key});
+
+  @override
+  State<ReportTab> createState() => _ReportTabState();
+}
+
+class _ReportTabState extends State<ReportTab> {
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    // Simulasi loading agar ritme UX konsisten dengan tab Beranda & Pelanggan
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: _DS.ground,
+      // [UPDATE UX] Latar belakang Navy agar jika ditarik ke bawah (bounce effect iOS/Android), warnanya biru solid
+      color: _DS.navy,
       child: SafeArea(
+        bottom: false,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -69,73 +93,81 @@ class ReportTab extends StatelessWidget {
             ),
             
             Expanded(
-              child: ListView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.only(left: 8, bottom: 12), 
-                    child: Text('MANAJEMEN DATA', 
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: _DS.textSecondary, letterSpacing: 1.2))
-                  ),
-                  
-                  _buildMenuCard(
-                    context, 
-                    icon: Icons.inventory_2_rounded, iconColor: Colors.brown.shade600, bgColor: Colors.brown.shade50,
-                    title: 'Stok Barang Fisik', subtitle: 'Atur produk jualan & restock barang',
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InventoryScreen())),
-                  ),
-                  const SizedBox(height: 12),
+              child: Container(
+                // [UPDATE UX] Konten list dikembalikan ke warna ground agar kontrasnya bagus
+                color: _DS.ground,
+                child: _isLoading 
+                  ? const Center(child: CircularProgressIndicator(color: _DS.blue))
+                  : RefreshIndicator(
+                      onRefresh: _loadData,
+                      color: _DS.blue,
+                      backgroundColor: _DS.surface,
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(left: 8, bottom: 12), 
+                            child: Text('MANAJEMEN DATA', 
+                              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: _DS.textSecondary, letterSpacing: 1.2))
+                          ),
+                          
+                          _buildMenuCard(
+                            context, 
+                            icon: Icons.inventory_2_rounded, iconColor: Colors.brown.shade600, bgColor: Colors.brown.shade50,
+                            title: 'Stok Barang Fisik', subtitle: 'Atur produk jualan & restock barang',
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InventoryScreen())),
+                          ),
+                          const SizedBox(height: 12),
 
-                  _buildMenuCard(
-                    context, 
-                    icon: Icons.local_laundry_service_rounded, iconColor: Colors.purple.shade600, bgColor: Colors.purple.shade50,
-                    title: 'Layanan Jasa Cuci', subtitle: 'Tambah & atur tarif cucian',
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ServicesManagementScreen())), 
-                  ),
+                          _buildMenuCard(
+                            context, 
+                            icon: Icons.local_laundry_service_rounded, iconColor: Colors.purple.shade600, bgColor: Colors.purple.shade50,
+                            title: 'Layanan Jasa Cuci', subtitle: 'Tambah & atur tarif cucian',
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ServicesManagementScreen())), 
+                          ),
 
-                  const SizedBox(height: 32),
-                  const Padding(
-                    padding: EdgeInsets.only(left: 8, bottom: 12), 
-                    child: Text('LAPORAN KEUANGAN', 
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: _DS.textSecondary, letterSpacing: 1.2))
-                  ),
-                  
-                  _buildMenuCard(
-                    context, 
-                    icon: Icons.bar_chart_rounded, iconColor: _DS.blue, bgColor: _DS.sky,
-                    title: 'Laporan Penjualan', subtitle: 'Statistik item terlaris & omset',
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportProductSalesScreen())),
-                  ),
-                  const SizedBox(height: 12),
+                          const SizedBox(height: 32),
+                          const Padding(
+                            padding: EdgeInsets.only(left: 8, bottom: 12), 
+                            child: Text('LAPORAN KEUANGAN', 
+                              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: _DS.textSecondary, letterSpacing: 1.2))
+                          ),
+                          
+                          _buildMenuCard(
+                            context, 
+                            icon: Icons.bar_chart_rounded, iconColor: _DS.blue, bgColor: _DS.sky,
+                            title: 'Laporan Penjualan', subtitle: 'Statistik item terlaris & omset',
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportProductSalesScreen())),
+                          ),
+                          const SizedBox(height: 12),
 
-                  _buildMenuCard(
-                    context, 
-                    icon: Icons.account_balance_wallet_rounded, iconColor: Colors.teal.shade600, bgColor: Colors.teal.shade50,
-                    title: 'Laporan Arus Kas', subtitle: 'Rincian uang masuk & pengeluaran',
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportCashFlowScreen())),
-                  ),
-                  const SizedBox(height: 12),
+                          _buildMenuCard(
+                            context, 
+                            icon: Icons.account_balance_wallet_rounded, iconColor: Colors.teal.shade600, bgColor: Colors.teal.shade50,
+                            title: 'Laporan Arus Kas', subtitle: 'Rincian uang masuk & pengeluaran',
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportCashFlowScreen())),
+                          ),
+                          const SizedBox(height: 12),
 
-                  _buildMenuCard(
-                    context, 
-                    icon: Icons.monetization_on_rounded, iconColor: Colors.orange.shade600, bgColor: Colors.orange.shade50,
-                    title: 'Laporan Koin', subtitle: 'Riwayat top-up & penukaran koin loyalitas',
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportCoinScreen())),
-                  ),
-                  const SizedBox(height: 12),
+                          _buildMenuCard(
+                            context, 
+                            icon: Icons.monetization_on_rounded, iconColor: Colors.orange.shade600, bgColor: Colors.orange.shade50,
+                            title: 'Laporan Koin', subtitle: 'Riwayat top-up & penukaran koin loyalitas',
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportCoinScreen())),
+                          ),
+                          const SizedBox(height: 12),
 
-                  // JANGAN LUPA IMPORT INI DI PALING ATAS FILE:
-// import 'package:laundry_one/features/cashier/screens/reward_management_screen.dart';
-
-                  _buildMenuCard(
-                    context, 
-                    icon: Icons.card_giftcard_rounded, iconColor: Colors.pink.shade600, bgColor: Colors.pink.shade50,
-                    title: 'Katalog Hadiah (Rewards)', subtitle: 'Atur daftar voucher diskon untuk pelanggan',
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RewardManagementScreen())), 
+                          _buildMenuCard(
+                            context, 
+                            icon: Icons.card_giftcard_rounded, iconColor: Colors.pink.shade600, bgColor: Colors.pink.shade50,
+                            title: 'Katalog Hadiah (Rewards)', subtitle: 'Atur daftar voucher diskon untuk pelanggan',
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RewardManagementScreen())), 
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                      ),
                   ),
-                  const SizedBox(height: 12),
-                ],
               ),
             )
           ],
