@@ -1,3 +1,4 @@
+import 'dart:ui'; // [UPDATE UX] Ditambahkan untuk efek BackdropFilter (Blur)
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -38,6 +39,14 @@ class _DS {
       offset: const Offset(0, 3),
     ),
   ];
+
+  static List<BoxShadow> fabShadow = [
+    BoxShadow(
+      color: const Color(0xFF1565C0).withOpacity(0.3),
+      blurRadius: 20,
+      offset: const Offset(0, 8),
+    ),
+  ];
 }
 
 class CreateOrderScreen extends StatefulWidget {
@@ -58,14 +67,13 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   List<Map<String, dynamic>> _allCustomers = [];
   List<Map<String, dynamic>> _filteredCustomers = [];
   final _searchCtrl = TextEditingController();
-  
-  // Variabel pencarian untuk Step 2 (Layanan)
+
   final _searchLayananCtrl = TextEditingController();
   String _searchLayananQuery = '';
 
   String? _voucherCode;
-  Map<String, dynamic>? _voucherData; 
-  Map<String, dynamic>? _selectedAutoReward; 
+  Map<String, dynamic>? _voucherData;
+  Map<String, dynamic>? _selectedAutoReward;
   double _diskonVoucher = 0;
   List<Map<String, dynamic>> _activeVouchers = [];
   Map<String, DateTime> _lastUsedRewards = {};
@@ -97,6 +105,99 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     super.dispose();
   }
 
+  // =========================================================
+  // [UPDATE UX] CUSTOM DIALOG (21st Century Dev Style)
+  // Menggantikan Snackbar yang sering tertumpuk keyboard
+  // =========================================================
+  void _showCustomDialog({
+    required String title,
+    required String message,
+    required bool isSuccess,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: _DS.surface,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: _DS.navy.withOpacity(0.15),
+                blurRadius: 32,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isSuccess ? Colors.green.shade50 : Colors.red.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isSuccess ? Icons.check_circle_rounded : Icons.error_rounded,
+                  color: isSuccess ? Colors.green : Colors.red,
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                  color: _DS.textPrimary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                style: const TextStyle(
+                  color: _DS.textSecondary,
+                  fontSize: 13,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isSuccess ? _DS.blue : Colors.red.shade600,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 0,
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text(
+                    'Mengerti',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // =========================================================
+  // DATA FETCHING
+  // =========================================================
   Future<void> _loadSettings() async {
     try {
       final settingData = await _supabase
@@ -104,11 +205,10 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           .select('value')
           .eq('id', 'rupiah_per_poin')
           .maybeSingle();
-      if (settingData != null && mounted) {
+      if (settingData != null && mounted)
         setState(
           () => _rupiahPerPoin = (settingData['value'] as num).toDouble(),
         );
-      }
     } catch (_) {}
   }
 
@@ -229,9 +329,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       (_subtotal - _diskonVoucher).clamp(0, double.infinity).toDouble();
 
   // =========================================================
-  // LOGIKA VOUCHER HYBRID (MANUAL & AUTO-REDEEM)
+  // LOGIKA VOUCHER HYBRID
   // =========================================================
-
   double _hitungDiskon(Map<String, dynamic> reward) {
     final minTx = (reward['min_transaksi'] as num?)?.toDouble() ?? 0;
     if (_subtotal < minTx)
@@ -264,21 +363,32 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         _diskonVoucher = 0;
         _voucherCode = null;
       });
-      _showSnackBar('Voucher dilepas otomatis: ${e.toString()}', Colors.orange);
+      _showCustomDialog(
+        title: 'Voucher Dilepas',
+        message: e.toString(),
+        isSuccess: false,
+      );
     }
   }
 
- Future<void> _bukaDialogVoucher() async {
+  Future<void> _bukaDialogVoucher() async {
     if (_selectedCustomer == null) return;
     setState(() => _isLoading = true);
     try {
       final profileId = _selectedCustomer!['id'];
-      
-      final custData = await _supabase.from('customers').select('id, poin_saldo').eq('profile_id', profileId).maybeSingle();
-      final int poinSaldo = custData != null ? (custData['poin_saldo'] as num).toInt() : 0;
+
+      final custData = await _supabase
+          .from('customers')
+          .select('id, poin_saldo')
+          .eq('profile_id', profileId)
+          .maybeSingle();
+      final int poinSaldo = custData != null
+          ? (custData['poin_saldo'] as num).toInt()
+          : 0;
       final String? customerId = custData?['id'];
 
-      final rewards = await _supabase.from('rewards_catalog')
+      final rewards = await _supabase
+          .from('rewards_catalog')
           .select()
           .inFilter('tipe_reward', ['diskon_nominal', 'diskon_persen'])
           .eq('is_active', true)
@@ -307,7 +417,10 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           } else if (v['status'] == 'aktif') {
             final expiredAtUtc = DateTime.parse(v['berlaku_sampai']).toUtc();
             if (nowUtc.isAfter(expiredAtUtc)) {
-              await _supabase.from('reward_redemptions').update({'status': 'expired'}).eq('id', v['id']);
+              await _supabase
+                  .from('reward_redemptions')
+                  .update({'status': 'expired'})
+                  .eq('id', v['id']);
             } else {
               validVouchers.add(v);
             }
@@ -318,18 +431,28 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _activeVouchers = validVouchers;  
-          _lastUsedRewards = usedDates;      
+          _activeVouchers = validVouchers;
+          _lastUsedRewards = usedDates;
         });
-        _tampilkanModalVoucher(poinSaldo, List<Map<String, dynamic>>.from(rewards));
+        _tampilkanModalVoucher(
+          poinSaldo,
+          List<Map<String, dynamic>>.from(rewards),
+        );
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      _showSnackBar('Gagal memuat data voucher: $e', Colors.red);
+      _showCustomDialog(
+        title: 'Gagal Memuat Voucher',
+        message: e.toString(),
+        isSuccess: false,
+      );
     }
   }
 
-  void _tampilkanModalVoucher(int poinSaldo, List<Map<String, dynamic>> rewards) {
+  void _tampilkanModalVoucher(
+    int poinSaldo,
+    List<Map<String, dynamic>> rewards,
+  ) {
     final codeCtrl = TextEditingController();
 
     showModalBottomSheet(
@@ -351,10 +474,26 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
             const SizedBox(height: 20),
 
-            const Text('Punya Kode Voucher?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _DS.textPrimary)),
+            const Text(
+              'Punya Kode Voucher?',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: _DS.textPrimary,
+              ),
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -362,32 +501,84 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                   child: TextField(
                     controller: codeCtrl,
                     textCapitalization: TextCapitalization.characters,
-                    decoration: _modernInputDecoration('Misal: VCH-1234', icon: Icons.confirmation_number_outlined),
+                    decoration: _modernInputDecoration(
+                      'Misal: VCH-1234',
+                      icon: Icons.confirmation_number_outlined,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _DS.blue,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 14,
+                      horizontal: 20,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
                   onPressed: () {
                     if (codeCtrl.text.trim().isEmpty) return;
                     Navigator.pop(ctx);
                     _prosesVoucherManual(codeCtrl.text.trim());
                   },
-                  child: const Text('Cek', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                  child: const Text(
+                    'Cek',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ],
             ),
 
-            const Padding(padding: EdgeInsets.symmetric(vertical: 20), child: Divider(color: _DS.border)),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Divider(color: _DS.border),
+            ),
 
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Atau Pilih Diskon', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _DS.textPrimary)),
+                const Text(
+                  'Atau Pilih Diskon',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: _DS.textPrimary,
+                  ),
+                ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(8)),
-                  child: Row(children: [Icon(Icons.stars_rounded, color: Colors.amber.shade600, size: 16), const SizedBox(width: 4), Text('$poinSaldo Koin', style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.w800, fontSize: 13))]),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.stars_rounded,
+                        color: Colors.amber.shade600,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$poinSaldo Koin',
+                        style: TextStyle(
+                          color: Colors.amber.shade900,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -395,72 +586,160 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
             Expanded(
               child: rewards.isEmpty
-                  ? const Center(child: Text('Tidak ada diskon tersedia.', style: TextStyle(color: _DS.textHint)))
+                  ? const Center(
+                      child: Text(
+                        'Tidak ada diskon tersedia.',
+                        style: TextStyle(color: _DS.textHint),
+                      ),
+                    )
                   : ListView.builder(
                       physics: const BouncingScrollPhysics(),
                       itemCount: rewards.length,
                       itemBuilder: (context, i) {
-                      final r = rewards[i];
-                      final poinReq = (r['poin_dibutuhkan'] as num).toInt();
-                      final isEnough = poinSaldo >= poinReq;
-                      final minTx = (r['min_transaksi'] as num?)?.toDouble() ?? 0;
-                      final isTxEnough = _subtotal >= minTx;
+                        final r = rewards[i];
+                        final poinReq = (r['poin_dibutuhkan'] as num).toInt();
+                        final isEnough = poinSaldo >= poinReq;
+                        final minTx =
+                            (r['min_transaksi'] as num?)?.toDouble() ?? 0;
+                        final isTxEnough = _subtotal >= minTx;
 
-                      final String safeRewardId = r['id']?.toString() ?? '';
-                      final isAlreadyActive = _activeVouchers.any((v) => v['reward_id']?.toString() == safeRewardId);
-                      final isLimitReached = _activeVouchers.length >= 2;
+                        final String safeRewardId = r['id']?.toString() ?? '';
+                        final isAlreadyActive = _activeVouchers.any(
+                          (v) => v['reward_id']?.toString() == safeRewardId,
+                        );
+                        final isLimitReached = _activeVouchers.length >= 2;
 
-                      bool isCooldown = false;
-                      int daysLeft = 0;
-                      if (_lastUsedRewards.containsKey(safeRewardId)) {
-                        final lastUsed = _lastUsedRewards[safeRewardId]!;
-                        final expiryDate = lastUsed.add(const Duration(days: 90));
-                        if (DateTime.now().toUtc().isBefore(expiryDate)) {
-                          isCooldown = true;
-                          daysLeft = expiryDate.difference(DateTime.now().toUtc()).inDays;
+                        bool isCooldown = false;
+                        int daysLeft = 0;
+                        if (_lastUsedRewards.containsKey(safeRewardId)) {
+                          final lastUsed = _lastUsedRewards[safeRewardId]!;
+                          final expiryDate = lastUsed.add(
+                            const Duration(days: 90),
+                          );
+                          if (DateTime.now().toUtc().isBefore(expiryDate)) {
+                            isCooldown = true;
+                            daysLeft = expiryDate
+                                .difference(DateTime.now().toUtc())
+                                .inDays;
+                          }
                         }
-                      }
 
-                      bool isBlocked = isCooldown || isAlreadyActive || isLimitReached;
-                      bool isSelectable = isEnough && !isBlocked;
+                        bool isBlocked =
+                            isCooldown || isAlreadyActive || isLimitReached;
+                        bool isSelectable = isEnough && !isBlocked;
 
-                      String statusLabel;
-                      if (isCooldown) {
-                        statusLabel = 'Tersedia dlm $daysLeft hari';
-                      } else if (isAlreadyActive) {
-                        statusLabel = 'Sedang Aktif';
-                      } else if (isLimitReached) {
-                        statusLabel = 'Limit Tercapai';
-                      } else if (!isEnough) {
-                        statusLabel = 'Koin Kurang';
-                      } else {
-                        statusLabel = 'Pilih';
-                      }
-                      
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(color: isSelectable ? _DS.surface : _DS.ground.withOpacity(0.5), borderRadius: BorderRadius.circular(16), border: Border.all(color: _DS.border)),
-                        child: ListTile(
-                          onTap: isSelectable ? () => _pilihAutoVoucher(r, poinSaldo) : null,
-                          leading: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: isSelectable ? Colors.amber.shade50 : Colors.grey.shade200, borderRadius: BorderRadius.circular(12)), child: Icon(Icons.discount_rounded, color: isSelectable ? Colors.amber.shade700 : Colors.grey)),
-                          title: Text(r['nama'] ?? '-', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: isSelectable ? _DS.textPrimary : _DS.textSecondary)),
-                          subtitle: Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (minTx > 0) Text('Min. Transaksi ${_formatRupiah(minTx)}', style: TextStyle(color: isTxEnough ? Colors.green : Colors.red, fontSize: 11, fontWeight: FontWeight.w600)),
-                                const SizedBox(height: 4),
-                                Text('$poinReq Koin', style: TextStyle(color: isSelectable ? _DS.blue : _DS.textHint, fontWeight: FontWeight.w700, fontSize: 12)),
-                              ],
-                            ),
+                        String statusLabel;
+                        if (isCooldown) {
+                          statusLabel = 'Tersedia dlm $daysLeft hari';
+                        } else if (isAlreadyActive) {
+                          statusLabel = 'Sedang Aktif';
+                        } else if (isLimitReached) {
+                          statusLabel = 'Limit Tercapai';
+                        } else if (!isEnough) {
+                          statusLabel = 'Koin Kurang';
+                        } else {
+                          statusLabel = 'Pilih';
+                        }
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: isSelectable
+                                ? _DS.surface
+                                : _DS.ground.withOpacity(0.5),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: _DS.border),
                           ),
-                          trailing: isSelectable 
-                            ? ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: _DS.sky, foregroundColor: _DS.blue, elevation: 0, padding: const EdgeInsets.symmetric(horizontal: 16)), onPressed: () => _pilihAutoVoucher(r, poinSaldo), child: const Text('Pilih', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)))
-                            : Text(statusLabel, style: const TextStyle(color: _DS.textHint, fontSize: 11, fontWeight: FontWeight.w600)),
-                        )
-                      );
-                    }
+                          child: ListTile(
+                            onTap: isSelectable
+                                ? () => _pilihAutoVoucher(r, poinSaldo)
+                                : null,
+                            leading: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: isSelectable
+                                    ? Colors.amber.shade50
+                                    : Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.discount_rounded,
+                                color: isSelectable
+                                    ? Colors.amber.shade700
+                                    : Colors.grey,
+                              ),
+                            ),
+                            title: Text(
+                              r['nama'] ?? '-',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                                color: isSelectable
+                                    ? _DS.textPrimary
+                                    : _DS.textSecondary,
+                              ),
+                            ),
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (minTx > 0)
+                                    Text(
+                                      'Min. Transaksi ${_formatRupiah(minTx)}',
+                                      style: TextStyle(
+                                        color: isTxEnough
+                                            ? Colors.green
+                                            : Colors.red,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '$poinReq Koin',
+                                    style: TextStyle(
+                                      color: isSelectable
+                                          ? _DS.blue
+                                          : _DS.textHint,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            trailing: isSelectable
+                                ? ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: _DS.sky,
+                                      foregroundColor: _DS.blue,
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                      ),
+                                    ),
+                                    onPressed: () =>
+                                        _pilihAutoVoucher(r, poinSaldo),
+                                    child: const Text(
+                                      'Pilih',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  )
+                                : Text(
+                                    statusLabel,
+                                    style: const TextStyle(
+                                      color: _DS.textHint,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                          ),
+                        );
+                      },
                     ),
             ),
           ],
@@ -476,16 +755,31 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       final lastUsed = _lastUsedRewards[safeRewardId]!;
       final cooldownEnd = lastUsed.add(const Duration(days: 90));
       if (DateTime.now().toUtc().isBefore(cooldownEnd)) {
-        _showSnackBar('Voucher ini baru bisa ditukar lagi setelah 3 bulan!', Colors.orange);
+        _showCustomDialog(
+          title: 'Cooled Down',
+          message: 'Voucher ini baru bisa ditukar lagi setelah 3 bulan!',
+          isSuccess: false,
+        );
         return;
       }
     }
     if (_activeVouchers.length >= 2) {
-      _showSnackBar('Limit Tercapai! Maksimal hanya boleh memiliki 2 voucher aktif.', Colors.orange);
+      _showCustomDialog(
+        title: 'Limit Tercapai',
+        message: 'Maksimal hanya boleh memiliki 2 voucher aktif.',
+        isSuccess: false,
+      );
       return;
     }
-    if (_activeVouchers.any((v) => v['reward_id']?.toString() == safeRewardId)) {
-      _showSnackBar('Pelanggan masih memiliki voucher jenis ini yang sedang aktif!', Colors.orange);
+    if (_activeVouchers.any(
+      (v) => v['reward_id']?.toString() == safeRewardId,
+    )) {
+      _showCustomDialog(
+        title: 'Sedang Aktif',
+        message:
+            'Pelanggan masih memiliki voucher jenis ini yang sedang aktif!',
+        isSuccess: false,
+      );
       return;
     }
 
@@ -498,9 +792,17 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         _diskonVoucher = diskon;
       });
       Navigator.pop(context);
-      _showSnackBar('Berhasil! Diskon otomatis diterapkan.', Colors.green);
+      _showCustomDialog(
+        title: 'Voucher Berhasil Dipakai!',
+        message: 'Diskon ${_formatRupiah(diskon)} diterapkan.',
+        isSuccess: true,
+      );
     } catch (e) {
-      _showSnackBar(e.toString(), Colors.red);
+      _showCustomDialog(
+        title: 'Tidak Memenuhi Syarat',
+        message: e.toString(),
+        isSuccess: false,
+      );
     }
   }
 
@@ -533,23 +835,28 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
       setState(() {
         _voucherData = voucher;
-        _selectedAutoReward = null; 
+        _selectedAutoReward = null;
         _voucherCode = kode;
         _diskonVoucher = diskon;
       });
-      _showSnackBar(
-        'Berhasil! Diskon ${_formatRupiah(diskon)} diterapkan.',
-        Colors.green,
+      _showCustomDialog(
+        title: 'Voucher Ditemukan!',
+        message: 'Diskon ${_formatRupiah(diskon)} diterapkan pada pesanan.',
+        isSuccess: true,
       );
     } catch (e) {
-      _showSnackBar(e.toString(), Colors.red);
+      _showCustomDialog(
+        title: 'Gagal Memakai Voucher',
+        message: e.toString(),
+        isSuccess: false,
+      );
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
   // =========================================================
-  // SIMPAN TRANSAKSI & REDEEM KOIN
+  // SIMPAN TRANSAKSI
   // =========================================================
   Future<void> _simpanOrder() async {
     setState(() => _isLoading = true);
@@ -583,7 +890,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             .eq('id', customerId)
             .single();
         currentPoinSaldo = (cust['poin_saldo'] as num).toInt();
-        final poinReq = (_selectedAutoReward!['poin_dibutuhkan'] as num).toInt();
+        final poinReq = (_selectedAutoReward!['poin_dibutuhkan'] as num)
+            .toInt();
         if (currentPoinSaldo < poinReq)
           throw 'Koin tidak cukup untuk memproses diskon ini.';
       }
@@ -602,7 +910,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           '$prefix-${(count.length + 1).toString().padLeft(4, '0')}';
 
       final int totalDibayar = _tipeBayar == 'piutang' ? 0 : _total.toInt();
-      final String metodeBayarFinal = _tipeBayar == 'piutang' ? 'piutang' : _metodeBayar;
+      final String metodeBayarFinal = _tipeBayar == 'piutang'
+          ? 'piutang'
+          : _metodeBayar;
 
       final orderPayload = <String, dynamic>{
         'nomor_order': nomorOrder,
@@ -625,7 +935,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
       if (_diskonVoucher > 0)
         orderPayload['diskon_voucher'] = _diskonVoucher.toInt();
-
       if (_voucherData != null)
         orderPayload['redemption_id'] = _voucherData!['id'];
 
@@ -719,7 +1028,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             })
             .eq('id', _voucherData!['id']);
       } else if (_selectedAutoReward != null && customerId != null) {
-        final poinReq = (_selectedAutoReward!['poin_dibutuhkan'] as num).toInt();
+        final poinReq = (_selectedAutoReward!['poin_dibutuhkan'] as num)
+            .toInt();
 
         final custR = await _supabase
             .from('customers')
@@ -733,7 +1043,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             .from('customers')
             .update({'poin_saldo': saldoSesudahR})
             .eq('id', customerId);
-
         await _supabase.from('points_ledger').insert({
           'customer_id': customerId,
           'tipe': 'redeemed',
@@ -758,12 +1067,11 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               'dipakai_at': now.toIso8601String(),
               'berlaku_sampai': now.toUtc().toIso8601String(),
               'poin_digunakan': poinReq,
-              'dipakai_oleh': kasirId, 
+              'dipakai_oleh': kasirId,
               'eksekutor': eksekutorName,
             })
             .select()
             .single();
-
         await _supabase
             .from('orders')
             .update({'redemption_id': redem['id']})
@@ -794,11 +1102,18 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        _showSnackBar('Gagal memproses pesanan: $e', Colors.red);
+        _showCustomDialog(
+          title: 'Gagal Memproses Pesanan',
+          message: e.toString(),
+          isSuccess: false,
+        );
       }
     }
   }
 
+  // =========================================================
+  // KOMPONEN UI TAMBAHAN
+  // =========================================================
   InputDecoration _modernInputDecoration(String label, {IconData? icon}) {
     return InputDecoration(
       labelText: label,
@@ -838,9 +1153,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             right: 24,
             top: 16,
           ),
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: _DS.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Form(
             key: formKey,
@@ -868,7 +1183,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
+                const Text(
                   'Password otomatis = nomor HP',
                   style: TextStyle(color: _DS.textSecondary, fontSize: 12),
                 ),
@@ -933,16 +1248,22 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                   _selectedCustomer = c;
                                   _step = 2;
                                 });
-                                _showSnackBar(
-                                  '${namaCtrl.text.trim()} berhasil didaftarkan!',
-                                  Colors.green,
+                                _showCustomDialog(
+                                  title: 'Berhasil Mendaftar',
+                                  message:
+                                      '${namaCtrl.text.trim()} berhasil didaftarkan dan dipilih!',
+                                  isSuccess: true,
                                 );
                               }
                             } catch (e) {
                               setModalState(() => isSubmitting = false);
-                              _showSnackBar(
-                                e.toString().replaceAll('Exception: ', ''),
-                                Colors.red,
+                              _showCustomDialog(
+                                title: 'Gagal Mendaftar',
+                                message: e.toString().replaceAll(
+                                  'Exception: ',
+                                  '',
+                                ),
+                                isSuccess: false,
                               );
                             }
                           },
@@ -972,17 +1293,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 
-  void _showSnackBar(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
-
   Future<void> _pickDateOnly({required bool isEstimasi}) async {
     final initDate = isEstimasi ? _estimasiSelesai! : _jatuhTempo!;
     final date = await showDatePicker(
@@ -998,7 +1308,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       ),
     );
     if (date == null) return;
-
     final now = DateTime.now();
     setState(() {
       final dt = DateTime(
@@ -1008,11 +1317,10 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         now.hour,
         now.minute,
       );
-      if (isEstimasi) {
+      if (isEstimasi)
         _estimasiSelesai = dt;
-      } else {
+      else
         _jatuhTempo = dt;
-      }
     });
   }
 
@@ -1037,13 +1345,15 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   }
 
   void _handleBackAttempt() {
-    if (_step > 1) {
+    if (_step > 1)
       setState(() => _step--);
-    } else {
+    else
       Navigator.of(context).pop();
-    }
   }
 
+  // =========================================================
+  // BUILD METHOD (MENYATUKAN SEMUA UX)
+  // =========================================================
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -1053,7 +1363,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         _handleBackAttempt();
       },
       child: Scaffold(
-        backgroundColor: _DS.ground,
+        // [UPDATE UX] Background Scaffold dijadikan Navy agar saat Pull-to-Refresh tidak ada warna putih putus-putus
+        backgroundColor: _DS.navy,
         appBar: AppBar(
           backgroundColor: _DS.navy,
           foregroundColor: Colors.white,
@@ -1077,47 +1388,96 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         ),
         body: Stack(
           children: [
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 800),
-                child: IndexedStack(
-                  index: _step - 1,
-                  children: [
-                    _buildStep1Pelanggan(),
-                    _buildStep2Layanan(),
-                    _buildStep3Bayar(),
-                  ],
+            // Konten Utama diberi background putih/ground agar yang Navy hanya muncul saat ditarik ke bawah (Overscroll)
+            Container(
+              color: _DS.ground,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 800),
+                  child: IndexedStack(
+                    index: _step - 1,
+                    children: [
+                      _buildStep1Pelanggan(),
+                      _buildStep2Layanan(),
+                      _buildStep3Bayar(),
+                    ],
+                  ),
                 ),
               ),
             ),
+
+            // [UPDATE UX] Scene Loading Modern (Glassmorphism Blur)
             if (_isLoading)
               Positioned.fill(
-                child: Container(
-                  color: Colors.black.withOpacity(0.4),
-                  child: const Center(
-                    child: CircularProgressIndicator(color: Colors.white),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                  child: Container(
+                    color: _DS.navy.withOpacity(0.2), // Lapisan gelap estetik
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 40,
+                          vertical: 32,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _DS.surface,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: _DS.navy.withOpacity(0.15),
+                              blurRadius: 30,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const CircularProgressIndicator(
+                              color: _DS.blue,
+                              strokeWidth: 3.5,
+                            ),
+                            const SizedBox(height: 20),
+                            const Text(
+                              'Memproses...',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: _DS.textPrimary,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
           ],
         ),
         bottomNavigationBar: SafeArea(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Expanded(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 800),
-                  child: _buildBottomBar(),
+          child: Container(
+            color: _DS.surface,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 800),
+                    child: _buildBottomBar(),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
+  // =========================================================
+  // SUB-WIDGETS STEPS (STEP 1, STEP 2, STEP 3)
+  // =========================================================
   Widget _buildStep1Pelanggan() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1161,7 +1521,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-
               Container(
                 decoration: BoxDecoration(
                   color: _DS.surface,
@@ -1219,7 +1578,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                           ),
                           Container(
                             padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
+                            decoration: const BoxDecoration(
                               color: _DS.ground,
                               shape: BoxShape.circle,
                             ),
@@ -1240,285 +1599,305 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         ),
 
         Expanded(
-          child: _filteredCustomers.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: const BoxDecoration(
-                          color: _DS.sky,
-                          shape: BoxShape.circle,
+          // [UPDATE UX] Tambah fitur tarik refresh agar list pelanggan up-to-date
+          child: RefreshIndicator(
+            onRefresh: _loadCustomers,
+            color: _DS.blue,
+            backgroundColor: _DS.surface,
+            child: _filteredCustomers.isEmpty
+                ? Center(
+                    child: ListView(
+                      shrinkWrap: true,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: const BoxDecoration(
+                                color: _DS.sky,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.person_search_rounded,
+                                size: 40,
+                                color: _DS.blue,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Pelanggan tidak ditemukan',
+                              style: TextStyle(
+                                color: _DS.textPrimary,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton.icon(
+                              icon: const Icon(Icons.person_add_rounded),
+                              label: const Text(
+                                'Daftarkan Baru',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _DS.blue,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 12,
+                                ),
+                                elevation: 0,
+                              ),
+                              onPressed: () => _showFormDaftarPelanggan(
+                                nomorHpAwal: _searchCtrl.text,
+                              ),
+                            ),
+                          ],
                         ),
-                        child: Icon(
-                          Icons.person_search_rounded,
-                          size: 40,
-                          color: _DS.blue,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Pelanggan tidak ditemukan',
-                        style: TextStyle(
-                          color: _DS.textPrimary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.person_add_rounded),
-                        label: const Text(
-                          'Daftarkan Baru',
-                          style: TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _DS.blue,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 12,
-                          ),
-                          elevation: 0,
-                        ),
-                        onPressed: () => _showFormDaftarPelanggan(
-                          nomorHpAwal: _searchCtrl.text,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  itemCount: _filteredCustomers.length,
-                  itemBuilder: (context, i) {
-                    final c = _filteredCustomers[i];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: _DS.surface,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: _DS.border, width: 1.5),
-                        boxShadow: _DS.cardShadow,
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(16),
-                        child: InkWell(
-                          onTap: () => setState(() {
-                            _selectedCustomer = c;
-                            _step = 2;
-                          }),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    itemCount: _filteredCustomers.length,
+                    itemBuilder: (context, i) {
+                      final c = _filteredCustomers[i];
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: _DS.surface,
                           borderRadius: BorderRadius.circular(16),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    color: _DS.sky,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      c['nama_lengkap']?[0]?.toUpperCase() ??
-                                          '?',
-                                      style: const TextStyle(
-                                        color: _DS.blue,
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 16,
+                          border: Border.all(color: _DS.border, width: 1.5),
+                          boxShadow: _DS.cardShadow,
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(16),
+                          child: InkWell(
+                            onTap: () => setState(() {
+                              _selectedCustomer = c;
+                              _step = 2;
+                            }),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      color: _DS.sky,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        c['nama_lengkap']?[0]?.toUpperCase() ??
+                                            '?',
+                                        style: const TextStyle(
+                                          color: _DS.blue,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 16,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        c['nama_lengkap'] ?? '-',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 14,
-                                          color: _DS.textPrimary,
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          c['nama_lengkap'] ?? '-',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 14,
+                                            color: _DS.textPrimary,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        c['nomor_hp'] ?? '-',
-                                        style: const TextStyle(
-                                          color: _DS.textSecondary,
-                                          fontSize: 12,
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          c['nomor_hp'] ?? '-',
+                                          style: const TextStyle(
+                                            color: _DS.textSecondary,
+                                            fontSize: 12,
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    color: _DS.ground,
-                                    shape: BoxShape.circle,
+                                  Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: const BoxDecoration(
+                                      color: _DS.ground,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: _DS.textSecondary,
+                                      size: 20,
+                                    ),
                                   ),
-                                  child: const Icon(
-                                    Icons.chevron_right_rounded,
-                                    color: _DS.textSecondary,
-                                    size: 20,
-                                  ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    );
-                  },
-                ),
+                      );
+                    },
+                  ),
+          ),
         ),
       ],
     );
   }
 
   Widget _buildStep2Layanan() {
-    // 👇 FILTER PENCARIAN (AJAX)
     final filtered = _services.where((s) {
       final n = (s['nama'] ?? '').toString().toLowerCase();
       return n.contains(_searchLayananQuery.toLowerCase());
     }).toList();
 
-    // MEMISAHKAN ITEM PIN & REGULER
     final pinned = filtered.where((s) => s['is_pinned'] == true).toList();
     final lainnya = filtered.where((s) => s['is_pinned'] != true).toList();
 
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (_selectedCustomer != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              margin: const EdgeInsets.only(bottom: 24),
-              decoration: BoxDecoration(
-                color: _DS.sky,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: _DS.blue.withOpacity(0.2)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.account_circle_rounded,
-                    color: _DS.blue,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 10),
-                  const Text(
-                    'Pelanggan: ',
-                    style: TextStyle(color: _DS.blue, fontSize: 13),
-                  ),
-                  Text(
-                    _selectedCustomer!['nama_lengkap'] ?? '-',
-                    style: const TextStyle(
+    return RefreshIndicator(
+      // [UPDATE UX] Pull-to-refresh List Jasa/Layanan
+      onRefresh: _loadServices,
+      color: _DS.blue,
+      backgroundColor: _DS.surface,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_selectedCustomer != null)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                margin: const EdgeInsets.only(bottom: 24),
+                decoration: BoxDecoration(
+                  color: _DS.sky,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _DS.blue.withOpacity(0.2)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.account_circle_rounded,
                       color: _DS.blue,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Pelanggan: ',
+                      style: TextStyle(color: _DS.blue, fontSize: 13),
+                    ),
+                    Text(
+                      _selectedCustomer!['nama_lengkap'] ?? '-',
+                      style: const TextStyle(
+                        color: _DS.blue,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            Container(
+              decoration: BoxDecoration(
+                color: _DS.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _DS.border),
+                boxShadow: _DS.softShadow,
+              ),
+              child: TextField(
+                controller: _searchLayananCtrl,
+                decoration: InputDecoration(
+                  hintText: 'Cari layanan atau produk...',
+                  hintStyle: const TextStyle(color: _DS.textHint, fontSize: 14),
+                  prefixIcon: const Icon(Icons.search, color: _DS.textHint),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  suffixIcon: _searchLayananQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, color: _DS.textHint),
+                          onPressed: () {
+                            _searchLayananCtrl.clear();
+                            setState(() => _searchLayananQuery = '');
+                          },
+                        )
+                      : null,
+                ),
+                onChanged: (val) => setState(() => _searchLayananQuery = val),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            if (pinned.isNotEmpty) ...[
+              const Row(
+                children: [
+                  Icon(Icons.push_pin_rounded, size: 16, color: Colors.amber),
+                  SizedBox(width: 6),
+                  Text(
+                    'Akses Cepat',
+                    style: TextStyle(
                       fontWeight: FontWeight.w800,
-                      fontSize: 14,
+                      fontSize: 16,
+                      color: _DS.textPrimary,
                     ),
                   ),
                 ],
               ),
-            ),
+              const SizedBox(height: 12),
+              ...pinned.map((s) => _buildServiceTile(s, showPin: true)),
+              const SizedBox(height: 24),
+            ],
 
-          // 👇 KOTAK PENCARIAN LAYANAN/BARANG
-          Container(
-            decoration: BoxDecoration(
-              color: _DS.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _DS.border),
-              boxShadow: _DS.softShadow,
-            ),
-            child: TextField(
-              controller: _searchLayananCtrl,
-              decoration: InputDecoration(
-                hintText: 'Cari layanan atau produk...',
-                hintStyle: const TextStyle(
-                  color: _DS.textHint,
-                  fontSize: 14,
+            if (lainnya.isNotEmpty) ...[
+              const Text(
+                'Semua Layanan',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                  color: _DS.textPrimary,
                 ),
-                prefixIcon: const Icon(Icons.search, color: _DS.textHint),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
-                ),
-                suffixIcon: _searchLayananQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, color: _DS.textHint),
-                        onPressed: () {
-                          _searchLayananCtrl.clear();
-                          setState(() => _searchLayananQuery = '');
-                        },
-                      )
-                    : null,
               ),
-              onChanged: (val) => setState(() => _searchLayananQuery = val),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // 👇 AKSES CEPAT (DESAIN LIST BIASA DENGAN IKON PIN)
-          if (pinned.isNotEmpty) ...[
-            Row(
-              children: [
-                const Icon(Icons.push_pin_rounded, size: 16, color: Colors.amber),
-                const SizedBox(width: 6),
-                const Text(
-                  'Akses Cepat',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                    color: _DS.textPrimary,
+              const SizedBox(height: 12),
+              ...lainnya.map((s) => _buildServiceTile(s, showPin: false)),
+            ] else if (pinned.isEmpty) ...[
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.only(top: 20),
+                  child: Text(
+                    'Layanan/Barang tidak ditemukan',
+                    style: TextStyle(color: _DS.textHint),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ...pinned.map((s) => _buildServiceTile(s, showPin: true)),
-            const SizedBox(height: 24),
-          ],
+              ),
+            ],
 
-          // 👇 SEMUA LAYANAN (DESAIN LIST BIASA)
-          if (lainnya.isNotEmpty) ...[
-            const Text(
-              'Semua Layanan',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 16,
-                color: _DS.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 12),
-            ...lainnya.map((s) => _buildServiceTile(s, showPin: false)),
-          ] else if (pinned.isEmpty) ...[
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.only(top: 20),
-                child: Text('Layanan/Barang tidak ditemukan', style: TextStyle(color: _DS.textHint)),
-              ),
-            )
+            const SizedBox(height: 100),
           ],
-          
-          const SizedBox(height: 20),
-        ],
+        ),
       ),
     );
   }
@@ -1612,7 +1991,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                   ),
                   trailing: Container(
                     padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       color: _DS.ground,
                       shape: BoxShape.circle,
                     ),
@@ -1657,7 +2036,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                     ),
                     trailing: Container(
                       padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         color: _DS.ground,
                         shape: BoxShape.circle,
                       ),
@@ -2083,6 +2462,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             )
           else
             const Spacer(),
+
           if (_step > 1)
             TextButton(
               onPressed: _isLoading ? null : () => setState(() => _step--),
@@ -2100,6 +2480,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 ),
               ),
             ),
+
           const SizedBox(width: 12),
           SizedBox(
             height: 52,
@@ -2151,7 +2532,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     return 'Rp ${buffer.toString()}';
   }
 
-  // 👇 FUNGSI WIDGET LIST BIASA DENGAN OPSI PIN
   Widget _buildServiceTile(Map<String, dynamic> s, {bool showPin = false}) {
     final qty = _qtyDiKeranjang(s['id']);
     return _ServiceTile(
@@ -2167,7 +2547,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           builder: (ctx) => AlertDialog(
             backgroundColor: _DS.surface,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(24),
             ),
             title: const Text(
               'Ubah Jumlah',
@@ -2198,6 +2578,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _DS.blue,
+                  foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -2210,10 +2591,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 },
                 child: const Text(
                   'Simpan',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
             ],
@@ -2267,10 +2645,14 @@ class _ServiceTile extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    if (showPin) 
+                    if (showPin)
                       const Padding(
-                        padding: EdgeInsets.only(right: 6), 
-                        child: Icon(Icons.push_pin_rounded, size: 14, color: Colors.amber)
+                        padding: EdgeInsets.only(right: 6),
+                        child: Icon(
+                          Icons.push_pin_rounded,
+                          size: 14,
+                          color: Colors.amber,
+                        ),
                       ),
                     Flexible(
                       child: Text(

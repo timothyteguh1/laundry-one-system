@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -59,6 +60,75 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
     super.dispose();
   }
 
+  // =========================================================
+  // [UPDATE UX] CUSTOM DIALOG
+  // Menggantikan Snackbar agar pesan tidak tertumpuk
+  // =========================================================
+  void _showCustomDialog({required String title, required String message, required bool isSuccess}) {
+    showDialog(
+      context: context,
+      barrierDismissible: false, 
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: _DS.surface,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(color: _DS.navy.withOpacity(0.15), blurRadius: 32, offset: const Offset(0, 12))
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isSuccess ? Colors.green.shade50 : Colors.red.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isSuccess ? Icons.check_circle_rounded : Icons.error_rounded,
+                  color: isSuccess ? Colors.green : Colors.red,
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: _DS.textPrimary),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                style: const TextStyle(color: _DS.textSecondary, fontSize: 13, height: 1.5),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isSuccess ? _DS.blue : Colors.red.shade600,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Mengerti', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                ),
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _checkRoleAndLoad() async {
     try {
       final myId = _supabase.auth.currentUser!.id;
@@ -77,19 +147,18 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
       if (mounted) {
         setState(() {
           _services = List<Map<String, dynamic>>.from(data);
-          _applyFilterAndSort(); // Terapkan sorting Pin & abjad
+          _applyFilterAndSort(); 
           _isLoading = false;
         });
       }
     } catch (e) {
-      debugPrint('Load services error: $e');
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showCustomDialog(title: 'Gagal Memuat', message: e.toString(), isSuccess: false);
+      }
     }
   }
 
-  // ============================================================
-  // LOGIKA AJAX LOKAL (FILTER PENCARIAN)
-  // ============================================================
   void _onSearchChanged(String query) {
     _applyFilterAndSort();
   }
@@ -99,17 +168,15 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
       final query = _searchCtrl.text.toLowerCase();
       List<Map<String, dynamic>> temp = _services;
       
-      // 1. Filter Pencarian Ajax
       if (query.isNotEmpty) {
         temp = temp.where((s) => (s['nama'] ?? '').toString().toLowerCase().contains(query)).toList();
       }
       
-      // 2. Sort: Pinned di atas, sisanya di bawah sesuai abjad
       temp.sort((a, b) {
         final pinA = a['is_pinned'] == true ? 1 : 0;
         final pinB = b['is_pinned'] == true ? 1 : 0;
         
-        if (pinA != pinB) return pinB.compareTo(pinA); // 1 (Pinned) duluan
+        if (pinA != pinB) return pinB.compareTo(pinA); 
         return (a['nama'] ?? '').toString().compareTo((b['nama'] ?? '').toString());
       });
       
@@ -119,17 +186,22 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
 
   Future<void> _togglePin(String serviceId, bool currentStatus) async {
     HapticFeedback.lightImpact();
+    setState(() => _isLoading = true);
     try {
       await _supabase.from('services').update({'is_pinned': !currentStatus}).eq('id', serviceId);
-      _loadServices();
+      await _loadServices();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(!currentStatus ? '📌 Jasa di-Pin ke Layar Kasir' : 'Pin dilepas'),
-          backgroundColor: !currentStatus ? Colors.amber.shade700 : Colors.grey,
-        ));
+        _showCustomDialog(
+          title: !currentStatus ? 'Berhasil Di-Pin' : 'Pin Dilepas', 
+          message: !currentStatus ? 'Jasa telah disematkan ke bagian atas Layar Kasir.' : 'Jasa tidak lagi disematkan.', 
+          isSuccess: true
+        );
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal update pin: $e'), backgroundColor: Colors.red));
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showCustomDialog(title: 'Gagal Mengubah Pin', message: e.toString(), isSuccess: false);
+      }
     }
   }
 
@@ -165,12 +237,16 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
 
     if (confirm == true) {
       HapticFeedback.heavyImpact();
+      setState(() => _isLoading = true);
       try {
         await _supabase.from('services').update({'is_active': false}).eq('id', id);
-        _loadServices();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Layanan jasa berhasil dihapus'), backgroundColor: Colors.green));
+        await _loadServices();
+        if (mounted) _showCustomDialog(title: 'Berhasil Dihapus', message: 'Layanan jasa berhasil dihapus dari sistem.', isSuccess: true);
       } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus: $e'), backgroundColor: Colors.red));
+        if (mounted) {
+          setState(() => _isLoading = false);
+          _showCustomDialog(title: 'Gagal Menghapus', message: e.toString(), isSuccess: false);
+        }
       }
     }
   }
@@ -182,8 +258,8 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
     
     String satuanSelected = isEdit ? (service['satuan'] ?? 'kg') : 'kg';
     bool isPinned = isEdit ? (service['is_pinned'] == true) : false;
-    bool isSubmitting = false;
-
+    
+    // Hilangkan loading di dalam dialog, kita pakai loading utama dengan BackdropFilter
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -243,12 +319,13 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
           ),
           actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
           actions: [
-            TextButton(onPressed: isSubmitting ? null : () => Navigator.pop(ctx), child: const Text('Batal', style: TextStyle(color: _DS.textSecondary, fontWeight: FontWeight.w600))),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal', style: TextStyle(color: _DS.textSecondary, fontWeight: FontWeight.w600))),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), elevation: 0),
-              onPressed: isSubmitting ? null : () async {
+              onPressed: () async {
                 if (namaCtrl.text.isEmpty || hargaCtrl.text.isEmpty) return;
-                setModalState(() => isSubmitting = true);
+                Navigator.pop(ctx); // Tutup dialog input
+                setState(() => _isLoading = true); // Munculkan Loading Kaca Buram
                 
                 final payload = {
                   'nama': namaCtrl.text.trim(),
@@ -265,13 +342,16 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
                   } else {
                     await _supabase.from('services').insert(payload);
                   }
-                  if (mounted) { Navigator.pop(ctx); _loadServices(); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isEdit ? '✅ Layanan diperbarui!' : '✅ Layanan ditambahkan!'), backgroundColor: Colors.green)); }
+                  await _loadServices();
+                  if (mounted) _showCustomDialog(title: 'Tersimpan', message: isEdit ? 'Layanan berhasil diperbarui.' : 'Layanan baru berhasil ditambahkan.', isSuccess: true);
                 } catch (e) {
-                  setModalState(() => isSubmitting = false);
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal: $e'), backgroundColor: Colors.red));
+                  if (mounted) {
+                    setState(() => _isLoading = false);
+                    _showCustomDialog(title: 'Gagal Menyimpan', message: e.toString(), isSuccess: false);
+                  }
                 }
               },
-              child: isSubmitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Simpan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              child: const Text('Simpan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
             )
           ],
         ),
@@ -288,91 +368,140 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _DS.ground,
+      // [UPDATE UX] KUNCI ANTI-BOLONG: Background dasar Scaffold diset ke Navy!
+      backgroundColor: _DS.navy,
       appBar: AppBar(title: const Text('Master Data Jasa', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)), backgroundColor: _DS.navy, foregroundColor: Colors.white, elevation: 0),
-      body: Column(
+      body: Stack(
         children: [
-          // KOTAK SEARCH / AJAX LOKAL
-          Container(
-            decoration: const BoxDecoration(gradient: LinearGradient(colors: [_DS.navy, _DS.blue], begin: Alignment.topLeft, end: Alignment.bottomRight)),
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
-            child: TextField(
-              controller: _searchCtrl,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Cari layanan jasa...', hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-                prefixIcon: Icon(Icons.search, color: Colors.white.withOpacity(0.5)),
-                filled: true, fillColor: Colors.white.withOpacity(0.1),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              ),
-              onChanged: _onSearchChanged,
-            ),
-          ),
+          // Latar belakang utama (Ground) untuk konten
+          Positioned.fill(child: Container(color: _DS.ground)),
           
-          // DAFTAR JASA
-          Expanded(
-            child: _isLoading 
-              ? const Center(child: CircularProgressIndicator(color: _DS.blue)) 
-              : _filteredServices.isEmpty
-                  ? Center(child: Text(_searchCtrl.text.isEmpty ? 'Belum ada data jasa' : 'Layanan tidak ditemukan', style: const TextStyle(color: _DS.textHint)))
-                  : ListView.builder(
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-                      itemCount: _filteredServices.length,
-                      itemBuilder: (ctx, i) {
-                        final s = _filteredServices[i];
-                        final isPinned = s['is_pinned'] == true;
+          Column(
+            children: [
+              Container(
+                decoration: const BoxDecoration(gradient: LinearGradient(colors: [_DS.navy, _DS.blue], begin: Alignment.topLeft, end: Alignment.bottomRight)),
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+                child: TextField(
+                  controller: _searchCtrl,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Cari layanan jasa...', hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+                    prefixIcon: Icon(Icons.search, color: Colors.white.withOpacity(0.5)),
+                    filled: true, fillColor: Colors.white.withOpacity(0.1),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
+                  onChanged: _onSearchChanged,
+                ),
+              ),
+              
+              Expanded(
+                // [UPDATE UX] RefreshIndicator membungkus ListView
+                child: RefreshIndicator(
+                  color: _DS.blue,
+                  backgroundColor: _DS.surface,
+                  onRefresh: _loadServices,
+                  child: _filteredServices.isEmpty && !_isLoading
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: [
+                            SizedBox(
+                              height: MediaQuery.of(context).size.height * 0.5,
+                              child: Center(
+                                child: Text(_searchCtrl.text.isEmpty ? 'Belum ada data jasa' : 'Layanan tidak ditemukan', style: const TextStyle(color: _DS.textHint)),
+                              ),
+                            )
+                          ],
+                        )
+                      : ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                          padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+                          itemCount: _filteredServices.length,
+                          itemBuilder: (ctx, i) {
+                            final s = _filteredServices[i];
+                            final isPinned = s['is_pinned'] == true;
 
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 14),
-                          decoration: BoxDecoration(
-                            color: _DS.surface, 
-                            borderRadius: BorderRadius.circular(16), 
-                            border: Border.all(color: isPinned ? Colors.amber.shade400 : _DS.border, width: isPinned ? 2 : 1.5), 
-                            boxShadow: _DS.cardShadow
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                              title: Row(
-                                children: [
-                                  if (isPinned) const Padding(padding: EdgeInsets.only(right: 6), child: Icon(Icons.push_pin_rounded, size: 16, color: Colors.amber)),
-                                  Expanded(child: Text(s['nama'], style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _DS.textPrimary))),
-                                ],
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 14),
+                              decoration: BoxDecoration(
+                                color: _DS.surface, 
+                                borderRadius: BorderRadius.circular(16), 
+                                border: Border.all(color: isPinned ? Colors.amber.shade400 : _DS.border, width: isPinned ? 2 : 1.5), 
+                                boxShadow: _DS.cardShadow
                               ),
-                              subtitle: Padding(
-                                padding: const EdgeInsets.only(top: 6),
-                                child: Text('${_formatRupiah((s['harga_per_satuan'] as num).toInt())} / ${s['satuan']}', style: const TextStyle(color: _DS.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    tooltip: isPinned ? 'Lepas Pin' : 'Pin ke Layar Kasir',
-                                    icon: Icon(isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined, color: isPinned ? Colors.amber.shade700 : _DS.textHint),
-                                    onPressed: () => _togglePin(s['id'], isPinned),
-                                  ),
-                                  if (_isAdmin) PopupMenuButton<String>(
-                                    icon: const Icon(Icons.more_vert_rounded, color: _DS.textHint),
-                                    onSelected: (val) {
-                                      if (val == 'edit') _showFormDialog(service: s);
-                                      else if (val == 'hapus') _hapusJasa(s['id'], s['nama']);
-                                    },
-                                    itemBuilder: (context) => [
-                                      const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_note_rounded, color: _DS.blue, size: 20), SizedBox(width: 8), Text('Edit Jasa')])),
-                                      const PopupMenuItem(value: 'hapus', child: Row(children: [Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20), SizedBox(width: 8), Text('Hapus', style: TextStyle(color: Colors.red))])),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: ListTile(
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                  title: Row(
+                                    children: [
+                                      if (isPinned) const Padding(padding: EdgeInsets.only(right: 6), child: Icon(Icons.push_pin_rounded, size: 16, color: Colors.amber)),
+                                      Expanded(child: Text(s['nama'], style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _DS.textPrimary))),
                                     ],
-                                  )
-                                ],
+                                  ),
+                                  subtitle: Padding(
+                                    padding: const EdgeInsets.only(top: 6),
+                                    child: Text('${_formatRupiah((s['harga_per_satuan'] as num).toInt())} / ${s['satuan']}', style: const TextStyle(color: _DS.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
+                                  ),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        tooltip: isPinned ? 'Lepas Pin' : 'Pin ke Layar Kasir',
+                                        icon: Icon(isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined, color: isPinned ? Colors.amber.shade700 : _DS.textHint),
+                                        onPressed: () => _togglePin(s['id'], isPinned),
+                                      ),
+                                      if (_isAdmin) PopupMenuButton<String>(
+                                        icon: const Icon(Icons.more_vert_rounded, color: _DS.textHint),
+                                        onSelected: (val) {
+                                          if (val == 'edit') _showFormDialog(service: s);
+                                          else if (val == 'hapus') _hapusJasa(s['id'], s['nama']);
+                                        },
+                                        itemBuilder: (context) => [
+                                          const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_note_rounded, color: _DS.blue, size: 20), SizedBox(width: 8), Text('Edit Jasa')])),
+                                          const PopupMenuItem(value: 'hapus', child: Row(children: [Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20), SizedBox(width: 8), Text('Hapus', style: TextStyle(color: Colors.red))])),
+                                        ],
+                                      )
+                                    ],
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+                            );
+                          },
+                        ),
+                ),
+              ),
+            ],
           ),
+
+          // [UPDATE UX] SCENE LOADING MODERN (Glassmorphism Blur)
+          if (_isLoading)
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                child: Container(
+                  color: _DS.navy.withOpacity(0.2),
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
+                      decoration: BoxDecoration(
+                        color: _DS.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [BoxShadow(color: _DS.navy.withOpacity(0.15), blurRadius: 30, offset: const Offset(0, 10))],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(color: _DS.blue, strokeWidth: 3.5),
+                          const SizedBox(height: 20),
+                          const Text('Memuat Data...', style: TextStyle(fontWeight: FontWeight.w800, color: _DS.textPrimary, fontSize: 15)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
       floatingActionButton: _isAdmin ? Container(
