@@ -51,9 +51,9 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:748610989842:android:d06137c1b9d25012000dcb",
+        "mobilesdk_app_id": "1:748610989842:android:b58d3839c9ba8546000dcb",
         "android_client_info": {
-          "package_name": "com.example.laundry_one"
+          "package_name": "com.example.laundry_one.cashier"
         }
       },
       "oauth_client": [
@@ -87,9 +87,45 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:748610989842:android:b58d3839c9ba8546000dcb",
+        "mobilesdk_app_id": "1:748610989842:android:7517b6c708e5fe7e000dcb",
         "android_client_info": {
-          "package_name": "com.example.laundry_one.cashier"
+          "package_name": "com.laundryone.cashier"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "748610989842-i1a5j3eekop9hgfb6dujlqao71luv9fk.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyADggdtmFhVwgqKRjula7gvzg8H0jH6zQ0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "748610989842-i1a5j3eekop9hgfb6dujlqao71luv9fk.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "748610989842-5m2fk3n71s59cgmi24rngas4lb4324dn.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.kasirPintarToti"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:748610989842:android:80d47f246c9b0760000dcb",
+        "android_client_info": {
+          "package_name": "com.laundryone.customer"
         }
       },
       "oauth_client": [

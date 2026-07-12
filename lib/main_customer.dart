@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'firebase_options.dart';
+import 'firebase_options_customer.dart';
 import 'package:laundry_one/features/customer/customer_theme.dart';
 import 'package:laundry_one/features/auth/screens/login_screen.dart';
 import 'package:laundry_one/features/customer/screens/home_customer_screen.dart';

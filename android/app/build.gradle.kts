@@ -1,10 +1,16 @@
+import java.util.Properties
+import java.io.FileInputStream
+
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
 plugins {
     id("com.android.application")
-    // START: FlutterFire Configuration
     id("com.google.gms.google-services")
-    // END: FlutterFire Configuration
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -14,9 +20,7 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        // Perbaikan: Tambahkan 'is' di depan dan gunakan '='
         isCoreLibraryDesugaringEnabled = true
-        
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
@@ -26,29 +30,55 @@ android {
     }
 
     defaultConfig {
+        // Ini akan menjadi base default
         applicationId = "com.example.laundry_one"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        
-        // Perbaikan: Gunakan '='
         multiDexEnabled = true
+    }
+
+    // ==========================================================
+    // [TAMBAHAN] KONFIGURASI FLAVORS UNTUK 2 APLIKASI
+    // ==========================================================
+    flavorDimensions += "app"
+
+    productFlavors {
+    create("customer") {
+        dimension = "app"
+        applicationId = "com.laundryone.customer"
+        resValue("string", "app_name", "Laundry One")
+    }
+    create("cashier") {
+        dimension = "app"
+        applicationId = "com.laundryone.cashier"
+        resValue("string", "app_name", "Laundry Kasir")
+    }
+}
+
+    // ==========================================================
+
+    signingConfigs {
+        create("release") {
+            keyAlias = keystoreProperties["keyAlias"] as String
+            keyPassword = keystoreProperties["keyPassword"] as String
+            storeFile = file(keystoreProperties["storeFile"] as String)
+            storePassword = keystoreProperties["storePassword"] as String
+        }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
-}   
+}
 
 flutter {
     source = "../.."
 }
 
-// Tambahkan blok dependencies ini di paling bawah file
 dependencies {
-    // Ganti 2.0.3 menjadi 2.1.4
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
