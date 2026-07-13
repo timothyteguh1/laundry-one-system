@@ -2,8 +2,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'firebase_options.dart';
+
+// Kunci opsi Firebase khusus pelanggan
+import 'firebase_options_customer.dart' as customerFirebase;
+
 import 'package:laundry_one/features/customer/customer_theme.dart';
 import 'package:laundry_one/features/auth/screens/login_screen.dart';
 import 'package:laundry_one/features/customer/screens/home_customer_screen.dart';
@@ -11,24 +15,30 @@ import 'package:laundry_one/features/customer/screens/register_customer_screen.d
 import 'package:laundry_one/features/auth/services/auth_service.dart';
 import 'package:laundry_one/features/auth/services/notification_service.dart';
 
+@pragma('vm:entry-point')
+Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
+  debugPrint('📩 Notif background: ${message.messageId}');
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Inisialisasi Firebase (Hanya di Android/iOS/Web)
-  if (kIsWeb || Platform.isAndroid || Platform.isIOS) {
-    try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-    } catch (e) {
-      // Jika sistem native Android sudah menyalakannya duluan, abaikan error duplikat ini
-      if (!e.toString().contains('duplicate-app')) {
-        rethrow; // Lemparkan error jika itu masalah lain, bukan masalah duplikat
-      }
+  try {
+    // Jalankan Firebase untuk semua platform (Web & Android)
+    await Firebase.initializeApp(
+      options: customerFirebase.DefaultFirebaseOptions.currentPlatform,
+    );
+    
+    // Cegah crash di Chrome: Background handler HANYA dinyalakan jika BUKAN Web
+    if (!kIsWeb) {
+      FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
+    }
+  } catch (e) {
+    if (!e.toString().contains('duplicate-app')) {
+      debugPrint("Error Firebase: $e");
     }
   }
 
-  // 2. Inisialisasi Supabase
   await Supabase.initialize(
     url: 'https://wmmbzdcmewqtcuqyhatk.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtbWJ6ZGNtZXdxdGN1cXloYXRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwMTA5MDYsImV4cCI6MjA4NzU4NjkwNn0.xso6FyX2hnZWqhAosUluF_gow6NaSlgsWISgE0f7SqM',
@@ -70,7 +80,6 @@ class _SplashRouterState extends State<_SplashRouter> {
     _setupAuthListener();
   }
 
-  // [TAMBAHAN] Pendeteksi Sesi Otomatis
   void _setupAuthListener() {
     Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       final AuthChangeEvent event = data.event;
@@ -84,14 +93,13 @@ class _SplashRouterState extends State<_SplashRouter> {
     await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
     final auth = AuthService();
-    
-    // Supabase otomatis mengingat sesi user di HP ini
+
     if (auth.isLoggedIn()) {
       final role = await auth.getMyRole();
       if (!mounted) return;
       if (role == 'customer') {
         NotificationService.setupPushNotifications();
-        
+
         Navigator.pushReplacement(context,
             MaterialPageRoute(builder: (_) => const HomeCustomerScreen()));
         return;
@@ -115,9 +123,9 @@ class _SplashRouterState extends State<_SplashRouter> {
             keyboardType: TextInputType.phone,
             primaryColor: CustomerTheme.primary,
             secondaryColor: CustomerTheme.primaryDark,
-            backgroundColor: CustomerTheme.surface, 
+            backgroundColor: CustomerTheme.surface,
             icon: Icons.local_laundry_service_rounded,
-            tagline: 'Lacak cucian & kumpulkan poinnya', 
+            tagline: 'Lacak cucian & kumpulkan poinnya',
             homeScreen: const HomeCustomerScreen(),
             showRegister: true,
             registerScreen: const RegisterCustomerScreen(),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:laundry_one/features/customer/customer_theme.dart';
 import 'package:laundry_one/features/customer/widgets/customer_shared_widgets.dart';
@@ -9,17 +10,16 @@ class AktivitasTab extends StatefulWidget {
   final String? customerId;
   final Future<void> Function() onRefresh;
   
-  // 👇 TAMBAHAN VARIABEL UNTUK MENANGKAP PERINTAH DARI BERANDA
   final int initialFilter; 
   final bool isStandalone; 
 
   const AktivitasTab({
     super.key,
-    this.historyOrders = const [], // Dibuat default kosong
-    this.customerId,               // Dibuat opsional
+    this.historyOrders = const [], 
+    this.customerId,               
     required this.onRefresh,
     this.initialFilter = 0,
-    this.isStandalone = false,     // Default false (saat dipakai di bottom nav)
+    this.isStandalone = false,     
   });
 
   @override
@@ -35,14 +35,13 @@ class _AktivitasTabState extends State<AktivitasTab> {
   @override
   void initState() {
     super.initState();
-    _selectedFilter = widget.initialFilter; // Set filter dari variabel lemparan
+    _selectedFilter = widget.initialFilter; 
     if (_selectedFilter == 1) _loadPointsHistory();
   }
 
   Future<void> _loadPointsHistory() async {
     setState(() => _isLoadingPoin = true);
     try {
-      // Jika dipanggil dari beranda (customerId kosong), kita cari sendiri ID-nya
       String? targetCustomerId = widget.customerId;
       if (targetCustomerId == null) {
         final userId = _supabase.auth.currentUser?.id;
@@ -73,7 +72,6 @@ class _AktivitasTabState extends State<AktivitasTab> {
 
   @override
   Widget build(BuildContext context) {
-    // KONTEN UTAMA AKTIVITAS
     Widget content = SafeArea(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -99,15 +97,20 @@ class _AktivitasTabState extends State<AktivitasTab> {
           const SizedBox(height: 16),
           
           Expanded(
-            child: _selectedFilter == 0 
-                ? _buildListCucian() 
-                : _buildListPoin(),
+            // [UPDATE UX] Transisi layar memudar mulus saat ganti tab filter
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              switchInCurve: Curves.easeOut,
+              switchOutCurve: Curves.easeIn,
+              child: _selectedFilter == 0 
+                  ? KeyedSubtree(key: const ValueKey(0), child: _buildListCucian()) 
+                  : KeyedSubtree(key: const ValueKey(1), child: _buildListPoin()),
+            ),
           )
         ],
       ),
     );
 
-    // 👇 JIKA DIPANGGIL DARI BERANDA, BUNGKUS DENGAN SCAFFOLD & TOMBOL BACK
     if (widget.isStandalone) {
       return Scaffold(
         backgroundColor: CustomerTheme.ground,
@@ -132,6 +135,7 @@ class _AktivitasTabState extends State<AktivitasTab> {
     return Expanded(
       child: GestureDetector(
         onTap: () {
+          HapticFeedback.selectionClick();
           setState(() => _selectedFilter = index);
           if (index == 1 && _pointsHistory.isEmpty) _loadPointsHistory();
         },
@@ -188,7 +192,10 @@ class _AktivitasTabState extends State<AktivitasTab> {
               order: order,
               isCustomerView: true,
               onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => CustomerInvoiceScreen(order: order)));
+                Navigator.push(context, PageRouteBuilder(
+                  pageBuilder: (ctx, anim, secAnim) => CustomerInvoiceScreen(order: order),
+                  transitionsBuilder: (ctx, anim, secAnim, child) => FadeTransition(opacity: anim, child: child),
+                ));
               },
             ),
           );
@@ -199,7 +206,7 @@ class _AktivitasTabState extends State<AktivitasTab> {
 
   Widget _buildListPoin() {
     if (_isLoadingPoin) {
-      return const Center(child: CircularProgressIndicator(color: CustomerTheme.primary));
+      return const Center(child: ModernSpinner()); // [UPDATE UX]
     }
 
     if (_pointsHistory.isEmpty) {
@@ -266,7 +273,6 @@ class _AktivitasTabState extends State<AktivitasTab> {
     return 'Transaksi Poin';
   }
 
-  // 👇 PERBAIKAN WAKTU WIB SEKALIGUS
   String _formatDate(String? iso) {
     if (iso == null) return '-';
     try {

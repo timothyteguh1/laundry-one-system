@@ -41,48 +41,53 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCAn_A34i_NPSvFDrzavKBlpDS7-1kHCQE',
-    appId: '1:447801848332:web:0326b568a0810642bdb429',
-    messagingSenderId: '447801848332',
-    projectId: 'laundry-one-45675',
-    authDomain: 'laundry-one-45675.firebaseapp.com',
-    storageBucket: 'laundry-one-45675.firebasestorage.app',
-    measurementId: 'G-FSF0B00ZV7',
+    apiKey: 'AIzaSyACTegVatNiZEwFNw36p1gC90atDJ3gA50',
+    appId: '1:748610989842:web:c87d164d5957ffd6000dcb',
+    messagingSenderId: '748610989842',
+    projectId: 'kasir-toti-2026-b6ce0',
+    authDomain: 'kasir-toti-2026-b6ce0.firebaseapp.com',
+    storageBucket: 'kasir-toti-2026-b6ce0.firebasestorage.app',
+    measurementId: 'G-VCVK04668J',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyA6GrUtGY_LaszNk6ORD7SXu_1J1o65pFE',
-    appId: '1:447801848332:android:f4abe34626b439b0bdb429',
-    messagingSenderId: '447801848332',
-    projectId: 'laundry-one-45675',
-    storageBucket: 'laundry-one-45675.firebasestorage.app',
+    apiKey: 'AIzaSyADggdtmFhVwgqKRjula7gvzg8H0jH6zQ0',
+    appId: '1:748610989842:android:d06137c1b9d25012000dcb',
+    messagingSenderId: '748610989842',
+    projectId: 'kasir-toti-2026-b6ce0',
+    storageBucket: 'kasir-toti-2026-b6ce0.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyACyYOVXQt7ulprOZXhBuwyg5bzWf3-RE4',
-    appId: '1:447801848332:ios:6e9af14de5f4b676bdb429',
-    messagingSenderId: '447801848332',
-    projectId: 'laundry-one-45675',
-    storageBucket: 'laundry-one-45675.firebasestorage.app',
+    apiKey: 'AIzaSyA8SS7iM_z_NNFEm-i8XQZw4lI3fcA1LKw',
+    appId: '1:748610989842:ios:154308654e676f2d000dcb',
+    messagingSenderId: '748610989842',
+    projectId: 'kasir-toti-2026-b6ce0',
+    storageBucket: 'kasir-toti-2026-b6ce0.firebasestorage.app',
+    androidClientId: '748610989842-qipja43h0lhajspsg780bqb0dlil66mt.apps.googleusercontent.com',
+    iosClientId: '748610989842-i8rg494mhc343b0afaejtjdci8uek74m.apps.googleusercontent.com',
     iosBundleId: 'com.example.laundryOne',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyACyYOVXQt7ulprOZXhBuwyg5bzWf3-RE4',
-    appId: '1:447801848332:ios:6e9af14de5f4b676bdb429',
-    messagingSenderId: '447801848332',
-    projectId: 'laundry-one-45675',
-    storageBucket: 'laundry-one-45675.firebasestorage.app',
+    apiKey: 'AIzaSyA8SS7iM_z_NNFEm-i8XQZw4lI3fcA1LKw',
+    appId: '1:748610989842:ios:154308654e676f2d000dcb',
+    messagingSenderId: '748610989842',
+    projectId: 'kasir-toti-2026-b6ce0',
+    storageBucket: 'kasir-toti-2026-b6ce0.firebasestorage.app',
+    androidClientId: '748610989842-qipja43h0lhajspsg780bqb0dlil66mt.apps.googleusercontent.com',
+    iosClientId: '748610989842-i8rg494mhc343b0afaejtjdci8uek74m.apps.googleusercontent.com',
     iosBundleId: 'com.example.laundryOne',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyCAn_A34i_NPSvFDrzavKBlpDS7-1kHCQE',
-    appId: '1:447801848332:web:df08b47908269702bdb429',
-    messagingSenderId: '447801848332',
-    projectId: 'laundry-one-45675',
-    authDomain: 'laundry-one-45675.firebaseapp.com',
-    storageBucket: 'laundry-one-45675.firebasestorage.app',
-    measurementId: 'G-FW8641D7V5',
+    apiKey: 'AIzaSyBOZm_SPl-0-AHRedw8nN4hvmKCLM0m-u8',
+    appId: '1:748610989842:web:124f1cdd88036dd7000dcb',
+    messagingSenderId: '748610989842',
+    projectId: 'kasir-toti-2026-b6ce0',
+    authDomain: 'kasir-toti-2026-b6ce0.firebaseapp.com',
+    storageBucket: 'kasir-toti-2026-b6ce0.firebasestorage.app',
+    measurementId: 'G-HEXM8RRLFC',
   );
+
 }

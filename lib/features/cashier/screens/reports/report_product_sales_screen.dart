@@ -30,7 +30,7 @@ class _ReportProductSalesScreenState extends State<ReportProductSalesScreen> {
   final _supabase = Supabase.instance.client;
   bool _isLoading = true;
 
-  DateTime _startDate = DateTime.now().subtract(const Duration(days: 49)); 
+  DateTime _startDate = DateTime.now().subtract(const Duration(days: 0)); 
   DateTime _endDate = DateTime.now();
 
   double _totalPenjualan = 0;

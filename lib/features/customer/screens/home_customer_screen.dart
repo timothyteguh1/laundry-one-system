@@ -7,6 +7,7 @@ import 'package:laundry_one/features/auth/services/auth_service.dart';
 import 'package:laundry_one/features/auth/screens/login_screen.dart';
 
 import 'package:laundry_one/features/customer/customer_theme.dart';
+import 'package:laundry_one/features/customer/widgets/customer_shared_widgets.dart'; // Import Custom Widgets
 import 'package:laundry_one/features/customer/screens/tabs/beranda_tab.dart';
 import 'package:laundry_one/features/customer/screens/tabs/aktivitas_tab.dart';
 import 'package:laundry_one/features/customer/screens/tabs/katalog_tab.dart';
@@ -40,7 +41,6 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
     super.initState();
     NotificationService.setupPushNotifications();
     _loadAllData();
-    
   }
 
   @override
@@ -73,7 +73,6 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
       List<Map<String, dynamic>> history = [];
 
       if (customerId != null) {
-        // PERHATIKAN PENAMBAHAN 'profiles!orders_cashier_id_fkey(nama_lengkap)'
         final ordersData = await _supabase
             .from('orders')
             .select('*, customers(profiles(nama_lengkap, nomor_hp)), profiles!orders_cashier_id_fkey(nama_lengkap), order_items(jumlah, harga_satuan, services(nama))')
@@ -126,7 +125,7 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
     return Scaffold(
       backgroundColor: CustomerTheme.ground,
       body: _isLoading 
-        ? const Center(child: CircularProgressIndicator(color: CustomerTheme.primary))
+        ? const Center(child: ModernSpinner(size: 48)) // [UPDATE UX]
         : _errorMessage != null
             ? _buildErrorScreen()
             : IndexedStack(
@@ -138,7 +137,6 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
                     customerId: _customerData?['id'], 
                     onRefresh: () => _fetchInitialData(_supabase.auth.currentUser!.id)
                   ),
-                  // UBAH BARIS INI:
                   KatalogTab(
                     customerId: _customerData?['id'],
                     currentPoin: poin,
@@ -156,15 +154,17 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(32.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.wifi_off_rounded, size: 48, color: Colors.red)),
-              const SizedBox(height: 24), const Text('Koneksi Terputus', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: CustomerTheme.textPrimary)), const SizedBox(height: 8),
-              Text(_errorMessage ?? 'Gagal terhubung ke server.', textAlign: TextAlign.center, style: const TextStyle(color: CustomerTheme.textSecondary, fontSize: 14)),
-              const SizedBox(height: 32),
-              SizedBox(width: double.infinity, height: 52, child: ElevatedButton.icon(onPressed: _loadAllData, icon: const Icon(Icons.refresh_rounded), label: const Text('Coba Lagi', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)), style: ElevatedButton.styleFrom(backgroundColor: CustomerTheme.primary, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0))),
-            ],
+          child: FadeInAnimation( // [UPDATE UX]
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(padding: const EdgeInsets.all(24), decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.wifi_off_rounded, size: 48, color: Colors.red)),
+                const SizedBox(height: 24), const Text('Koneksi Terputus', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: CustomerTheme.textPrimary)), const SizedBox(height: 8),
+                Text(_errorMessage ?? 'Gagal terhubung ke server.', textAlign: TextAlign.center, style: const TextStyle(color: CustomerTheme.textSecondary, fontSize: 14)),
+                const SizedBox(height: 32),
+                SizedBox(width: double.infinity, height: 52, child: ElevatedButton.icon(onPressed: _loadAllData, icon: const Icon(Icons.refresh_rounded), label: const Text('Coba Lagi', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)), style: ElevatedButton.styleFrom(backgroundColor: CustomerTheme.primary, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0))),
+              ],
+            ),
           ),
         ),
       ),

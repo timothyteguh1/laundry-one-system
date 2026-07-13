@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:laundry_one/features/customer/customer_theme.dart';
+import 'package:laundry_one/features/customer/widgets/customer_shared_widgets.dart'; // [UPDATE UX] Import ModernSpinner
 
 class ProfilTab extends StatefulWidget {
   final String nama;
@@ -27,9 +28,6 @@ class _ProfilTabState extends State<ProfilTab> {
   final _supabase = Supabase.instance.client;
   bool _isUploading = false; 
 
-  // ==========================================\
-  // FUNGSI CHAT ADMIN (WHATSAPP)
-  // ==========================================\
   Future<void> _hubungiAdmin() async {
     final Uri url = Uri.parse('https://wa.me/6281248004818?text=Halo%20Admin%20Laundry%20One,%20saya%20butuh%20bantuan%20terkait%20cucian%20saya.');
     try {
@@ -41,9 +39,6 @@ class _ProfilTabState extends State<ProfilTab> {
     }
   }
 
-  // ==========================================\
-  // FUNGSI GANTI PASSWORD (MANDIRI)
-  // ==========================================\
   void _showGantiPasswordDialog() {
     final oldPassCtrl = TextEditingController();
     final newPassCtrl = TextEditingController();
@@ -129,11 +124,7 @@ class _ProfilTabState extends State<ProfilTab> {
                     setModalState(() => isSubmitting = true);
                     try {
                       final email = _supabase.auth.currentUser!.email!;
-                      
-                      // 1. Verifikasi Password Lama (Auth Sign In)
                       await _supabase.auth.signInWithPassword(email: email, password: oldPassCtrl.text);
-
-                      // 2. Update Password Baru
                       await _supabase.auth.updateUser(UserAttributes(password: newPassCtrl.text));
 
                       if (mounted) {
@@ -145,7 +136,7 @@ class _ProfilTabState extends State<ProfilTab> {
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal: Password lama salah atau jaringan error.'), backgroundColor: Colors.red));
                     }
                   },
-                  child: isSubmitting ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Simpan Password Baru', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                  child: isSubmitting ? const ModernSpinner(size: 24, color: Colors.white) : const Text('Simpan Password Baru', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
                 ),
               ),
               const SizedBox(height: 20),
@@ -156,9 +147,6 @@ class _ProfilTabState extends State<ProfilTab> {
     );
   }
 
-  // ==========================================\
-  // GANTI FOTO PROFIL
-  // ==========================================\
   Future<void> _pickAndUploadImage() async {
     final picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 800);
@@ -187,9 +175,6 @@ class _ProfilTabState extends State<ProfilTab> {
     }
   }
 
-  // ==========================================
-  // MODAL KEBIJAKAN PRIVASI STANDAR
-  // ==========================================
   void _showKebijakanPrivasi() {
     showDialog(
       context: context,
@@ -223,9 +208,6 @@ class _ProfilTabState extends State<ProfilTab> {
     );
   }
 
-  // ==========================================
-  // BOTTOM SHEET EDIT PROFIL
-  // ==========================================
   void _showEditProfilDialog() {
     final namaController = TextEditingController(text: widget.nama);
     bool isLoading = false;
@@ -277,7 +259,7 @@ class _ProfilTabState extends State<ProfilTab> {
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menyimpan: $e')));
                     }
                   },
-                  child: isLoading ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Simpan Perubahan', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+                  child: isLoading ? const ModernSpinner(size: 24, color: Colors.white) : const Text('Simpan Perubahan', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
                 ),
               )
             ],
@@ -303,7 +285,6 @@ class _ProfilTabState extends State<ProfilTab> {
               decoration: CustomerTheme.cardDecoration,
               child: Row(
                 children: [
-                  // AVATAR AREA
                   GestureDetector(
                     onTap: _isUploading ? null : _pickAndUploadImage,
                     child: Stack(
@@ -311,7 +292,6 @@ class _ProfilTabState extends State<ProfilTab> {
                         Container(
                           width: 64, height: 64, 
                           decoration: BoxDecoration(
-                            // 👇 FIX: Error Theme warna diubah ke primaryLight
                             color: CustomerTheme.primaryLight, 
                             shape: BoxShape.circle,
                             image: widget.avatarUrl != null 
@@ -319,7 +299,7 @@ class _ProfilTabState extends State<ProfilTab> {
                                 : null,
                           ), 
                           child: _isUploading 
-                              ? const CircularProgressIndicator(color: CustomerTheme.primary)
+                              ? const Center(child: ModernSpinner(size: 24)) // [UPDATE UX]
                               : widget.avatarUrl == null 
                                   ? Center(child: Text(widget.nama.isNotEmpty ? widget.nama[0].toUpperCase() : '?', style: const TextStyle(color: CustomerTheme.primary, fontSize: 24, fontWeight: FontWeight.w800)))
                                   : null,
@@ -338,7 +318,6 @@ class _ProfilTabState extends State<ProfilTab> {
                   ),
                   const SizedBox(width: 16),
                   
-                  // NAMA & HP
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,7 +329,6 @@ class _ProfilTabState extends State<ProfilTab> {
                     ),
                   ),
                   
-                  // TOMBOL EDIT PENSIL
                   IconButton(icon: const Icon(Icons.edit_rounded, color: CustomerTheme.textHint), onPressed: _showEditProfilDialog)
                 ],
               ),
