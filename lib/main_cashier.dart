@@ -1,17 +1,48 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+// Kunci opsi Firebase khusus kasir
+import 'firebase_options_cashier.dart' as cashierFirebase;
+
 import 'package:laundry_one/features/auth/screens/login_screen.dart';
 import 'package:laundry_one/features/auth/screens/register_screen.dart';
 import 'package:laundry_one/features/cashier/screens/home_cashier_screen.dart';
 import 'package:laundry_one/features/auth/services/auth_service.dart';
+import 'package:laundry_one/features/auth/services/notification_service.dart';
+
+@pragma('vm:entry-point')
+Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
+  debugPrint('📩 Notif background: ${message.messageId}');
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    // Jalankan Firebase untuk semua platform (Web & Android)
+    await Firebase.initializeApp(
+      options: cashierFirebase.DefaultFirebaseOptions.currentPlatform,
+    );
+    
+    // Cegah crash di Chrome: Background handler HANYA dinyalakan jika BUKAN Web
+    if (!kIsWeb) {
+      FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
+    }
+  } catch (e) {
+    if (!e.toString().contains('duplicate-app')) {
+      debugPrint("Error Firebase: $e");
+    }
+  }
+
   await Supabase.initialize(
     url: 'https://wmmbzdcmewqtcuqyhatk.supabase.co',
-    anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtbWJ6ZGNtZXdxdGN1cXloYXRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwMTA5MDYsImV4cCI6MjA4NzU4NjkwNn0.xso6FyX2hnZWqhAosUluF_gow6NaSlgsWISgE0f7SqM',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtbWJ6ZGNtZXdxdGN1cXloYXRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwMTA5MDYsImV4cCI6MjA4NzU4NjkwNn0.xso6FyX2hnZWqhAosUluF_gow6NaSlgsWISgE0f7SqM',
   );
+  
   runApp(const CashierApp());
 }
 
@@ -28,7 +59,6 @@ class CashierApp extends StatelessWidget {
             ColorScheme.fromSeed(seedColor: const Color(0xFF1565C0)),
         useMaterial3: true,
       ),
-      // Set Global Key untuk Navigasi Global
       navigatorKey: GlobalKey<NavigatorState>(),
       home: const _SplashRouter(),
     );
@@ -50,12 +80,10 @@ class _SplashRouterState extends State<_SplashRouter> {
     _setupAuthListener();
   }
 
-  // [TAMBAHAN] Pendeteksi Sesi Otomatis
   void _setupAuthListener() {
     Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       final AuthChangeEvent event = data.event;
       if (event == AuthChangeEvent.signedOut) {
-        // Jika token mati/logout, otomatis lempar ke Login
         if (mounted) _keLogin();
       }
     });
@@ -66,16 +94,15 @@ class _SplashRouterState extends State<_SplashRouter> {
     if (!mounted) return;
     final auth = AuthService();
     
-    // Supabase otomatis menyimpan sesi di local storage, kita tinggal cek
     if (auth.isLoggedIn()) {
       final role = await auth.getMyRole();
       if (!mounted) return;
       if (role == 'cashier' || role == 'super_admin') {
+        NotificationService.setupPushNotifications();
         Navigator.pushReplacement(context,
             MaterialPageRoute(builder: (_) => const HomeCashierScreen()));
         return;
       }
-      // Jika role tidak sesuai, paksa logout
       await auth.logout();
     }
     if (!mounted) return;
