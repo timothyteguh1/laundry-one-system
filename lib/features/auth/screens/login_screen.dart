@@ -15,10 +15,10 @@ class LoginConfig {
   final String? hint;
   final TextInputType keyboardType;
   final Color primaryColor;
-  final Color? secondaryColor;  
+  final Color? secondaryColor;
   final Color backgroundColor;
   final IconData icon;
-  final String? tagline;        
+  final String? tagline;
   final Widget homeScreen;
   final bool showRegister;
   final Widget? registerScreen;
@@ -30,10 +30,10 @@ class LoginConfig {
     this.hint,
     this.keyboardType = TextInputType.text,
     required this.primaryColor,
-    this.secondaryColor,         
+    this.secondaryColor,
     required this.backgroundColor,
     required this.icon,
-    this.tagline,                
+    this.tagline,
     required this.homeScreen,
     required this.showRegister,
     this.registerScreen,
@@ -87,13 +87,13 @@ class _LoginScreenState extends State<LoginScreen>
       parent: _entranceController,
       curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
     );
-    _formSlideAnim = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _entranceController,
-      curve: const Interval(0.3, 1.0, curve: Curves.easeOutCubic),
-    ));
+    _formSlideAnim =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _entranceController,
+            curve: const Interval(0.3, 1.0, curve: Curves.easeOutCubic),
+          ),
+        );
     _formFadeAnim = CurvedAnimation(
       parent: _entranceController,
       curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
@@ -180,7 +180,9 @@ class _LoginScreenState extends State<LoginScreen>
                 height: 48,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isSuccess ? widget.config.primaryColor : Colors.red.shade600,
+                    backgroundColor: isSuccess
+                        ? widget.config.primaryColor
+                        : Colors.red.shade600,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
@@ -247,12 +249,22 @@ class _LoginScreenState extends State<LoginScreen>
       if (mounted) {
         HapticFeedback.vibrate();
         _shakeController.forward(from: 0);
-        // [UPDATE UX] Panggil Custom Dialog menggantikan _showError
-        _showCustomDialog(
-          title: 'Gagal Masuk',
-          message: e.toString().replaceAll('Exception: ', ''),
-          isSuccess: false,
-        );
+
+        final errorMsg = e.toString();
+        String title = 'Gagal Masuk';
+        String message = errorMsg.replaceAll('Exception: ', '');
+
+        // [TAMBAHAN] Deteksi masalah koneksi internet
+        if (errorMsg.contains('SocketException') ||
+            errorMsg.contains('Failed host lookup') ||
+            errorMsg.contains('Network is unreachable') ||
+            errorMsg.contains('Connection failed') ||
+            errorMsg.contains('ClientException')) {
+          title = 'Tidak Ada Koneksi';
+          message = 'Periksa koneksi internet atau WiFi kamu, lalu coba lagi.';
+        }
+
+        _showCustomDialog(title: title, message: message, isSuccess: false);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -267,13 +279,10 @@ class _LoginScreenState extends State<LoginScreen>
       PageRouteBuilder(
         pageBuilder: (_, animation, __) => widget.config.registerScreen!,
         transitionsBuilder: (_, animation, __, child) => SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(1, 0),
-            end: Offset.zero,
-          ).animate(CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-          )),
+          position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+              .animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              ),
           child: child,
         ),
       ),
@@ -334,15 +343,14 @@ class _LoginScreenState extends State<LoginScreen>
                             ],
                           ),
                           child: SingleChildScrollView(
-                            padding:
-                                const EdgeInsets.fromLTRB(28, 32, 28, 24),
+                            padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
                             child: AnimatedBuilder(
                               animation: _shakeAnim,
                               builder: (context, child) {
                                 final shake =
                                     math.sin(_shakeAnim.value * math.pi * 6) *
-                                        6 *
-                                        (1 - _shakeAnim.value);
+                                    6 *
+                                    (1 - _shakeAnim.value);
                                 return Transform.translate(
                                   offset: Offset(shake, 0),
                                   child: child,
@@ -380,23 +388,22 @@ class _LoginScreenState extends State<LoginScreen>
                                       controller: _identifierController,
                                       label: widget.config.labelIdentifier,
                                       hint: widget.config.hint ?? '',
-                                      icon: widget.config.roleDatabase ==
+                                      icon:
+                                          widget.config.roleDatabase ==
                                               'super_admin'
                                           ? Icons.email_outlined
                                           : Icons.phone_android_outlined,
-                                      keyboardType:
-                                          widget.config.keyboardType,
+                                      keyboardType: widget.config.keyboardType,
                                       inputFormatters:
                                           widget.config.keyboardType ==
-                                                  TextInputType.phone
-                                              ? [
-                                                  FilteringTextInputFormatter
-                                                      .digitsOnly
-                                                ]
-                                              : null,
+                                              TextInputType.phone
+                                          ? [
+                                              FilteringTextInputFormatter
+                                                  .digitsOnly,
+                                            ]
+                                          : null,
                                       validator: (val) {
-                                        if (val == null ||
-                                            val.trim().isEmpty) {
+                                        if (val == null || val.trim().isEmpty) {
                                           return 'Wajib diisi';
                                         }
                                         if (widget.config.roleDatabase ==
@@ -430,9 +437,10 @@ class _LoginScreenState extends State<LoginScreen>
                                           color: Colors.grey.shade400,
                                           size: 20,
                                         ),
-                                        onPressed: () => setState(() =>
-                                            _obscurePassword =
-                                                !_obscurePassword),
+                                        onPressed: () => setState(
+                                          () => _obscurePassword =
+                                              !_obscurePassword,
+                                        ),
                                       ),
                                       validator: (val) {
                                         if (val == null || val.isEmpty) {
@@ -453,22 +461,27 @@ class _LoginScreenState extends State<LoginScreen>
                                           backgroundColor:
                                               widget.config.primaryColor,
                                           disabledBackgroundColor: widget
-                                              .config.primaryColor
+                                              .config
+                                              .primaryColor
                                               .withOpacity(0.5),
                                           elevation: _isLoading ? 0 : 4,
                                           shadowColor: widget
-                                              .config.primaryColor
+                                              .config
+                                              .primaryColor
                                               .withOpacity(0.35),
                                           shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(16),
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
                                           ),
                                         ),
-                                        onPressed:
-                                            _isLoading ? null : _prosesLogin,
+                                        onPressed: _isLoading
+                                            ? null
+                                            : _prosesLogin,
                                         child: AnimatedSwitcher(
                                           duration: const Duration(
-                                              milliseconds: 200),
+                                            milliseconds: 200,
+                                          ),
                                           child: _isLoading
                                               ? const SizedBox(
                                                   key: ValueKey('loading'),
@@ -476,17 +489,16 @@ class _LoginScreenState extends State<LoginScreen>
                                                   width: 22,
                                                   child:
                                                       CircularProgressIndicator(
-                                                    color: Colors.white,
-                                                    strokeWidth: 2.5,
-                                                  ),
+                                                        color: Colors.white,
+                                                        strokeWidth: 2.5,
+                                                      ),
                                                 )
                                               : const Text(
                                                   key: ValueKey('text'),
                                                   'Masuk',
                                                   style: TextStyle(
                                                     color: Colors.white,
-                                                    fontWeight:
-                                                        FontWeight.w700,
+                                                    fontWeight: FontWeight.w700,
                                                     fontSize: 16,
                                                     letterSpacing: 0.3,
                                                   ),
@@ -514,8 +526,8 @@ class _LoginScreenState extends State<LoginScreen>
                                             child: Text(
                                               'Daftar',
                                               style: TextStyle(
-                                                color: widget
-                                                    .config.primaryColor,
+                                                color:
+                                                    widget.config.primaryColor,
                                                 fontWeight: FontWeight.w700,
                                                 fontSize: 14,
                                               ),
@@ -545,13 +557,18 @@ class _LoginScreenState extends State<LoginScreen>
                     color: widget.config.primaryColor.withOpacity(0.2),
                     child: Center(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 40,
+                          vertical: 32,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
-                              color: widget.config.primaryColor.withOpacity(0.15),
+                              color: widget.config.primaryColor.withOpacity(
+                                0.15,
+                              ),
                               blurRadius: 30,
                               offset: const Offset(0, 10),
                             ),
@@ -621,8 +638,10 @@ class _LoginScreenState extends State<LoginScreen>
         suffixIcon: suffixIcon,
         filled: true,
         fillColor: Colors.grey.shade50,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 18,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: Colors.grey.shade200),
@@ -633,8 +652,7 @@ class _LoginScreenState extends State<LoginScreen>
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              BorderSide(color: widget.config.primaryColor, width: 1.8),
+          borderSide: BorderSide(color: widget.config.primaryColor, width: 1.8),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -718,9 +736,7 @@ class _Header extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.25),
-                    ),
+                    border: Border.all(color: Colors.white.withOpacity(0.25)),
                   ),
                   child: Icon(config.icon, size: 30, color: Colors.white),
                 ),
@@ -747,13 +763,13 @@ class _Header extends StatelessWidget {
                 const SizedBox(height: 14),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 5),
+                    horizontal: 12,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.3),
-                    ),
+                    border: Border.all(color: Colors.white.withOpacity(0.3)),
                   ),
                   child: Text(
                     config.roleName,
@@ -786,18 +802,10 @@ class _BgPainter extends CustomPainter {
       ..color = primary.withOpacity(0.04)
       ..style = PaintingStyle.fill;
 
-    canvas.drawCircle(
-      Offset(size.width + 40, size.height * 0.75),
-      110,
-      paint,
-    );
+    canvas.drawCircle(Offset(size.width + 40, size.height * 0.75), 110, paint);
 
     paint.color = secondary.withOpacity(0.03);
-    canvas.drawCircle(
-      Offset(-20, size.height * 0.88),
-      80,
-      paint,
-    );
+    canvas.drawCircle(Offset(-20, size.height * 0.88), 80, paint);
   }
 
   @override

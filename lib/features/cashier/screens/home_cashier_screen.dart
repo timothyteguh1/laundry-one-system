@@ -629,52 +629,21 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      final profile = await _supabase
-          .from('profiles')
-          .select('nama_lengkap')
-          .eq('id', _supabase.auth.currentUser!.id)
-          .single();
-      _kasirNama = profile['nama_lengkap'];
-
       final now = DateTime.now();
+      final startStr = '${_startDate.year}-${_startDate.month.toString().padLeft(2, '0')}-${_startDate.day.toString().padLeft(2, '0')}T00:00:00';
+      final endStr = '${_endDate.year}-${_endDate.month.toString().padLeft(2, '0')}-${_endDate.day.toString().padLeft(2, '0')}T23:59:59';
+      final todayStart = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}T00:00:00';
+      final todayEnd = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}T23:59:59';
 
-      final startStr =
-          '${_startDate.year}-${_startDate.month.toString().padLeft(2, '0')}-${_startDate.day.toString().padLeft(2, '0')}T00:00:00';
-      final endStr =
-          '${_endDate.year}-${_endDate.month.toString().padLeft(2, '0')}-${_endDate.day.toString().padLeft(2, '0')}T23:59:59';
-
-      final todayStart =
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}T00:00:00';
-      final todayEnd =
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}T23:59:59';
-
+      // [UPDATE LOGIKA 1]: Menambah relasi kasir ke profiles untuk mengunci nama permanen
+      // [UPDATE] Tambahkan kasir:profiles!orders_cashier_id_fkey(nama_lengkap)
       final queryStr =
-          'id, nomor_order, status, total_harga, is_piutang, metode_bayar_awal, created_at, estimasi_selesai, jatuh_tempo, customer_id, poin_didapat, poin_sudah_diberikan, customers(profiles(nama_lengkap, nomor_hp)), order_items(jumlah, harga_satuan, services(nama))';
-
+          'id, nomor_order, status, total_harga, is_piutang, metode_bayar_awal, created_at, estimasi_selesai, jatuh_tempo, customer_id, poin_didapat, poin_sudah_diberikan, customers(profiles(nama_lengkap, nomor_hp)), kasir:profiles!orders_cashier_id_fkey(nama_lengkap), order_items(jumlah, harga_satuan, services(nama))';
       final results = await Future.wait([
-        _supabase
-            .from('orders')
-            .select(queryStr)
-            .gte('created_at', startStr)
-            .lte('created_at', endStr)
-            .order('created_at', ascending: false),
-        _supabase
-            .from('orders')
-            .select(queryStr)
-            .gte('created_at', todayStart)
-            .lte('created_at', todayEnd)
-            .order('created_at', ascending: false),
-        _supabase
-            .from('orders')
-            .select(queryStr)
-            .eq('is_piutang', true)
-            .neq('status', 'dibatalkan')
-            .order('created_at', ascending: false),
-        _supabase
-            .from('order_payments')
-            .select('jumlah, metode')
-            .gte('created_at', todayStart)
-            .lte('created_at', todayEnd),
+        _supabase.from('orders').select(queryStr).gte('created_at', startStr).lte('created_at', endStr).order('created_at', ascending: false),
+        _supabase.from('orders').select(queryStr).gte('created_at', todayStart).lte('created_at', todayEnd).order('created_at', ascending: false),
+        _supabase.from('orders').select(queryStr).eq('is_piutang', true).neq('status', 'dibatalkan').order('created_at', ascending: false),
+        _supabase.from('order_payments').select('jumlah, metode').gte('created_at', todayStart).lte('created_at', todayEnd),
       ]);
 
       final tabOrdersData = List<Map<String, dynamic>>.from(results[0]);
@@ -682,26 +651,20 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       final allPiutangData = List<Map<String, dynamic>>.from(results[2]);
       final todayPaymentsData = List<Map<String, dynamic>>.from(results[3]);
 
-      double penjualanHariIni = 0, cashHariIni = 0, nonCashHariIni = 0;
+      // [UPDATE LOGIKA 2]: Pemisahan Omset (pesanan) vs Kas Masuk (pembayaran)
+      double kasTunaiHariIni = 0;
+      double kasNonTunaiHariIni = 0;
       for (final p in todayPaymentsData) {
         final amt = (p['jumlah'] ?? 0).toDouble();
-        penjualanHariIni += amt;
-        if (p['metode'] == 'cash')
-          cashHariIni += amt;
-        else
-          nonCashHariIni += amt;
+        if (p['metode'] == 'cash') kasTunaiHariIni += amt;
+        else kasNonTunaiHariIni += amt;
       }
 
-      double piutangAllTime = 0;
-      for (final o in allPiutangData) {
-        piutangAllTime += (o['total_harga'] ?? 0).toDouble();
-      }
-
-      int tAktif = 0, tSelesai = 0;
+      double omsetHariIni = 0;
       for (final o in todayOrdersData) {
-        if (o['status'] == 'diproses') tAktif++;
-        if (o['status'] == 'selesai' || o['status'] == 'dibayar_lunas')
-          tSelesai++;
+        if (o['status'] != 'dibatalkan') {
+          omsetHariIni += (o['total_harga'] ?? 0).toDouble();
+        }
       }
 
       if (mounted) {
@@ -709,13 +672,9 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
           _tabOrders = tabOrdersData;
           _todayOrders = todayOrdersData;
           _allPiutangOrders = allPiutangData;
-          _todayTotalOrder = todayOrdersData.length;
-          _todayAktif = tAktif;
-          _todaySelesai = tSelesai;
-          _totalPenjualanHariIni = penjualanHariIni;
-          _totalCashHariIni = cashHariIni;
-          _totalNonCashHariIni = nonCashHariIni;
-          _totalPiutangAllTime = piutangAllTime;
+          _totalPenjualanHariIni = omsetHariIni; 
+          _totalCashHariIni = kasTunaiHariIni;
+          _totalNonCashHariIni = kasNonTunaiHariIni;
           _isLoading = false;
         });
       }
@@ -723,7 +682,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
   void _subscribeRealtime() {
     _supabase
         .channel('orders_rt')
@@ -1696,7 +1654,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
           namaPelanggan:
               order['customers']?['profiles']?['nama_lengkap'] ?? 'Umum',
           nomorHp: order['customers']?['profiles']?['nomor_hp'] ?? '-',
-          namaKasir: _kasirNama ?? 'Kasir',
+          namaKasir: order['kasir']?['nama_lengkap'] ?? 'Sistem',
           items: mappedItems,
           subtotal: (order['total_harga'] ?? 0).toDouble(),
           diskon: 0,

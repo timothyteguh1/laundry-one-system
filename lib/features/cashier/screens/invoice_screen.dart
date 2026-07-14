@@ -133,10 +133,10 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       HapticFeedback.heavyImpact();
       // Tampilkan Loading
       showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)));
-      
+
       try {
         final orderId = widget.orderId;
-        
+
         // 1. Tarik Poin (jika pelanggan sudah terlanjur dapat poin dari nota ini)
         final orderData = await _supabase.from('orders').select('customer_id, poin_didapat, poin_sudah_diberikan').eq('id', orderId).single();
         final custId = orderData['customer_id'];
@@ -154,8 +154,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         final redemptions = await _supabase.from('reward_redemptions').select('id').eq('dipakai_di_order', orderId);
         for (var red in redemptions) {
           await _supabase.from('reward_redemptions').update({
-            'status': 'aktif', 
-            'dipakai_di_order': null, 
+            'status': 'aktif',
+            'dipakai_di_order': null,
             'dipakai_at': null
           }).eq('id', red['id']);
         }
@@ -399,212 +399,243 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
             )
           : null,
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 10),
+        child: Center( // [TAMBAHAN] Agar konten tidak melar di tablet/layar lebar
+          child: ConstrainedBox( // [TAMBAHAN] Batasi lebar maksimal nota
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 10),
 
-                    // CEKLIS HIJAU (Hanya jika order baru)
-                    if (!widget.isFromHome) ...[
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.check_circle_rounded,
-                          color: Colors.green,
-                          size: 56,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        widget.isPiutang
-                            ? 'Pesanan Disimpan!'
-                            : 'Pembayaran Berhasil!',
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: _DS.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                    ],
-
-                    // KERTAS NOTA MENGAMBANG
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: _DS.surface,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: _DS.border, width: 1.5),
-                        boxShadow: _DS.cardShadow,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Center(
-                            child: Column(
-                              children: [
-                                const Icon(
-                                  Icons.receipt_long_rounded,
-                                  color: _DS.blue,
-                                  size: 36,
-                                ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'NOTA PESANAN',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 18,
-                                    letterSpacing: 1,
-                                    color: _DS.textPrimary,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  widget.nomorOrder,
-                                  style: const TextStyle(
-                                    color: _DS.textSecondary,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
+                        // CEKLIS HIJAU (Hanya jika order baru)
+                        if (!widget.isFromHome) ...[
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.check_circle_rounded,
+                              color: Colors.green,
+                              size: 56,
                             ),
                           ),
-                          const SizedBox(height: 20),
-                          const Divider(color: _DS.border, thickness: 1.5),
                           const SizedBox(height: 16),
-
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                'Tanggal Transaksi',
-                                style: TextStyle(
-                                  color: _DS.textSecondary,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              Text(
-                                _formatDateTime(widget.created_at),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 12,
-                                  color: _DS.textPrimary,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                'Kasir',
-                                style: TextStyle(
-                                  color: _DS.textSecondary,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              Text(
-                                widget.namaKasir,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 12,
-                                  color: _DS.textPrimary,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                'Pelanggan',
-                                style: TextStyle(
-                                  color: _DS.textSecondary,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              Text(
-                                widget.namaPelanggan,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 12,
-                                  color: _DS.textPrimary,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                'No. HP',
-                                style: TextStyle(
-                                  color: _DS.textSecondary,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              Text(
-                                widget.nomorHp,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 12,
-                                  color: _DS.textPrimary,
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 16),
-                          const Divider(color: _DS.border, thickness: 1.5),
-                          const SizedBox(height: 16),
-
-                          const Text(
-                            'Detail Layanan:',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: _DS.textSecondary,
-                              fontSize: 12,
+                          Text(
+                            widget.isPiutang
+                                ? 'Pesanan Disimpan!'
+                                : 'Pembayaran Berhasil!',
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: _DS.textPrimary,
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          ...widget.items.map(
-                            (item) => Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${item['qty']}x ',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 13,
-                                      color: _DS.textPrimary,
+                          const SizedBox(height: 24),
+                        ],
+
+                        // KERTAS NOTA MENGAMBANG
+                        Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: _DS.surface,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: _DS.border, width: 1.5),
+                            boxShadow: _DS.cardShadow,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Center(
+                                child: Column(
+                                  children: [
+                                    const Icon(
+                                      Icons.receipt_long_rounded,
+                                      color: _DS.blue,
+                                      size: 36,
                                     ),
-                                  ),
-                                  Expanded(
-                                    child: Text(
-                                      '${item['service']['nama']}',
-                                      style: const TextStyle(
-                                        fontSize: 13,
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      'NOTA PESANAN',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 18,
+                                        letterSpacing: 1,
                                         color: _DS.textPrimary,
                                       ),
                                     ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      widget.nomorOrder,
+                                      style: const TextStyle(
+                                        color: _DS.textSecondary,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              const Divider(color: _DS.border, thickness: 1.5),
+                              const SizedBox(height: 16),
+
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'Tanggal Transaksi',
+                                    style: TextStyle(
+                                      color: _DS.textSecondary,
+                                      fontSize: 12,
+                                    ),
                                   ),
                                   Text(
-                                    _formatRupiah(item['subtotal']),
+                                    _formatDateTime(widget.created_at),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                      color: _DS.textPrimary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'Kasir',
+                                    style: TextStyle(
+                                      color: _DS.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  Text(
+                                    widget.namaKasir,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                      color: _DS.textPrimary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'Pelanggan',
+                                    style: TextStyle(
+                                      color: _DS.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  Text(
+                                    widget.namaPelanggan,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                      color: _DS.textPrimary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'No. HP',
+                                    style: TextStyle(
+                                      color: _DS.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  Text(
+                                    widget.nomorHp,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                      color: _DS.textPrimary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+
+                              const SizedBox(height: 16),
+                              const Divider(color: _DS.border, thickness: 1.5),
+                              const SizedBox(height: 16),
+
+                              const Text(
+                                'Detail Layanan:',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: _DS.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              ...widget.items.map(
+                                (item) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${item['qty']}x ',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13,
+                                          color: _DS.textPrimary,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          '${item['service']['nama']}',
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            color: _DS.textPrimary,
+                                          ),
+                                        ),
+                                      ),
+                                      Text(
+                                        _formatRupiah(item['subtotal']),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13,
+                                          color: _DS.textPrimary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 16),
+                              const Divider(color: _DS.border, thickness: 1.5),
+                              const SizedBox(height: 12),
+
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'Subtotal',
+                                    style: TextStyle(
+                                      color: _DS.textSecondary,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    _formatRupiah(widget.subtotal),
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w700,
                                       fontSize: 13,
@@ -613,213 +644,231 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                   ),
                                 ],
                               ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 16),
-                          const Divider(color: _DS.border, thickness: 1.5),
-                          const SizedBox(height: 12),
-
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                'Subtotal',
-                                style: TextStyle(
-                                  color: _DS.textSecondary,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              Text(
-                                _formatRupiah(widget.subtotal),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
-                                  color: _DS.textPrimary,
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (widget.diskon > 0) ...[
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  'Diskon Voucher',
-                                  style: TextStyle(
-                                    color: Colors.green,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                Text(
-                                  '- ${_formatRupiah(widget.diskon)}',
-                                  style: const TextStyle(
-                                    color: Colors.green,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 13,
-                                  ),
+                              if (widget.diskon > 0) ...[
+                                const SizedBox(height: 8),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text(
+                                      'Diskon Voucher',
+                                      style: TextStyle(
+                                        color: Colors.green,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    Text(
+                                      '- ${_formatRupiah(widget.diskon)}',
+                                      style: const TextStyle(
+                                        color: Colors.green,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
-                            ),
-                          ],
-                          const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                'TOTAL AKHIR',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 15,
-                                  color: _DS.textPrimary,
-                                ),
+                              const SizedBox(height: 16),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'TOTAL AKHIR',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 15,
+                                      color: _DS.textPrimary,
+                                    ),
+                                  ),
+                                  Text(
+                                    _formatRupiah(widget.total),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 24,
+                                      color: _DS.blue,
+                                      letterSpacing: -0.5,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              Text(
-                                _formatRupiah(widget.total),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 24,
-                                  color: _DS.blue,
-                                  letterSpacing: -0.5,
+
+                              const SizedBox(height: 24),
+                              if (widget.isPiutang)
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: Colors.red.shade200),
+                                  ),
+                                  child: Text(
+                                    'STATUS: PIUTANG (BELUM LUNAS)',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: Colors.red.shade700,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                )
+                              else
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Colors.green.shade200,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'STATUS: LUNAS (${widget.metodeBayar.toUpperCase()})',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: Colors.green.shade700,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
                                 ),
-                              ),
                             ],
                           ),
-
-                          const SizedBox(height: 24),
-                          if (widget.isPiutang)
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: Colors.red.shade50,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.red.shade200),
-                              ),
-                              child: Text(
-                                'STATUS: PIUTANG (BELUM LUNAS)',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.red.shade700,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 12,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            )
-                          else
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              decoration: BoxDecoration(
-                                color: Colors.green.shade50,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: Colors.green.shade200,
-                                ),
-                              ),
-                              child: Text(
-                                'STATUS: LUNAS (${widget.metodeBayar.toUpperCase()})',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.green.shade700,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 12,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-            ),
-
-            // ACTION BUTTONS (STICKY BAWAH) KONSISTEN DENGAN DS
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-              decoration: BoxDecoration(
-                color: _DS.surface,
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF0F2557).withOpacity(0.06),
-                    blurRadius: 20,
-                    offset: const Offset(0, -4),
                   ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _shareReceipt,
-                          icon: const Icon(Icons.share_rounded, size: 18),
-                          label: const Text(
-                            'Share Nota',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: _DS.blue,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            side: const BorderSide(
-                              color: _DS.border,
-                              width: 1.5,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _showPrinterDialog,
-                          icon: const Icon(Icons.print_rounded, size: 18),
-                          label: const Text(
-                            'Cetak Struk',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: _DS.blue,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            side: const BorderSide(
-                              color: _DS.border,
-                              width: 1.5,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
+                ),
+
+                // ACTION BUTTONS (STICKY BAWAH) KONSISTEN DENGAN DS
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                  decoration: BoxDecoration(
+                    color: _DS.surface,
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF0F2557).withOpacity(0.06),
+                        blurRadius: 20,
+                        offset: const Offset(0, -4),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-
-                  if (widget.isFromHome) ...[
-                    if (widget.status == 'diproses')
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: SizedBox(
-                          width: double.infinity,
-                          height: 50,
-                          child: ElevatedButton.icon(
-                            icon: const Icon(Icons.check_circle_outline),
-                            label: const Text(
-                              'Tandai Cucian Selesai',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 15,
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _shareReceipt,
+                              icon: const Icon(Icons.share_rounded, size: 18),
+                              label: const Text(
+                                'Share Nota',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: _DS.blue,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                side: const BorderSide(
+                                  color: _DS.border,
+                                  width: 1.5,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
                             ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _showPrinterDialog,
+                              icon: const Icon(Icons.print_rounded, size: 18),
+                              label: const Text(
+                                'Cetak Struk',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: _DS.blue,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                side: const BorderSide(
+                                  color: _DS.border,
+                                  width: 1.5,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      if (widget.isFromHome) ...[
+                        if (widget.status == 'diproses')
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: 50,
+                              child: ElevatedButton.icon(
+                                icon: const Icon(Icons.check_circle_outline),
+                                label: const Text(
+                                  'Tandai Cucian Selesai',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _DS.blue,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  elevation: 0,
+                                ),
+                                onPressed: () {
+                                  Navigator.pop(context, 'selesai');
+                                },
+                              ),
+                            ),
+                          ),
+
+                        if (widget.isPiutang)
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.payments_outlined),
+                              label: const Text(
+                                'Lunasi Tagihan',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green.shade600,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                elevation: 0,
+                              ),
+                              onPressed: () {
+                                Navigator.pop(context, 'dibayar_lunas');
+                              },
+                            ),
+                          ),
+                      ] else ...[
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: _DS.blue,
                               foregroundColor: Colors.white,
@@ -828,86 +877,42 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                               ),
                               elevation: 0,
                             ),
-                            onPressed: () {
-                              Navigator.pop(context, 'selesai');
-                            },
-                          ),
-                        ),
-                      ),
-
-                    if (widget.isPiutang)
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.payments_outlined),
-                          label: const Text(
-                            'Lunasi Tagihan',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 15,
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text(
+                              'Kembali ke Beranda',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15,
+                              ),
                             ),
                           ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green.shade600,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            elevation: 0,
-                          ),
-                          onPressed: () {
-                            Navigator.pop(context, 'dibayar_lunas');
-                          },
                         ),
-                      ),
-                  ] else ...[
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _DS.blue,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          elevation: 0,
-                        ),
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text(
-                          'Kembali ke Beranda',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                      ],
 
-                  // [TAMBAHAN BARU] TOMBOL HAPUS KHUSUS ADMIN
-                  if (_isAdmin) ...[
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.delete_forever_rounded, color: Colors.red),
-                        label: const Text('Hapus Nota (Permanen)', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 15)),
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: Colors.red.shade50,
-                          side: BorderSide(color: Colors.red.shade200, width: 1.5),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      // [TAMBAHAN BARU] TOMBOL HAPUS KHUSUS ADMIN
+                      if (_isAdmin) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.delete_forever_rounded, color: Colors.red),
+                            label: const Text('Hapus Nota (Permanen)', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 15)),
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: Colors.red.shade50,
+                              side: BorderSide(color: Colors.red.shade200, width: 1.5),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                            onPressed: _hapusNota,
+                          ),
                         ),
-                        onPressed: _hapusNota,
-                      ),
-                    ),
-                  ]
-                ],
-              ),
+                      ]
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
