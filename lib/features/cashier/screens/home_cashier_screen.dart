@@ -630,15 +630,22 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     setState(() => _isLoading = true);
     try {
       final now = DateTime.now();
-      final startStr = '${_startDate.year}-${_startDate.month.toString().padLeft(2, '0')}-${_startDate.day.toString().padLeft(2, '0')}T00:00:00';
-      final endStr = '${_endDate.year}-${_endDate.month.toString().padLeft(2, '0')}-${_endDate.day.toString().padLeft(2, '0')}T23:59:59';
-      final todayStart = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}T00:00:00';
-      final todayEnd = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}T23:59:59';
+
+    // [FIX TIMEZONE] Bangun batas waktu sebagai WIB (local time) lalu convert ke UTC
+      // agar filter Supabase presisi sesuai jam lokal, bukan digeser 7 jam.
+      final startOfRangeLocal = DateTime(_startDate.year, _startDate.month, _startDate.day, 0, 0, 0);
+      final endOfRangeLocal = DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59, 59);
+      final startOfTodayLocal = DateTime(now.year, now.month, now.day, 0, 0, 0);
+      final endOfTodayLocal = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
+      final startStr = startOfRangeLocal.toUtc().toIso8601String();
+      final endStr = endOfRangeLocal.toUtc().toIso8601String();
+      final todayStart = startOfTodayLocal.toUtc().toIso8601String();
+      final todayEnd = endOfTodayLocal.toUtc().toIso8601String();
 
       // [UPDATE LOGIKA 1]: Menambah relasi kasir ke profiles untuk mengunci nama permanen
-      // [UPDATE] Tambahkan kasir:profiles!orders_cashier_id_fkey(nama_lengkap)
       final queryStr =
-          'id, nomor_order, status, total_harga, is_piutang, metode_bayar_awal, created_at, estimasi_selesai, jatuh_tempo, customer_id, poin_didapat, poin_sudah_diberikan, customers(profiles(nama_lengkap, nomor_hp)), kasir:profiles!orders_cashier_id_fkey(nama_lengkap), order_items(jumlah, harga_satuan, services(nama))';
+          'id, nomor_order, status, total_harga, is_piutang, metode_bayar_awal, created_at, estimasi_selesai, jatuh_tempo, customer_id, poin_didapat, poin_sudah_diberikan, customers(profiles(nama_lengkap, nomor_hp)), kasir:profiles!cashier_id(nama_lengkap), order_items(jumlah, harga_satuan, services(nama))';
       final results = await Future.wait([
         _supabase.from('orders').select(queryStr).gte('created_at', startStr).lte('created_at', endStr).order('created_at', ascending: false),
         _supabase.from('orders').select(queryStr).gte('created_at', todayStart).lte('created_at', todayEnd).order('created_at', ascending: false),
@@ -675,6 +682,22 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
           _totalPenjualanHariIni = omsetHariIni; 
           _totalCashHariIni = kasTunaiHariIni;
           _totalNonCashHariIni = kasNonTunaiHariIni;
+           // [FIX] Isi statistik header (sebelumnya selalu 0 karena tidak pernah di-assign)
+          _todayTotalOrder = todayOrdersData
+              .where((o) => o['status'] != 'dibatalkan')
+              .length;
+          _todayAktif = todayOrdersData
+              .where((o) => o['status'] == 'diproses')
+              .length;
+          _todaySelesai = todayOrdersData
+              .where((o) =>
+                  o['status'] == 'selesai' || o['status'] == 'dibayar_lunas')
+              .length;
+
+          _totalPiutangAllTime = allPiutangData.fold(
+            0.0,
+            (sum, o) => sum + (o['total_harga'] ?? 0).toDouble(),
+          );
           _isLoading = false;
         });
       }
@@ -1521,94 +1544,158 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     );
   }
 
-  void _showPenjualanDetail() {
+void _showPenjualanDetail() {
+    final totalPembayaranDiterima = _totalCashHariIni + _totalNonCashHariIni;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
-        height: MediaQuery.of(context).size.height * 0.35,
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
         decoration: const BoxDecoration(
           color: _DS.ground,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(top: 12, bottom: 20),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 12, bottom: 20),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Rincian Penjualan',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: _DS.textPrimary,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Rincian Penjualan',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: _DS.textPrimary,
+                      ),
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _DS.sky,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.today_rounded, color: _DS.blue, size: 14),
-                        SizedBox(width: 6),
-                        Text(
-                          'HARI INI',
-                          style: TextStyle(
-                            color: _DS.blue,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _DS.sky,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.today_rounded, color: _DS.blue, size: 14),
+                          SizedBox(width: 6),
+                          Text(
+                            'HARI INI',
+                            style: TextStyle(
+                              color: _DS.blue,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                children: [
-                  _buildMiniStatCard(
-                    'Tunai (Cash)',
-                    _totalCashHariIni,
-                    Icons.payments_rounded,
-                    Colors.green,
+              const SizedBox(height: 16),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: _DS.navy,
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  const SizedBox(width: 12),
-                  _buildMiniStatCard(
-                    'Non-Tunai',
-                    _totalNonCashHariIni,
-                    Icons.qr_code_scanner_rounded,
-                    Colors.blue,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Total Pembayaran Diterima',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.7),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _formatRupiah(totalPembayaranDiterima),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 20,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.account_balance_wallet_rounded,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-            const Spacer(),
-          ],
+
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  children: [
+                    _buildMiniStatCard(
+                      'Tunai (Cash)',
+                      _totalCashHariIni,
+                      Icons.payments_rounded,
+                      Colors.green,
+                    ),
+                    const SizedBox(width: 12),
+                    _buildMiniStatCard(
+                      'Non-Tunai',
+                      _totalNonCashHariIni,
+                      Icons.qr_code_scanner_rounded,
+                      Colors.blue,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
       ),
     );
