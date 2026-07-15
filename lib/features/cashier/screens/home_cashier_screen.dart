@@ -643,9 +643,9 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       final todayStart = startOfTodayLocal.toUtc().toIso8601String();
       final todayEnd = endOfTodayLocal.toUtc().toIso8601String();
 
-      // [UPDATE LOGIKA 1]: Menambah relasi kasir ke profiles untuk mengunci nama permanen
       final queryStr =
-          'id, nomor_order, status, total_harga, is_piutang, metode_bayar_awal, created_at, estimasi_selesai, jatuh_tempo, customer_id, poin_didapat, poin_sudah_diberikan, customers(profiles(nama_lengkap, nomor_hp)), kasir:profiles!cashier_id(nama_lengkap), order_items(jumlah, harga_satuan, services(nama))';
+          'id, nomor_order, status, total_harga, is_piutang, metode_bayar_awal, created_at, estimasi_selesai, jatuh_tempo, customer_id, poin_didapat, poin_sudah_diberikan, customers(profiles(nama_lengkap, nomor_hp)), profiles!orders_cashier_id_fkey(nama_lengkap), order_items(jumlah, harga_satuan, services(nama))';
+
       final results = await Future.wait([
         _supabase.from('orders').select(queryStr).gte('created_at', startStr).lte('created_at', endStr).order('created_at', ascending: false),
         _supabase.from('orders').select(queryStr).gte('created_at', todayStart).lte('created_at', todayEnd).order('created_at', ascending: false),
@@ -657,6 +657,20 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       final todayOrdersData = List<Map<String, dynamic>>.from(results[1]);
       final allPiutangData = List<Map<String, dynamic>>.from(results[2]);
       final todayPaymentsData = List<Map<String, dynamic>>.from(results[3]);
+
+      // 🔍 DEBUG: cek bentuk field 'profiles' (kasir) hasil join dari Supabase.
+      // Buka Chrome DevTools (F12) -> tab Console untuk melihat output ini.
+      if (todayOrdersData.isNotEmpty) {
+        debugPrint('=== DEBUG _loadData: ORDER[0] RAW ===');
+        debugPrint('order_id           : ${todayOrdersData[0]['id']}');
+        debugPrint('nomor_order        : ${todayOrdersData[0]['nomor_order']}');
+        debugPrint('cashier_id (FK)    : ${todayOrdersData[0]['cashier_id']}');
+        debugPrint('profiles (raw)     : ${todayOrdersData[0]['profiles']}');
+        debugPrint('profiles.runtimeType: ${todayOrdersData[0]['profiles'].runtimeType}');
+        debugPrint('======================================');
+      } else {
+        debugPrint('=== DEBUG _loadData: todayOrdersData KOSONG ===');
+      }
 
       // [UPDATE LOGIKA 2]: Pemisahan Omset (pesanan) vs Kas Masuk (pembayaran)
       double kasTunaiHariIni = 0;
@@ -1715,9 +1729,35 @@ void _showPenjualanDetail() {
       ),
     );
   }
+  String _extractCashierName(Map<String, dynamic> order) {
+    try {
+      final kasirData = order['kasir'];
+      
+      if (kasirData == null) return 'Sistem';
+
+      // Jika Supabase mengembalikannya sebagai Map { 'nama_lengkap': 'toti1' }
+      if (kasirData is Map<String, dynamic>) {
+        return kasirData['nama_lengkap']?.toString() ?? 'Sistem';
+      }
+      
+      // Jika Supabase mengembalikannya sebagai List [ { 'nama_lengkap': 'toti1' } ]
+      if (kasirData is List && kasirData.isNotEmpty) {
+        final firstItem = kasirData.first;
+        if (firstItem is Map<String, dynamic>) {
+          return firstItem['nama_lengkap']?.toString() ?? 'Sistem';
+        }
+      }
+      
+      return 'Sistem';
+    } catch (e) {
+      debugPrint('Error ekstrak nama kasir: $e');
+      return 'Sistem';
+    }
+  }
 
   Future<void> _showDetail(Map<String, dynamic> order) async {
     HapticFeedback.lightImpact();
+    
     final List<Map<String, dynamic>> mappedItems =
         (order['order_items'] as List? ?? [])
             .map(
@@ -1730,6 +1770,38 @@ void _showPenjualanDetail() {
               },
             )
             .toList();
+
+    // ==========================================
+    // LOGIKA DETEKTIF: AMBIL NAMA KASIR AKURAT
+    // ==========================================
+    String namaKasirFinal = 'Sistem';
+    final dataKasir = order['profiles'];
+
+    // 🔍 DEBUG: cek bentuk field 'profiles' (kasir) tepat sebelum diparse.
+    // Buka Chrome DevTools (F12) -> tab Console untuk melihat output ini.
+    debugPrint('--- DEBUG _showDetail: cek data kasir ---');
+    debugPrint('order[id]           : ${order['id']}');
+    debugPrint('order[nomor_order]  : ${order['nomor_order']}');
+    debugPrint('order[cashier_id]   : ${order['cashier_id']}');
+    debugPrint('order[profiles] raw : $dataKasir');
+    debugPrint('order[profiles] type: ${dataKasir.runtimeType}');
+    debugPrint('------------------------------------------');
+    
+    if (dataKasir != null) {
+      // Jika Supabase mengirimkannya sebagai List (Array)
+      if (dataKasir is List && dataKasir.isNotEmpty) {
+        namaKasirFinal = dataKasir[0]['nama_lengkap']?.toString() ?? 'Sistem';
+      } 
+      // Jika Supabase mengirimkannya sebagai Objek (Map)
+      else if (dataKasir is Map) {
+        namaKasirFinal = dataKasir['nama_lengkap']?.toString() ?? 'Sistem';
+      }
+    }
+
+    // 🔍 DEBUG: hasil akhir nama kasir yang akan ditampilkan di nota
+    debugPrint('DEBUG _showDetail: namaKasirFinal = $namaKasirFinal');
+    // ==========================================
+
     final action = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -1741,7 +1813,10 @@ void _showPenjualanDetail() {
           namaPelanggan:
               order['customers']?['profiles']?['nama_lengkap'] ?? 'Umum',
           nomorHp: order['customers']?['profiles']?['nomor_hp'] ?? '-',
-          namaKasir: order['kasir']?['nama_lengkap'] ?? 'Sistem',
+          
+          // Masukkan variabel yang sudah diekstrak dengan aman
+          namaKasir: namaKasirFinal,
+          
           items: mappedItems,
           subtotal: (order['total_harga'] ?? 0).toDouble(),
           diskon: 0,
@@ -1752,6 +1827,7 @@ void _showPenjualanDetail() {
         ),
       ),
     );
+    
     if (action == 'selesai')
       _handleUpdateStatus(order, 'selesai');
     else if (action == 'dibayar_lunas')

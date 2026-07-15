@@ -902,12 +902,29 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       final now = DateTime.now();
       final prefix =
           'ORD-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-      final count = await _supabase
+      
+      // ==========================================================
+      // [UPDATE LOGIKA PERBAIKAN]: ANTI-DUPLIKAT NOMOR NOTA
+      // ==========================================================
+      final lastOrderResponse = await _supabase
           .from('orders')
-          .select('id')
-          .like('nomor_order', '$prefix%');
-      final nomorOrder =
-          '$prefix-${(count.length + 1).toString().padLeft(4, '0')}';
+          .select('nomor_order')
+          .like('nomor_order', '$prefix-%')
+          .order('nomor_order', ascending: false) // Urutkan dari yang terbesar
+          .limit(1) // Ambil 1 saja yang paling atas
+          .maybeSingle();
+
+      int urutanBaru = 1;
+      if (lastOrderResponse != null) {
+        // Jika sudah ada nota hari ini, potong string untuk ambil 4 digit terakhir
+        final lastNomor = lastOrderResponse['nomor_order'] as String;
+        final lastUrutanStr = lastNomor.split('-').last; 
+        final lastUrutanInt = int.tryParse(lastUrutanStr) ?? 0;
+        urutanBaru = lastUrutanInt + 1; // Lanjutkan hitungan
+      }
+
+      final nomorOrder = '$prefix-${urutanBaru.toString().padLeft(4, '0')}';
+      // ==========================================================
 
       final int totalDibayar = _tipeBayar == 'piutang' ? 0 : _total.toInt();
       final String metodeBayarFinal = _tipeBayar == 'piutang'
@@ -2449,12 +2466,20 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  Text(
-                    _formatRupiah(_subtotal),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: _DS.blue,
-                      fontSize: 18,
+                  // ==========================================================
+                  // [UPDATE UI]: CEGAH HARGA PATAH KE BARIS BARU (MELAR)
+                  // ==========================================================
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _formatRupiah(_subtotal),
+                      maxLines: 1, // Kunci agar selalu satu baris
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: _DS.blue,
+                        fontSize: 18,
+                      ),
                     ),
                   ),
                 ],
@@ -2481,7 +2506,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               ),
             ),
 
-          const SizedBox(width: 12),
+          const SizedBox(width: 8), // Sedikit digeser agar lega
           SizedBox(
             height: 52,
             child: ElevatedButton(

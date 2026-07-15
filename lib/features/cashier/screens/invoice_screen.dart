@@ -257,7 +257,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         : 'LUNAS (${widget.metodeBayar.toUpperCase()})';
 
     StringBuffer sb = StringBuffer();
-    sb.writeln('🧾 *NOTA PESANAN - LAUNDRY ONE*');
+    sb.writeln('🧾 *NOTA PESANAN - HAPPY LAUNDRY*');
     sb.writeln('-----------------------------------');
     sb.writeln('No Order : ${widget.nomorOrder}');
     sb.writeln('Tanggal  : ${_formatDateTime(widget.created_at)}');
@@ -327,7 +327,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       }
 
       // LOGIKA CETAK KERTAS STRUK
-      bluetooth.printCustom("LAUNDRY ONE", 3, 1); // Size 3, Align Center
+      bluetooth.printCustom("HAPPY LAUNDRY", 3, 1); // Size 3, Align Center
       bluetooth.printNewLine();
       bluetooth.printCustom(widget.nomorOrder, 1, 1);
       bluetooth.printCustom(_formatDateTime(widget.created_at), 1, 1);
