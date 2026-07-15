@@ -55,6 +55,7 @@ class _PelangganTabState extends State<PelangganTab> {
   bool _isLoading = true;
   bool _isProcessing = false; // [UPDATE UX] Flag untuk loading aksi (hapus/poin)
   bool _isAdmin = false; 
+  bool _showNonActive = false; // false = tampil pelanggan aktif, true = tampil nonaktif
 
   @override
   void initState() {
@@ -165,7 +166,7 @@ class _PelangganTabState extends State<PelangganTab> {
           .from('profiles')
           .select('id, nama_lengkap, nomor_hp, customers(id, poin_saldo)')
           .eq('role', 'customer')
-          .eq('is_active', true)
+          .eq('is_active', !_showNonActive)
           .order('nama_lengkap');
 
       if (mounted) {
@@ -258,6 +259,39 @@ class _PelangganTabState extends State<PelangganTab> {
         await _supabase.from('profiles').update({'is_active': false}).eq('id', profileId);
         await _loadCustomers();
         if (mounted) _showCustomDialog(title: 'Terhapus', message: 'Data pelanggan berhasil dihapus.', isSuccess: true);
+      } catch (e) {
+        if (mounted) _showCustomDialog(title: 'Gagal', message: e.toString(), isSuccess: false);
+      } finally {
+        if (mounted) setState(() => _isProcessing = false);
+      }
+    }
+  }
+
+  Future<void> _aktifkanPelanggan(String profileId, String nama) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(children: [Icon(Icons.check_circle_outline_rounded, color: Colors.green), SizedBox(width: 8), Text('Aktifkan Pelanggan?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))]),
+        content: Text('Aktifkan kembali $nama? Pelanggan akan muncul lagi di daftar aktif.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal', style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade600, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Aktifkan', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      HapticFeedback.heavyImpact();
+      setState(() => _isProcessing = true);
+      try {
+        await _supabase.from('profiles').update({'is_active': true}).eq('id', profileId);
+        await _loadCustomers();
+        if (mounted) _showCustomDialog(title: 'Berhasil', message: 'Pelanggan berhasil diaktifkan kembali.', isSuccess: true);
       } catch (e) {
         if (mounted) _showCustomDialog(title: 'Gagal', message: e.toString(), isSuccess: false);
       } finally {
@@ -418,6 +452,35 @@ class _PelangganTabState extends State<PelangganTab> {
                   ),
                 ),
               ),
+
+              if (_isAdmin)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: _showNonActive ? () { setState(() => _showNonActive = false); _loadCustomers(); } : null,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(color: !_showNonActive ? Colors.white : Colors.white.withOpacity(0.1), borderRadius: const BorderRadius.horizontal(left: Radius.circular(10))),
+                            child: Center(child: Text('Aktif', style: TextStyle(color: !_showNonActive ? _DS.blue : Colors.white.withOpacity(0.7), fontWeight: FontWeight.w700, fontSize: 13))),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: !_showNonActive ? () { setState(() => _showNonActive = true); _loadCustomers(); } : null,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(color: _showNonActive ? Colors.white : Colors.white.withOpacity(0.1), borderRadius: const BorderRadius.horizontal(right: Radius.circular(10))),
+                            child: Center(child: Text('Nonaktif', style: TextStyle(color: _showNonActive ? _DS.blue : Colors.white.withOpacity(0.7), fontWeight: FontWeight.w700, fontSize: 13))),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               
               Expanded(
                 child: Container(
@@ -471,11 +534,16 @@ class _PelangganTabState extends State<PelangganTab> {
                                                     else _showCustomDialog(title: 'Gagal', message: 'Data pelanggan belum lengkap (Dompet Poin kosong).', isSuccess: false); 
                                                   } 
                                                   else if (val == 'hapus') { _hapusPelanggan(c['id'], c['nama_lengkap'] ?? 'Pelanggan'); }
+                                                  else if (val == 'aktifkan') { _aktifkanPelanggan(c['id'], c['nama_lengkap'] ?? 'Pelanggan'); }
                                                 },
-                                                itemBuilder: (context) => [
-                                                  const PopupMenuItem(value: 'edit_poin', child: Row(children: [Icon(Icons.edit_note_rounded, color: _DS.blue, size: 20), SizedBox(width: 8), Text('Koreksi Poin')])),
-                                                  const PopupMenuItem(value: 'hapus', child: Row(children: [Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20), SizedBox(width: 8), Text('Hapus Akun', style: TextStyle(color: Colors.red))])),
-                                                ],
+                                                itemBuilder: (context) => _showNonActive
+                                                    ? [
+                                                        const PopupMenuItem(value: 'aktifkan', child: Row(children: [Icon(Icons.check_circle_outline_rounded, color: Colors.green, size: 20), SizedBox(width: 8), Text('Aktifkan Kembali', style: TextStyle(color: Colors.green))])),
+                                                      ]
+                                                    : [
+                                                        const PopupMenuItem(value: 'edit_poin', child: Row(children: [Icon(Icons.edit_note_rounded, color: _DS.blue, size: 20), SizedBox(width: 8), Text('Koreksi Poin')])),
+                                                        const PopupMenuItem(value: 'hapus', child: Row(children: [Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20), SizedBox(width: 8), Text('Hapus Akun', style: TextStyle(color: Colors.red))])),
+                                                      ],
                                               ),
                                             ]
                                           ],
