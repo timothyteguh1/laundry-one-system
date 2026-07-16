@@ -136,8 +136,9 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
       try {
         final orderId = widget.orderId;
+        final currentKasirId = _supabase.auth.currentUser!.id;
 
-        // 1. Tarik Poin (jika pelanggan sudah terlanjur dapat poin dari nota ini)
+        // 1. TARIK POIN YANG DIDAPAT (Jika pelanggan dapat poin dari nota ini)
         final orderData = await _supabase.from('orders').select('customer_id, poin_didapat, poin_sudah_diberikan').eq('id', orderId).single();
         final custId = orderData['customer_id'];
         final int poin = orderData['poin_didapat'] ?? 0;
@@ -147,26 +148,59 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
           final custData = await _supabase.from('customers').select('poin_saldo').eq('id', custId).single();
           final int saldoSaatIni = custData['poin_saldo'] ?? 0;
           final int saldoBaru = (saldoSaatIni - poin < 0) ? 0 : saldoSaatIni - poin;
+          
           await _supabase.from('customers').update({'poin_saldo': saldoBaru}).eq('id', custId);
+          
+          // Catat penarikan poin di ledger
+          await _supabase.from('points_ledger').insert({
+            'customer_id': custId,
+            'tipe': 'reversed',
+            'jumlah': -poin,
+            'saldo_sebelum': saldoSaatIni,
+            'saldo_sesudah': saldoBaru,
+            'dilakukan_oleh': currentKasirId,
+            'catatan': 'Pembatalan Poin (Nota Dihapus)',
+          });
         }
 
-        // 2. Kembalikan Status Voucher (jika nota ini memotong voucher pelanggan)
-        final redemptions = await _supabase.from('reward_redemptions').select('id').eq('dipakai_di_order', orderId);
+        // 2. KEMBALIKAN POIN DARI VOUCHER & HAPUS VOUCHER
+        final redemptions = await _supabase.from('reward_redemptions').select('id, poin_digunakan, customer_id').eq('dipakai_di_order', orderId);
+        
         for (var red in redemptions) {
-          await _supabase.from('reward_redemptions').update({
-            'status': 'aktif',
-            'dipakai_di_order': null,
-            'dipakai_at': null
-          }).eq('id', red['id']);
+          final int poinDigunakan = red['poin_digunakan'] ?? 0;
+          final String? redCustId = red['customer_id'];
+
+          if (redCustId != null && poinDigunakan > 0) {
+            final custData = await _supabase.from('customers').select('poin_saldo').eq('id', redCustId).single();
+            final int saldoSaatIni = custData['poin_saldo'] ?? 0;
+            final int saldoBaru = saldoSaatIni + poinDigunakan;
+
+            // Kembalikan poin utuh ke saldo pelanggan
+            await _supabase.from('customers').update({'poin_saldo': saldoBaru}).eq('id', redCustId);
+
+            // Catat pengembalian di ledger agar history jelas
+            await _supabase.from('points_ledger').insert({
+              'customer_id': redCustId,
+              'tipe': 'reversed',
+              'jumlah': poinDigunakan,
+              'saldo_sebelum': saldoSaatIni,
+              'saldo_sesudah': saldoBaru,
+              'dilakukan_oleh': currentKasirId,
+              'catatan': 'Pengembalian Poin (Voucher Dibatalkan)',
+            });
+          }
+
+          // Hapus data voucher karena transaksinya batal dan poin sudah dikembalikan
+          await _supabase.from('reward_redemptions').delete().eq('id', red['id']);
         }
 
-        // 3. Eksekusi Hapus Nota (Tabel item & ledger akan bersih karena CASCADE)
+        // 3. Eksekusi Hapus Nota (Tabel item & ledger pembayaran akan bersih karena CASCADE di database)
         await _supabase.from('orders').delete().eq('id', orderId);
 
         if (mounted) {
           Navigator.pop(context); // Tutup loading
           Navigator.pop(context, 'dihapus'); // Keluar dan beritahu beranda agar refresh
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Nota berhasil dibatalkan dan dihapus!'), backgroundColor: Colors.green));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Nota berhasil dibatalkan & Poin dikembalikan!'), backgroundColor: Colors.green));
         }
       } catch (e) {
         if (mounted) {
