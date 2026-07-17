@@ -90,8 +90,8 @@ class AuthService {
     }
   }
 
-  // ============================================================
-  // REGISTER PELANGGAN
+ // ============================================================
+  // REGISTER PELANGGAN (VIA EDGE FUNCTION ANTI-LOGOUT)
   // ============================================================
   Future<void> registerPelanggan({
     required String phone,
@@ -106,18 +106,29 @@ class AuthService {
           ? password
           : phone.trim();
 
-      await _supabase.auth.signUp(
-        email: authEmail,
-        password: authPassword,
-        data: {
+      // [UPDATE]: Kita gunakan Edge Function agar sesi kasir tidak tertimpa!
+      final response = await _supabase.functions.invoke(
+        'register-customer',
+        body: {
+          'email': authEmail,
+          'password': authPassword,
           'full_name': fullName,
           'phone': phone,
-          'role': 'customer',
-          if (tanggalLahir != null) 'tanggal_lahir': tanggalLahir,
+          'tanggal_lahir': tanggalLahir,
         },
       );
-    } on AuthException catch (e) {
-      throw Exception(_translateError(e.message));
+
+      // Tangkap jika Edge Function mengembalikan error (misal nomor sudah ada)
+      if (response.status != 200) {
+         final errorMsg = response.data['error'] ?? 'Gagal mendaftarkan pelanggan';
+         throw Exception(_translateError(errorMsg.toString()));
+      }
+
+    } on FunctionException catch (e) {
+      // Gunakan toString() agar aman dari perubahan versi package Supabase
+      throw Exception('Server Error: ${e.toString()}');
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
     }
   }
 

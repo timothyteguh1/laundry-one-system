@@ -216,7 +216,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     final data = await _supabase
         .from('services')
         .select(
-          'id, nama, harga_per_satuan, satuan, tipe, is_active, inventory_id, qty_per_unit, is_pinned',
+          // [UPDATE]: Menambahkan join ke tabel inventory untuk mengambil stok
+          'id, nama, harga_per_satuan, satuan, tipe, is_active, inventory_id, qty_per_unit, is_pinned, inventory:inventory_id(stok_saat_ini)',
         )
         .eq('is_active', true)
         .order('nama');
@@ -258,6 +259,21 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   // LOGIKA KERANJANG
   // =========================================================
   void _tambahKeKeranjang(Map<String, dynamic> service, [int qty = 1]) {
+    // [UPDATE]: LOGIKA VALIDASI STOK
+    if (service['tipe'] == 'produk' && service['inventory'] != null) {
+      final int stokTersedia = (service['inventory']['stok_saat_ini'] as num).toInt();
+      final int currentQty = _qtyDiKeranjang(service['id']);
+      
+      if (currentQty + qty > stokTersedia) {
+        _showCustomDialog(
+          title: 'Stok Tidak Cukup',
+          message: 'Stok ${service['nama']} hanya tersisa $stokTersedia ${service['satuan']}.',
+          isSuccess: false,
+        );
+        return; // Hentikan proses, jangan tambah ke keranjang
+      }
+    }
+
     final idx = _cart.indexWhere((c) => c['service']['id'] == service['id']);
     setState(() {
       if (idx >= 0) {
@@ -295,23 +311,38 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       setState(
         () => _cart.removeWhere((c) => c['service']['id'] == service['id']),
       );
-    } else {
-      final idx = _cart.indexWhere((c) => c['service']['id'] == service['id']);
-      setState(() {
-        if (idx >= 0) {
-          _cart[idx]['qty'] = newQty;
-          _cart[idx]['subtotal'] =
-              newQty * (service['harga_per_satuan'] as num).toDouble();
-        } else {
-          _cart.add({
-            'service': service,
-            'qty': newQty,
-            'subtotal':
-                newQty * (service['harga_per_satuan'] as num).toDouble(),
-          });
-        }
-      });
+      _revalidateVoucher();
+      return;
     }
+
+    // [UPDATE]: LOGIKA VALIDASI STOK UNTUK INPUT MANUAL
+    if (service['tipe'] == 'produk' && service['inventory'] != null) {
+      final int stokTersedia = (service['inventory']['stok_saat_ini'] as num).toInt();
+      if (newQty > stokTersedia) {
+        _showCustomDialog(
+          title: 'Stok Tidak Cukup',
+          message: 'Stok ${service['nama']} hanya tersisa $stokTersedia ${service['satuan']}.',
+          isSuccess: false,
+        );
+        return; // Hentikan proses
+      }
+    }
+
+    final idx = _cart.indexWhere((c) => c['service']['id'] == service['id']);
+    setState(() {
+      if (idx >= 0) {
+        _cart[idx]['qty'] = newQty;
+        _cart[idx]['subtotal'] =
+            newQty * (service['harga_per_satuan'] as num).toDouble();
+      } else {
+        _cart.add({
+          'service': service,
+          'qty': newQty,
+          'subtotal':
+              newQty * (service['harga_per_satuan'] as num).toDouble(),
+        });
+      }
+    });
     _revalidateVoucher();
   }
 
