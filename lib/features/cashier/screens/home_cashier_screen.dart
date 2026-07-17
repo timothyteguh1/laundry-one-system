@@ -738,7 +738,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
         )
         .subscribe();
 
-    // 2. [TAMBAHAN BARU] Telinga untuk Status Kasir (Force Logout)
+    // 2. Telinga Status Kasir (Jika "Cabut Akses" -> status jadi rejected)
     _supabase
         .channel('kasir_status_rt')
         .onPostgresChanges(
@@ -750,44 +750,71 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
             column: 'profile_id',
             value: userId,
           ),
-          callback: (payload) async {
-            final newStatus = payload.newRecord['status'];
-            // Jika tiba-tiba status berubah jadi rejected atau dihapus
-            if (newStatus == 'rejected' || newStatus == null) {
-              await _authService.logout(); // Logout paksa dari server
-              if (mounted) {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const LoginScreen(
-                      config: LoginConfig(
-                        roleName: 'Staf Kasir',
-                        roleDatabase: 'cashier',
-                        labelIdentifier: 'Nomor HP',
-                        primaryColor: Color(0xFF1565C0),
-                        backgroundColor: Colors.white,
-                        icon: Icons.point_of_sale_rounded,
-                        homeScreen: HomeCashierScreen(),
-                        showRegister: true,
-                      ),
-                    ),
-                  ),
-                  (route) => false,
-                );
-                
-                // Tampilkan pesan kenapa dia ditendang
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Sesi diakhiri: Akses Anda telah dicabut oleh Admin.'),
-                    backgroundColor: Colors.red,
-                    duration: Duration(seconds: 5),
-                  ),
-                );
-              }
+          callback: (payload) {
+            if (payload.newRecord['status'] == 'rejected') {
+              _forceLogout('Akses Anda telah dicabut oleh Admin.');
             }
           },
         )
         .subscribe();
+
+    // 3. Telinga Hapus Akun (Jika akun lenyap sepenuhnya dari database)
+    _supabase
+        .channel('kasir_delete_rt')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.delete,
+          schema: 'public',
+          table: 'profiles',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: userId, // ID pada tabel profiles adalah ID User
+          ),
+          callback: (payload) {
+            _forceLogout('Akun Kasir Anda telah dihapus permanen.');
+          },
+        )
+        .subscribe();
+  }
+
+  // =========================================================
+  // FUNGSI HELPER: LOGOUT PAKSA
+  // =========================================================
+  Future<void> _forceLogout(String pesan) async {
+    await _authService.logout();
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const LoginScreen(
+            config: LoginConfig(
+              roleName: 'Staf Kasir',
+              roleDatabase: 'cashier',
+              labelIdentifier: 'Nomor HP / Email',
+              hint: '081234567890',
+              keyboardType: TextInputType.phone,
+              primaryColor: Color(0xFF1565C0),
+              secondaryColor: Color(0xFF0D47A1),
+              backgroundColor: Colors.white,
+              icon: Icons.point_of_sale_rounded,
+              tagline: 'Kelola pesanan dengan cepat & mudah',
+              homeScreen: HomeCashierScreen(),
+              showRegister: true,
+              registerScreen: RegisterScreen(), 
+            ),
+          ),
+        ),
+        (route) => false,
+      );
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Sesi diakhiri: $pesan'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
   }
 
   void _handleUpdateStatus(Map<String, dynamic> order, String newStatus) {

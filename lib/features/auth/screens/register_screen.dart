@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // [TAMBAHAN] Wajib di-import
 import 'package:laundry_one/features/auth/services/auth_service.dart';
 import 'package:laundry_one/features/cashier/screens/home_cashier_screen.dart';
 import 'package:laundry_one/features/auth/screens/login_screen.dart';
@@ -62,7 +63,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Daftar sebagai kasir — role otomatis 'cashier' di auth_service
+      // 1. Daftar sebagai kasir — role otomatis 'cashier' di auth_service
       await _authService.registerKasir(
         email: email,
         phone: phone,
@@ -70,12 +71,51 @@ class _RegisterScreenState extends State<RegisterScreen> {
         fullName: nama,
       );
 
-      if (mounted) {
-        _showSnackBar('Akun kasir berhasil dibuat! Silakan login.', Colors.green);
+      // =========================================================
+      // [PERBAIKAN KUNCI]: OTOMATIS MASUKKAN KE TABEL KASIR 
+      // SEBAGAI 'PENDING'
+      // =========================================================
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+      String profileId = '';
 
-        // Setelah register → kembali ke halaman login
-        // Tidak langsung masuk karena Supabase perlu konfirmasi
-        await Future.delayed(const Duration(seconds: 1));
+      if (user != null) {
+        profileId = user.id;
+      } else {
+        // Jika sistem tidak auto-login, kita cari berdasarkan nomor HP
+        String localPhone = phone;
+        if (localPhone.startsWith('+62')) localPhone = '0${localPhone.substring(3)}';
+        if (localPhone.startsWith('62')) localPhone = '0${localPhone.substring(2)}';
+
+        final profile = await supabase.from('profiles').select('id').eq('nomor_hp', localPhone).maybeSingle();
+        if (profile != null) profileId = profile['id'];
+      }
+
+      if (profileId.isNotEmpty) {
+        // Cek apakah sudah ada untuk mencegah duplikat saat ditekan 2x
+        final cekKasir = await supabase.from('kasir').select('id').eq('profile_id', profileId).maybeSingle();
+        
+        if (cekKasir == null) {
+          // Masukkan ke tabel kasir agar Admin bisa melihat dan Approve
+          await supabase.from('kasir').insert({
+            'profile_id': profileId,
+            'status': 'pending', 
+          });
+        }
+        
+        // Jika otomatis masuk, usir (logout) kasir tersebut.
+        // Ia baru boleh masuk aplikasi HANYA JIKA sudah di-approve Admin
+        if (user != null) {
+          await supabase.auth.signOut(); 
+        }
+      }
+      // =========================================================
+
+      if (mounted) {
+        // Teks feedback diubah agar Kasir sadar mereka harus menunggu persetujuan
+        _showSnackBar('Pendaftaran berhasil! Akun Anda sedang menunggu persetujuan Admin.', Colors.green);
+
+        await Future.delayed(const Duration(seconds: 2));
 
         if (mounted) {
           Navigator.pushAndRemoveUntil(
@@ -91,7 +131,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   icon: Icons.point_of_sale_rounded,
                   homeScreen: HomeCashierScreen(),
                   showRegister: true,
-                  registerScreen: RegisterScreen(), // <--- TAMBAHKAN BARIS INI
+                  registerScreen: RegisterScreen(), 
                 ),
               ),
             ),

@@ -859,7 +859,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
       if (voucher == null)
         throw 'Voucher tidak valid atau milik pelanggan lain.';
-      if (DateTime.now().isAfter(DateTime.parse(voucher['berlaku_sampai'])))
+      // SESUDAH DIPERBAIKI:
+      if (DateTime.now().toUtc().isAfter(DateTime.parse(voucher['berlaku_sampai']).toUtc()))  
         throw 'Voucher ini sudah expired.';
 
       double diskon = _hitungDiskon(voucher['rewards_catalog']);
@@ -1072,7 +1073,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             .update({
               'status': 'dipakai',
               'dipakai_di_order': order['id'],
-              'dipakai_at': now.toIso8601String(),
+              // SESUDAH DIPERBAIKI:
+              'dipakai_at': now.toUtc().toIso8601String(),
             })
             .eq('id', _voucherData!['id']);
       } else if (_selectedAutoReward != null && customerId != null) {
@@ -1112,8 +1114,12 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                   'POS-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}',
               'status': 'dipakai',
               'dipakai_di_order': order['id'],
-              'dipakai_at': now.toIso8601String(),
-              'berlaku_sampai': now.toUtc().toIso8601String(),
+              // ===============================================
+              // PERBAIKAN: Gunakan UTC agar jam tidak meleset
+              // ===============================================
+              'dipakai_at': now.toUtc().toIso8601String(), 
+              'berlaku_sampai': now.add(const Duration(days: 30)).toUtc().toIso8601String(), 
+              // ===============================================
               'poin_digunakan': poinReq,
               'dipakai_oleh': kasirId,
               'eksekutor': eksekutorName,

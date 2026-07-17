@@ -75,8 +75,11 @@ class _ReportCashFlowScreenState extends State<ReportCashFlowScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      final startStr = '${_startDate.year}-${_startDate.month.toString().padLeft(2, '0')}-${_startDate.day.toString().padLeft(2, '0')}T00:00:00';
-      final endStr = '${_endDate.year}-${_endDate.month.toString().padLeft(2, '0')}-${_endDate.day.toString().padLeft(2, '0')}T23:59:59';
+      final startLocal = DateTime(_startDate.year, _startDate.month, _startDate.day, 0, 0, 0);
+      final endLocal = DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59, 59);
+
+      final startStr = startLocal.toUtc().toIso8601String();
+      final endStr = endLocal.toUtc().toIso8601String();
 
       final resPayments = await _supabase.from('order_payments').select('jumlah, metode').gte('created_at', startStr).lte('created_at', endStr);
       double cash = 0, qris = 0, transfer = 0;

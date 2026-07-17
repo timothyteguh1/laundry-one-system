@@ -234,6 +234,71 @@ class _PelangganTabState extends State<PelangganTab> {
     );
   }
 
+  // =========================================================
+  // [FITUR BARU] RESET PASSWORD PELANGGAN (Khusus Super Admin)
+  // =========================================================
+  Future<void> _resetPassword(String profileId, String namaPelanggan) async {
+    final pwdCtrl = TextEditingController();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _DS.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Reset Sandi Pelanggan', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: _DS.textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Masukkan kata sandi baru untuk $namaPelanggan (minimal 6 karakter).', style: const TextStyle(color: _DS.textSecondary, fontSize: 13)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: pwdCtrl, 
+              obscureText: true, 
+              decoration: InputDecoration(
+                labelText: 'Sandi Baru',
+                labelStyle: const TextStyle(color: _DS.textHint, fontSize: 13),
+                filled: true,
+                fillColor: _DS.ground,
+                prefixIcon: const Icon(Icons.lock_reset_rounded, color: _DS.textHint, size: 20),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _DS.blue, width: 1.5)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              )
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal', style: TextStyle(color: _DS.textSecondary))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            onPressed: () {
+              if (pwdCtrl.text.length >= 6) Navigator.pop(ctx, true);
+            },
+            child: const Text('Reset', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      setState(() => _isProcessing = true);
+      try {
+        // [EDGE FUNCTION CALL] Panggil Edge Function reset-customer-password
+        await _supabase.functions.invoke('reset-customer-password', body: {
+          'user_id': profileId,
+          'new_password': pwdCtrl.text.trim(),
+        });
+        
+        if (mounted) _showCustomDialog(title: 'Berhasil Reset Sandi', message: 'Kata sandi $namaPelanggan telah diperbarui.', isSuccess: true);
+      } catch (e) {
+        if (mounted) {
+          _showCustomDialog(title: 'Gagal Reset', message: e.toString().replaceAll('Exception: ', ''), isSuccess: false);
+        }
+      } finally {
+        if (mounted) setState(() => _isProcessing = false);
+      }
+    }
+  }
+
   Future<void> _hapusPelanggan(String profileId, String nama) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -533,6 +598,8 @@ class _PelangganTabState extends State<PelangganTab> {
                                                     if (custId != null) _showAdjustPointsSheet(custId, c['nama_lengkap'] ?? 'Pelanggan', poin); 
                                                     else _showCustomDialog(title: 'Gagal', message: 'Data pelanggan belum lengkap (Dompet Poin kosong).', isSuccess: false); 
                                                   } 
+                                                  // [FITUR BARU] Panggil fungsi reset sandi
+                                                  else if (val == 'reset_sandi') { _resetPassword(c['id'], c['nama_lengkap'] ?? 'Pelanggan'); }
                                                   else if (val == 'hapus') { _hapusPelanggan(c['id'], c['nama_lengkap'] ?? 'Pelanggan'); }
                                                   else if (val == 'aktifkan') { _aktifkanPelanggan(c['id'], c['nama_lengkap'] ?? 'Pelanggan'); }
                                                 },
@@ -542,6 +609,8 @@ class _PelangganTabState extends State<PelangganTab> {
                                                       ]
                                                     : [
                                                         const PopupMenuItem(value: 'edit_poin', child: Row(children: [Icon(Icons.edit_note_rounded, color: _DS.blue, size: 20), SizedBox(width: 8), Text('Koreksi Poin')])),
+                                                        // [FITUR BARU] Tombol Reset Sandi khusus Admin
+                                                        const PopupMenuItem(value: 'reset_sandi', child: Row(children: [Icon(Icons.lock_reset_rounded, color: Colors.orange, size: 20), SizedBox(width: 8), Text('Reset Sandi', style: TextStyle(color: Colors.orange))])),
                                                         const PopupMenuItem(value: 'hapus', child: Row(children: [Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20), SizedBox(width: 8), Text('Hapus Akun', style: TextStyle(color: Colors.red))])),
                                                       ],
                                               ),

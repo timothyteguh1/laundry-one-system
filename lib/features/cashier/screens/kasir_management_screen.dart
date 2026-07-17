@@ -239,7 +239,8 @@ class _KasirManagementScreenState extends State<KasirManagementScreen> {
       await _supabase.from('kasir').update({
         'status': statusBaru,
         'approved_by': statusBaru == 'approved' ? adminId : null,
-        'approved_at': statusBaru == 'approved' ? DateTime.now().toIso8601String() : null,
+        // SESUDAH DIPERBAIKI:
+        'approved_at': statusBaru == 'approved' ? DateTime.now().toUtc().toIso8601String() : null,
       }).eq('id', kasirId);
       
       await _loadKasir();
