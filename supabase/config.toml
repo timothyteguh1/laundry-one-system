@@ -419,3 +419,36 @@ entrypoint = "./functions/register-customer/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/register-customer/*.html" ]
+
+[functions.reset-kasir-password]
+enabled = true
+verify_jwt = true
+import_map = "./functions/reset-kasir-password/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/reset-kasir-password/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/reset-kasir-password/*.html" ]
+
+[functions.delete-kasir]
+enabled = true
+verify_jwt = true
+import_map = "./functions/delete-kasir/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/delete-kasir/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/delete-kasir/*.html" ]
+
+[functions.create-kasir]
+enabled = true
+verify_jwt = true
+import_map = "./functions/create-kasir/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/create-kasir/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/create-kasir/*.html" ]

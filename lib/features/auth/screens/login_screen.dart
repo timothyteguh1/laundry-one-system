@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'package:laundry_one/features/auth/services/auth_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ============================================================
 // LOGIN SCREEN — Industry-standard design
@@ -230,7 +231,53 @@ class _LoginScreenState extends State<LoginScreen>
           identifier: _identifierController.text.trim(),
           password: _passwordController.text.trim(),
         );
+        // ==========================================================
+        // [TAMBAHAN BARU] GUARD KASIR: CEK STATUS APPROVAL
+        // ==========================================================
+        // ==========================================================
+        // GUARD KASIR & BYPASS ADMIN
+        // ==========================================================
+        if (widget.config.roleDatabase == 'cashier') {
+          final userId = Supabase.instance.client.auth.currentUser?.id;
+          if (userId != null) {
+            
+            // 1. Cek dulu apakah dia Admin di tabel profiles
+            final profileData = await Supabase.instance.client
+                .from('profiles')
+                .select('role')
+                .eq('id', userId)
+                .maybeSingle();
+
+            // 2. Jika dia super_admin, lewati pengecekan kasir (Bypass)
+            if (profileData != null && profileData['role'] == 'super_admin') {
+              // Lanjut masuk ke Beranda
+            } else {
+              // 3. Jika dia BUKAN super_admin (berarti Kasir beneran), baru cek tabel kasir
+              final kasirData = await Supabase.instance.client
+                  .from('kasir')
+                  .select('status')
+                  .eq('profile_id', userId)
+                  .maybeSingle();
+
+              if (kasirData == null) {
+                await Supabase.instance.client.auth.signOut();
+                throw Exception('Data kasir tidak ditemukan. Hubungi admin.');
+              }
+
+              final status = kasirData['status'];
+              if (status == 'pending') {
+                await Supabase.instance.client.auth.signOut();
+                throw Exception('Akun Anda masih "Menunggu Persetujuan". Silakan hubungi Admin untuk membuka akses.');
+              } else if (status == 'rejected') {
+                await Supabase.instance.client.auth.signOut();
+                throw Exception('Akses Anda telah ditolak/dicabut oleh Admin.');
+              }
+            }
+          }
+        }
+        // ==========================================================
       }
+      
 
       if (mounted) {
         HapticFeedback.mediumImpact();

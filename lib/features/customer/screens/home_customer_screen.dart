@@ -12,6 +12,8 @@ import 'package:laundry_one/features/customer/screens/tabs/beranda_tab.dart';
 import 'package:laundry_one/features/customer/screens/tabs/aktivitas_tab.dart';
 import 'package:laundry_one/features/customer/screens/tabs/katalog_tab.dart';
 import 'package:laundry_one/features/customer/screens/tabs/profil_tab.dart';
+// Tambahkan di deretan import paling atas
+import 'package:laundry_one/features/customer/screens/register_customer_screen.dart'; // Sesuaikan dengan path folder Anda jika berbeda
 
 class HomeCustomerScreen extends StatefulWidget {
   const HomeCustomerScreen({super.key});
@@ -112,7 +114,29 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
     HapticFeedback.mediumImpact();
     await AuthService().logout();
     if (mounted) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen(config: LoginConfig(roleName: 'Pelanggan', roleDatabase: 'customer', labelIdentifier: 'Nomor HP', hint: '081234567890', keyboardType: TextInputType.phone, primaryColor: CustomerTheme.primary, secondaryColor: CustomerTheme.primaryDark, backgroundColor: Colors.white, icon: Icons.local_laundry_service_rounded, tagline: 'Lacak cucian & kumpulkan poinnya', homeScreen: HomeCustomerScreen(), showRegister: true))));
+      Navigator.pushAndRemoveUntil( // <-- Gunakan pushAndRemoveUntil
+        context,
+        MaterialPageRoute(
+          builder: (_) => const LoginScreen(
+            config: LoginConfig(
+              roleName: 'Pelanggan',
+              roleDatabase: 'customer',
+              labelIdentifier: 'Nomor HP',
+              hint: '081234567890',
+              keyboardType: TextInputType.phone,
+              primaryColor: CustomerTheme.primary,
+              secondaryColor: CustomerTheme.primaryDark,
+              backgroundColor: Colors.white,
+              icon: Icons.local_laundry_service_rounded,
+              tagline: 'Lacak cucian & kumpulkan poinnya',
+              homeScreen: HomeCustomerScreen(),
+              showRegister: true,
+              registerScreen: RegisterCustomerScreen(), // <-- Tambahkan parameter ini!
+            ),
+          ),
+        ),
+        (route) => false, // <-- Bersihkan seluruh tumpukan layar
+      );
     }
   }
 

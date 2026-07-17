@@ -81,16 +81,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(
-              builder: (context) => LoginScreen(
+              builder: (context) => const LoginScreen(
                 config: LoginConfig(
                   roleName: 'Staf Kasir',
                   roleDatabase: 'cashier',
                   labelIdentifier: 'Nomor HP / Email',
-                  primaryColor: const Color(0xFF1976D2),
-                  backgroundColor: const Color(0xFFF0F7FF),
+                  primaryColor: Color(0xFF1976D2),
+                  backgroundColor: Color(0xFFF0F7FF),
                   icon: Icons.point_of_sale_rounded,
-                  homeScreen: const HomeCashierScreen(),
+                  homeScreen: HomeCashierScreen(),
                   showRegister: true,
+                  registerScreen: RegisterScreen(), // <--- TAMBAHKAN BARIS INI
                 ),
               ),
             ),

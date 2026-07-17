@@ -9,6 +9,9 @@ import 'package:laundry_one/features/cashier/screens/inventory_screen.dart';
 import 'package:laundry_one/features/cashier/screens/tabs/report_tab.dart';
 import 'package:laundry_one/features/cashier/screens/tabs/pelanggan_tab.dart';
 import 'package:laundry_one/features/cashier/screens/invoice_screen.dart';
+// Sesuaikan dengan letak file register_screen Anda
+import 'package:laundry_one/features/auth/screens/register_screen.dart';
+
 
 // ============================================================
 // DESIGN SYSTEM — Laundry One POS
@@ -417,7 +420,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                     HapticFeedback.mediumImpact();
                     await _authService.logout();
                     if (mounted)
-                      Navigator.pushReplacement(
+                      Navigator.pushAndRemoveUntil( // <-- Ubah ke pushAndRemoveUntil
                         context,
                         MaterialPageRoute(
                           builder: (_) => const LoginScreen(
@@ -434,9 +437,11 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                               tagline: 'Kelola pesanan dengan cepat & mudah',
                               homeScreen: HomeCashierScreen(),
                               showRegister: true,
+                              registerScreen: RegisterScreen(), // <-- TAMBAHKAN INI
                             ),
                           ),
                         ),
+                        (route) => false, // <-- Bersihkan semua tumpukan layar
                       );
                   },
                 ),
@@ -720,6 +725,9 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     }
   }
   void _subscribeRealtime() {
+    final userId = _supabase.auth.currentUser!.id;
+
+    // 1. Telinga untuk Pesanan (Order)
     _supabase
         .channel('orders_rt')
         .onPostgresChanges(
@@ -727,6 +735,57 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
           schema: 'public',
           table: 'orders',
           callback: (_) => _loadData(),
+        )
+        .subscribe();
+
+    // 2. [TAMBAHAN BARU] Telinga untuk Status Kasir (Force Logout)
+    _supabase
+        .channel('kasir_status_rt')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'kasir',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'profile_id',
+            value: userId,
+          ),
+          callback: (payload) async {
+            final newStatus = payload.newRecord['status'];
+            // Jika tiba-tiba status berubah jadi rejected atau dihapus
+            if (newStatus == 'rejected' || newStatus == null) {
+              await _authService.logout(); // Logout paksa dari server
+              if (mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const LoginScreen(
+                      config: LoginConfig(
+                        roleName: 'Staf Kasir',
+                        roleDatabase: 'cashier',
+                        labelIdentifier: 'Nomor HP',
+                        primaryColor: Color(0xFF1565C0),
+                        backgroundColor: Colors.white,
+                        icon: Icons.point_of_sale_rounded,
+                        homeScreen: HomeCashierScreen(),
+                        showRegister: true,
+                      ),
+                    ),
+                  ),
+                  (route) => false,
+                );
+                
+                // Tampilkan pesan kenapa dia ditendang
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Sesi diakhiri: Akses Anda telah dicabut oleh Admin.'),
+                    backgroundColor: Colors.red,
+                    duration: Duration(seconds: 5),
+                  ),
+                );
+              }
+            }
+          },
         )
         .subscribe();
   }
@@ -1363,8 +1422,8 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                       onTap: () async {
                         HapticFeedback.mediumImpact();
                         await AuthService().logout();
-                        if (mounted)
-                          Navigator.pushReplacement(
+                        if (mounted) {
+                          Navigator.pushAndRemoveUntil( // <-- Gunakan pushAndRemoveUntil
                             context,
                             MaterialPageRoute(
                               builder: (_) => const LoginScreen(
@@ -1378,14 +1437,16 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                                   secondaryColor: Color(0xFF0D47A1),
                                   backgroundColor: Colors.white,
                                   icon: Icons.point_of_sale_rounded,
-                                  tagline:
-                                      'Kelola pesanan dengan cepat & mudah',
+                                  tagline: 'Kelola pesanan dengan cepat & mudah',
                                   homeScreen: HomeCashierScreen(),
                                   showRegister: true,
+                                  registerScreen: RegisterScreen(), // <-- Tambahkan ini!
                                 ),
                               ),
                             ),
+                            (route) => false,
                           );
+                        }
                       },
                       borderRadius: BorderRadius.circular(12),
                       child: const Padding(
