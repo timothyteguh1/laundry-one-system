@@ -233,9 +233,49 @@ class AuthService {
   bool isLoggedIn() => _supabase.auth.currentUser != null;
 
   // ============================================================
-  // LOGOUT
+  // LOGOUT DENGAN PEMBERSIH JEJAK FCM
   // ============================================================
-  Future<void> logout() async => await _supabase.auth.signOut();
+  Future<void> logout() async {
+    final userId = _supabase.auth.currentUser?.id;
+
+    if (userId != null) {
+      try {
+        // Hapus token FCM agar notifikasi orang lain tidak masuk ke HP ini
+        await _supabase.from('profiles').update({'fcm_token': null}).eq('id', userId);
+      } catch (_) {
+        // Abaikan jika gagal (misal koneksi terputus), prioritas utama adalah logout
+      }
+    }
+    
+    // Baru kemudian hancurkan sesi login
+    await _supabase.auth.signOut();
+  }
+  // ============================================================
+  // LUPA SANDI VIA OTP (Memanggil Edge Function otp-self-reset)
+  // ============================================================
+  Future<void> resetPasswordViaOtp({
+    required String phone,
+    required String newPassword,
+  }) async {
+    try {
+      final response = await _supabase.functions.invoke(
+        'otp-self-reset',
+        body: {
+          'phone': phone,
+          'new_password': newPassword,
+        },
+      );
+
+      if (response.status != 200) {
+        final errorMsg = response.data['error'] ?? 'Gagal mereset sandi.';
+        throw Exception(_translateError(errorMsg.toString()));
+      }
+    } on FunctionException catch (e) {
+      throw Exception('Server Error: ${e.toString()}');
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    }
+  }
 
   // ============================================================
   // TRANSLATE ERROR

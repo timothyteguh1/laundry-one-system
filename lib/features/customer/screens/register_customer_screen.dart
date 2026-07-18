@@ -4,6 +4,11 @@ import 'package:laundry_one/features/auth/services/auth_service.dart';
 import 'package:laundry_one/features/customer/screens/home_customer_screen.dart';
 
 // ============================================================
+// IMPORT WAJIB UNTUK JURUS NINJA NOTIFIKASI FCM
+// ============================================================
+import 'package:laundry_one/features/auth/services/notification_service.dart';
+
+// ============================================================
 // REGISTER CUSTOMER SCREEN
 // Pelanggan daftar sendiri dari aplikasi HP
 //
@@ -134,6 +139,16 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
         // Password dihandle terpisah — perlu update auth_service
         password: _passwordController.text.trim(),
       );
+
+      // ==========================================================
+      // [JURUS NINJA FCM]: UPDATE TOKEN DIAM-DIAM SETELAH DAFTAR
+      // ==========================================================
+      try {
+        await NotificationService.saveTokenToSupabase();
+      } catch (e) {
+        debugPrint('Ninja Token Gagal: $e'); // Gagal diam-diam tanpa merusak pendaftaran
+      }
+      // ==========================================================
 
       if (mounted) {
         HapticFeedback.mediumImpact();

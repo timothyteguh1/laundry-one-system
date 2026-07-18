@@ -6,6 +6,11 @@ import 'package:laundry_one/features/auth/services/auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ============================================================
+// IMPORT WAJIB UNTUK JURUS NINJA NOTIFIKASI FCM
+// ============================================================
+import 'package:laundry_one/features/auth/services/notification_service.dart';
+
+// ============================================================
 // LOGIN SCREEN — Industry-standard design
 // ============================================================
 
@@ -215,44 +220,30 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _isLoading = true);
 
     try {
-      // =========================================================
-      // Logika Cerdas Pembagi Aplikasi (TIDAK ADA YANG DIUBAH)
-      // =========================================================
       if (widget.config.roleDatabase == 'customer') {
-        // Jika dibuka di Aplikasi Pelanggan
         await _authService.loginWithRole(
           identifier: _identifierController.text.trim(),
           password: _passwordController.text.trim(),
           expectedRole: 'customer',
         );
       } else {
-        // Jika dibuka di Aplikasi Kasir/Admin
         await _authService.loginUniversal(
           identifier: _identifierController.text.trim(),
           password: _passwordController.text.trim(),
         );
-        // ==========================================================
-        // [TAMBAHAN BARU] GUARD KASIR: CEK STATUS APPROVAL
-        // ==========================================================
-        // ==========================================================
-        // GUARD KASIR & BYPASS ADMIN
-        // ==========================================================
+
         if (widget.config.roleDatabase == 'cashier') {
           final userId = Supabase.instance.client.auth.currentUser?.id;
           if (userId != null) {
-            
-            // 1. Cek dulu apakah dia Admin di tabel profiles
             final profileData = await Supabase.instance.client
                 .from('profiles')
                 .select('role')
                 .eq('id', userId)
                 .maybeSingle();
 
-            // 2. Jika dia super_admin, lewati pengecekan kasir (Bypass)
             if (profileData != null && profileData['role'] == 'super_admin') {
-              // Lanjut masuk ke Beranda
+              // Bypass
             } else {
-              // 3. Jika dia BUKAN super_admin (berarti Kasir beneran), baru cek tabel kasir
               final kasirData = await Supabase.instance.client
                   .from('kasir')
                   .select('status')
@@ -275,9 +266,17 @@ class _LoginScreenState extends State<LoginScreen>
             }
           }
         }
-        // ==========================================================
       }
-      
+
+      // ==========================================================
+      // [JURUS NINJA FCM]: UPDATE TOKEN DIAM-DIAM SETELAH LOGIN
+      // ==========================================================
+      try {
+        await NotificationService.saveTokenToSupabase();
+      } catch (e) {
+        debugPrint('Ninja Token Gagal: $e'); // Gagal diam-diam tanpa mengganggu proses login
+      }
+      // ==========================================================
 
       if (mounted) {
         HapticFeedback.mediumImpact();
@@ -301,7 +300,6 @@ class _LoginScreenState extends State<LoginScreen>
         String title = 'Gagal Masuk';
         String message = errorMsg.replaceAll('Exception: ', '');
 
-        // [TAMBAHAN] Deteksi masalah koneksi internet
         if (errorMsg.contains('SocketException') ||
             errorMsg.contains('Failed host lookup') ||
             errorMsg.contains('Network is unreachable') ||
@@ -595,7 +593,6 @@ class _LoginScreenState extends State<LoginScreen>
               ),
             ),
 
-            // [UPDATE UX] Scene Loading Glassmorphism di Stack paling atas
             if (_isLoading)
               Positioned.fill(
                 child: BackdropFilter(
