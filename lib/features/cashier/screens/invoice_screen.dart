@@ -58,6 +58,7 @@ class InvoiceScreen extends StatefulWidget {
   final String created_at;
   final bool isFromHome;
   final String? status;
+  final bool isAdmin;
 
   const InvoiceScreen({
     super.key,
@@ -75,6 +76,7 @@ class InvoiceScreen extends StatefulWidget {
     this.created_at = '',
     this.isFromHome = false,
     this.status,
+    this.isAdmin = false,
   });
 
   @override
@@ -89,26 +91,26 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   bool _connected = false;
 
   // [TAMBAHAN] Variabel Admin & Supabase
-  bool _isAdmin = false;
+  // bool _isAdmin = false;
   final _supabase = Supabase.instance.client;
 
   @override
   void initState() {
     super.initState();
     _initBluetooth();
-    _checkAdminRole(); // [TAMBAHAN] Cek Otoritas
+    // _checkAdminRole(); // [TAMBAHAN] Cek Otoritas
   }
 
-  // [TAMBAHAN] Cek Otoritas Admin
-  Future<void> _checkAdminRole() async {
-    try {
-      final myId = _supabase.auth.currentUser!.id;
-      final profile = await _supabase.from('profiles').select('role').eq('id', myId).single();
-      if (mounted) setState(() => _isAdmin = profile['role'] == 'super_admin');
-    } catch (e) {
-      debugPrint('Error role check: $e');
-    }
-  }
+  // // [TAMBAHAN] Cek Otoritas Admin
+  // Future<void> _checkAdminRole() async {
+  //   try {
+  //     final myId = _supabase.auth.currentUser!.id;
+  //     final profile = await _supabase.from('profiles').select('role').eq('id', myId).single();
+  //     if (mounted) setState(() => _isAdmin = profile['role'] == 'super_admin');
+  //   } catch (e) {
+  //     debugPrint('Error role check: $e');
+  //   }
+  // }
 
   // [TAMBAHAN] Fungsi Void / Hapus Nota
   Future<void> _hapusNota() async {
@@ -924,7 +926,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                       ],
 
                       // [TAMBAHAN BARU] TOMBOL HAPUS KHUSUS ADMIN
-                      if (_isAdmin) ...[
+                      if (widget.isAdmin) ...[
                         const SizedBox(height: 12),
                         SizedBox(
                           width: double.infinity,

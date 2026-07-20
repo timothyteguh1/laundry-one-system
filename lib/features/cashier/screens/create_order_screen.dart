@@ -1002,8 +1002,16 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         });
       }
 
+      final List<Map<String, dynamic>> itemsPayload = [];
+
+      // [FIX] Gabungkan qty per inventory_id dulu, biar kalau ada 2 baris
+      // keranjang untuk produk yang sama, potong stoknya cuma sekali (akurat)
+      // dan gak boros round-trip ke database satu-satu per baris.
+      final Map<String, double> qtyKurangPerInventory = {};
+
       for (final item in _cart) {
-        await _supabase.from('order_items').insert({
+        // Masukkan data ke keranjang sementara, jangan langsung tembak ke DB
+        itemsPayload.add({
           'order_id': order['id'],
           'service_id': item['service']['id'],
           'jumlah': item['qty'],
@@ -1011,35 +1019,51 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           'subtotal': (item['subtotal'] as double).toInt(),
         });
 
+        // Logika potong stok asli Anda TETAP BERJALAN seperti biasa,
+        // hanya saja sekarang cuma dihitung dulu (belum tembak ke DB)
         if (item['service']['tipe'] == 'produk' &&
             item['service']['inventory_id'] != null) {
-          final invId = item['service']['inventory_id'];
+          final invId = item['service']['inventory_id'] as String;
           final qtyPerUnit = (item['service']['qty_per_unit'] ?? 1).toDouble();
           final qtyKurang = item['qty'] * qtyPerUnit;
 
-          final inv = await _supabase
-              .from('inventory')
-              .select('stok_saat_ini')
-              .eq('id', invId)
-              .single();
-          final stokBefore = (inv['stok_saat_ini'] as num).toDouble();
-          final stokAfter = stokBefore - qtyKurang;
-
-          await _supabase
-              .from('inventory')
-              .update({'stok_saat_ini': stokAfter})
-              .eq('id', invId);
-          await _supabase.from('inventory_log').insert({
-            'inventory_id': invId,
-            'tipe': 'keluar',
-            'qty': qtyKurang,
-            'stok_sebelum': stokBefore,
-            'stok_sesudah': stokAfter,
-            'keterangan': 'Order $nomorOrder',
-            'order_id': order['id'],
-            'created_by': kasirId,
-          });
+          qtyKurangPerInventory[invId] =
+              (qtyKurangPerInventory[invId] ?? 0) + qtyKurang;
         }
+      }
+
+      // Tembak seluruh item ke database DALAM 1 KALI JALAN
+      if (itemsPayload.isNotEmpty) {
+        await _supabase.from('order_items').insert(itemsPayload);
+      }
+
+      // Potong stok per inventory_id yang unik (total qty sudah digabung di atas)
+      for (final entry in qtyKurangPerInventory.entries) {
+        final invId = entry.key;
+        final qtyKurang = entry.value;
+
+        final inv = await _supabase
+            .from('inventory')
+            .select('stok_saat_ini')
+            .eq('id', invId)
+            .single();
+        final stokBefore = (inv['stok_saat_ini'] as num).toDouble();
+        final stokAfter = stokBefore - qtyKurang;
+
+        await _supabase
+            .from('inventory')
+            .update({'stok_saat_ini': stokAfter})
+            .eq('id', invId);
+        await _supabase.from('inventory_log').insert({
+          'inventory_id': invId,
+          'tipe': 'keluar',
+          'qty': qtyKurang,
+          'stok_sebelum': stokBefore,
+          'stok_sesudah': stokAfter,
+          'keterangan': 'Order $nomorOrder',
+          'order_id': order['id'],
+          'created_by': kasirId,
+        });
       }
 
       if (customerId != null && poinDidapat > 0 && _tipeBayar == 'lunas') {
@@ -1149,6 +1173,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               metodeBayar: metodeBayarFinal,
               isPiutang: _tipeBayar == 'piutang',
               created_at: _tglMasuk.toIso8601String(),
+              isAdmin: roleKasir == 'super_admin',
             ),
           ),
         );

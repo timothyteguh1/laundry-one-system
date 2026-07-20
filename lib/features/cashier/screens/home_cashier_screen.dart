@@ -648,9 +648,9 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       final todayStart = startOfTodayLocal.toUtc().toIso8601String();
       final todayEnd = endOfTodayLocal.toUtc().toIso8601String();
 
+      // [TAMBAH cashier_id DI SINI]
       final queryStr =
-          'id, nomor_order, status, total_harga, is_piutang, metode_bayar_awal, created_at, estimasi_selesai, jatuh_tempo, customer_id, poin_didapat, poin_sudah_diberikan, customers(profiles(nama_lengkap, nomor_hp)), profiles!orders_cashier_id_fkey(nama_lengkap), order_items(jumlah, harga_satuan, services(nama))';
-
+          'id, nomor_order, cashier_id, status, total_harga, is_piutang, metode_bayar_awal, created_at, estimasi_selesai, jatuh_tempo, customer_id, poin_didapat, poin_sudah_diberikan, customers(profiles(nama_lengkap, nomor_hp)), profiles!orders_cashier_id_fkey(nama_lengkap), order_items(jumlah, harga_satuan, services(nama))';
       final results = await Future.wait([
         _supabase.from('orders').select(queryStr).gte('created_at', startStr).lte('created_at', endStr).order('created_at', ascending: false),
         _supabase.from('orders').select(queryStr).gte('created_at', todayStart).lte('created_at', todayEnd).order('created_at', ascending: false),
@@ -1912,6 +1912,7 @@ void _showPenjualanDetail() {
           metodeBayar: order['metode_bayar_awal'] ?? 'cash',
           isPiutang: order['is_piutang'] == true,
           created_at: order['created_at'],
+          isAdmin: _userProfile?['role'] == 'super_admin',
         ),
       ),
     );
