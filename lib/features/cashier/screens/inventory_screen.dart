@@ -140,7 +140,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
               const SizedBox(height: 8),
               Text(
                 message,
-                style: const TextStyle(color: _DS.textSecondary, fontSize: 13, height: 1.5),
+                style: const TextStyle(
+                  color: _DS.textSecondary,
+                  fontSize: 13,
+                  height: 1.5,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
@@ -151,11 +155,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isSuccess ? _DS.blue : Colors.red.shade600,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                     elevation: 0,
                   ),
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Mengerti', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                  child: const Text(
+                    'Mengerti',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                  ),
                 ),
               ),
             ],
@@ -168,8 +177,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
   Future<void> _checkRoleAndLoad() async {
     try {
       final myId = _supabase.auth.currentUser!.id;
-      final myProfile = await _supabase.from('profiles').select('role').eq('id', myId).single();
-      if (mounted) setState(() => _isAdmin = myProfile['role'] == 'super_admin');
+      final myProfile = await _supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', myId)
+          .single();
+      if (mounted)
+        setState(() => _isAdmin = myProfile['role'] == 'super_admin');
     } catch (e) {
       debugPrint('Role check error: $e');
     }
@@ -192,7 +206,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
         final ids = inventoryList.map((e) => e['id']).toList();
         final svcData = await _supabase
             .from('services')
-            .select('id, inventory_id, is_pinned, nama, harga_per_satuan, satuan, is_active')
+            .select(
+              'id, inventory_id, is_pinned, nama, harga_per_satuan, satuan, is_active',
+            )
             .inFilter('inventory_id', ids)
             .eq('is_active', true);
         for (final s in svcData) {
@@ -213,7 +229,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        _showCustomDialog(title: 'Gagal Memuat', message: e.toString(), isSuccess: false);
+        _showCustomDialog(
+          title: 'Gagal Memuat',
+          message: e.toString(),
+          isSuccess: false,
+        );
       }
     }
   }
@@ -231,7 +251,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
       List<Map<String, dynamic>> temp = _inventory;
 
       if (query.isNotEmpty) {
-        temp = temp.where((s) => (s['nama_item'] ?? '').toString().toLowerCase().contains(query)).toList();
+        temp = temp
+            .where(
+              (s) => (s['nama_item'] ?? '').toString().toLowerCase().contains(
+                query,
+              ),
+            )
+            .toList();
       }
 
       temp.sort((a, b) {
@@ -241,7 +267,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
         final pinB = (linkB != null && linkB['is_pinned'] == true) ? 1 : 0;
 
         if (pinA != pinB) return pinB.compareTo(pinA);
-        return (a['nama_item'] ?? '').toString().compareTo((b['nama_item'] ?? '').toString());
+        return (a['nama_item'] ?? '').toString().compareTo(
+          (b['nama_item'] ?? '').toString(),
+        );
       });
 
       _filteredInventory = temp;
@@ -253,7 +281,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
     HapticFeedback.lightImpact();
     setState(() => _isLoading = true);
     try {
-      await _supabase.from('services').update({'is_pinned': !current}).eq('id', serviceId);
+      await _supabase
+          .from('services')
+          .update({'is_pinned': !current})
+          .eq('id', serviceId);
       await _loadInventory();
       if (mounted) {
         _showCustomDialog(
@@ -267,7 +298,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        _showCustomDialog(title: 'Gagal Mengubah Pin', message: e.toString(), isSuccess: false);
+        _showCustomDialog(
+          title: 'Gagal Mengubah Pin',
+          message: e.toString(),
+          isSuccess: false,
+        );
       }
     }
   }
@@ -278,8 +313,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
       labelStyle: const TextStyle(color: _DS.textHint, fontSize: 13),
       filled: true,
       fillColor: _DS.ground,
-      prefixIcon: icon != null ? Icon(icon, color: _DS.textHint, size: 20) : null,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      prefixIcon: icon != null
+          ? Icon(icon, color: _DS.textHint, size: 20)
+          : null,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: _DS.blue, width: 1.5),
@@ -300,22 +340,33 @@ class _InventoryScreenState extends State<InventoryScreen> {
           children: [
             Icon(Icons.warning_amber_rounded, color: Colors.red),
             SizedBox(width: 8),
-            Text('Hapus Barang?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            Text(
+              'Hapus Barang?',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
           ],
         ),
         content: Text(
           'Yakin ingin menghapus $nama dari gudang? Barang ini akan otomatis disembunyikan dari layar penjualan Kasir.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal', style: TextStyle(color: Colors.grey))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red.shade600,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Hapus', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Hapus',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -326,10 +377,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
       setState(() => _isLoading = true);
       try {
         // 1. Soft-Delete dari Gudang (Inventory)
-        await _supabase.from('inventory').update({'is_active': false}).eq('id', id);
+        await _supabase
+            .from('inventory')
+            .update({'is_active': false})
+            .eq('id', id);
 
         // 2. OTOMATIS Soft-Delete dari Etalase Kasir (Services) agar tak bisa dijual lagi
-        await _supabase.from('services').update({'is_active': false, 'is_pinned': false}).eq('inventory_id', id);
+        await _supabase
+            .from('services')
+            .update({'is_active': false, 'is_pinned': false})
+            .eq('inventory_id', id);
 
         await _loadInventory();
         if (mounted) {
@@ -342,7 +399,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
       } catch (e) {
         if (mounted) {
           setState(() => _isLoading = false);
-          _showCustomDialog(title: 'Gagal Menghapus', message: e.toString(), isSuccess: false);
+          _showCustomDialog(
+            title: 'Gagal Menghapus',
+            message: e.toString(),
+            isSuccess: false,
+          );
         }
       }
     }
@@ -363,18 +424,32 @@ class _InventoryScreenState extends State<InventoryScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => AlertDialog(
           backgroundColor: _DS.surface,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 24,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
           title: const Text(
             'Tambah Barang Fisik',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: _DS.textPrimary),
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+              color: _DS.textPrimary,
+            ),
           ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextField(controller: namaCtrl, decoration: _modernInputDecoration('Nama Barang (Cth: Deterjen)')),
+                TextField(
+                  controller: namaCtrl,
+                  decoration: _modernInputDecoration(
+                    'Nama Barang (Cth: Deterjen)',
+                  ),
+                ),
                 const SizedBox(height: 14),
                 TextField(
                   controller: stokCtrl,
@@ -387,34 +462,58 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   controller: modalCtrl,
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: _modernInputDecoration('Total Modal / Harga Beli (Rp)', icon: Icons.payments_outlined),
+                  decoration: _modernInputDecoration(
+                    'Total Modal / Harga Beli (Rp)',
+                    icon: Icons.payments_outlined,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 const Text(
                   '*Modal akan tercatat otomatis di Pengeluaran Kasir',
-                  style: TextStyle(fontSize: 11, color: Colors.orange, fontStyle: FontStyle.italic),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.orange,
+                    fontStyle: FontStyle.italic,
+                  ),
                 ),
                 const SizedBox(height: 18),
                 Container(
                   decoration: BoxDecoration(
                     color: isDijual ? _DS.sky : _DS.ground,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: isDijual ? _DS.blue : Colors.transparent),
+                    border: Border.all(
+                      color: isDijual ? _DS.blue : Colors.transparent,
+                    ),
                   ),
                   child: CheckboxListTile(
                     title: Text(
                       'Jual di Kasir?',
-                      style: TextStyle(fontWeight: FontWeight.w700, color: isDijual ? _DS.blue : _DS.textSecondary, fontSize: 14),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: isDijual ? _DS.blue : _DS.textSecondary,
+                        fontSize: 14,
+                      ),
                     ),
                     subtitle: Text(
-                      isDijual ? 'Barang akan muncul di layar pesanan' : 'Hanya pemakaian internal/gudang',
-                      style: TextStyle(fontSize: 11, color: isDijual ? _DS.blue.withOpacity(0.7) : _DS.textHint),
+                      isDijual
+                          ? 'Barang akan muncul di layar pesanan'
+                          : 'Hanya pemakaian internal/gudang',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDijual
+                            ? _DS.blue.withOpacity(0.7)
+                            : _DS.textHint,
+                      ),
                     ),
                     value: isDijual,
                     activeColor: _DS.blue,
-                    onChanged: (val) => setModalState(() => isDijual = val ?? false),
+                    onChanged: (val) =>
+                        setModalState(() => isDijual = val ?? false),
                     controlAffinity: ListTileControlAffinity.leading,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
                   ),
                 ),
                 if (isDijual) ...[
@@ -423,7 +522,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     controller: hargaJualCtrl,
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: _modernInputDecoration('Harga Jual per Pcs (Rp)', icon: Icons.sell_outlined),
+                    decoration: _modernInputDecoration(
+                      'Harga Jual per Pcs (Rp)',
+                      icon: Icons.sell_outlined,
+                    ),
                   ),
                 ],
               ],
@@ -431,20 +533,39 @@ class _InventoryScreenState extends State<InventoryScreen> {
           ),
           actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal', style: TextStyle(color: _DS.textSecondary, fontWeight: FontWeight.w600))),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                'Batal',
+                style: TextStyle(
+                  color: _DS.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: _DS.blue,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 14,
+                ),
                 elevation: 0,
               ),
               onPressed: () async {
-                if (namaCtrl.text.isEmpty || stokCtrl.text.isEmpty || modalCtrl.text.isEmpty) return;
+                if (namaCtrl.text.isEmpty ||
+                    stokCtrl.text.isEmpty ||
+                    modalCtrl.text.isEmpty)
+                  return;
                 if (isDijual && hargaJualCtrl.text.isEmpty) return;
 
                 Navigator.pop(ctx); // Tutup dialog input
-                setState(() => _isLoading = true); // Munculkan Loading Kaca Buram
+                setState(
+                  () => _isLoading = true,
+                ); // Munculkan Loading Kaca Buram
 
                 try {
                   final qty = int.parse(stokCtrl.text.trim());
@@ -494,22 +615,37 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     await _supabase.from('expenses').insert({
                       'cashier_id': kasirId,
                       'nominal': totalModal,
-                      'keterangan': 'Belanja Stok Awal: ${namaCtrl.text.trim()}',
+                      'keterangan':
+                          'Belanja Stok Awal: ${namaCtrl.text.trim()}',
                     });
                   }
 
                   await _loadInventory();
                   if (mounted) {
-                    _showCustomDialog(title: 'Tersimpan', message: 'Barang baru berhasil ditambahkan.', isSuccess: true);
+                    _showCustomDialog(
+                      title: 'Tersimpan',
+                      message: 'Barang baru berhasil ditambahkan.',
+                      isSuccess: true,
+                    );
                   }
                 } catch (e) {
                   if (mounted) {
                     setState(() => _isLoading = false);
-                    _showCustomDialog(title: 'Gagal Menyimpan', message: e.toString(), isSuccess: false);
+                    _showCustomDialog(
+                      title: 'Gagal Menyimpan',
+                      message: e.toString(),
+                      isSuccess: false,
+                    );
                   }
                 }
               },
-              child: const Text('Simpan Data', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              child: const Text(
+                'Simpan Data',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         ),
@@ -527,12 +663,18 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final existingLink = _serviceLinks[item['id'].toString()];
 
     final namaCtrl = TextEditingController(text: item['nama_item']);
-    final stokCtrl = TextEditingController(text: (item['stok_saat_ini'] as num).toInt().toString());
+    final stokCtrl = TextEditingController(
+      text: (item['stok_saat_ini'] as num).toInt().toString(),
+    );
     final hargaBeliCtrl = TextEditingController(
-      text: item['harga_beli'] != null ? (item['harga_beli'] as num).toInt().toString() : '0',
+      text: item['harga_beli'] != null
+          ? (item['harga_beli'] as num).toInt().toString()
+          : '0',
     );
     final hargaJualCtrl = TextEditingController(
-      text: existingLink != null ? (existingLink['harga_per_satuan'] as num).toInt().toString() : '',
+      text: existingLink != null
+          ? (existingLink['harga_per_satuan'] as num).toInt().toString()
+          : '',
     );
 
     bool isDijual = existingLink != null;
@@ -543,18 +685,30 @@ class _InventoryScreenState extends State<InventoryScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => AlertDialog(
           backgroundColor: _DS.surface,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 24,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
           title: const Text(
             'Edit Barang Fisik',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: _DS.textPrimary),
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+              color: _DS.textPrimary,
+            ),
           ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextField(controller: namaCtrl, decoration: _modernInputDecoration('Nama Barang')),
+                TextField(
+                  controller: namaCtrl,
+                  decoration: _modernInputDecoration('Nama Barang'),
+                ),
                 const SizedBox(height: 14),
                 TextField(
                   controller: stokCtrl,
@@ -567,29 +721,49 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   controller: hargaBeliCtrl,
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: _modernInputDecoration('Harga Beli per Pcs (Rp)', icon: Icons.payments_outlined),
+                  decoration: _modernInputDecoration(
+                    'Harga Beli per Pcs (Rp)',
+                    icon: Icons.payments_outlined,
+                  ),
                 ),
                 const SizedBox(height: 18),
                 Container(
                   decoration: BoxDecoration(
                     color: isDijual ? _DS.sky : _DS.ground,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: isDijual ? _DS.blue : Colors.transparent),
+                    border: Border.all(
+                      color: isDijual ? _DS.blue : Colors.transparent,
+                    ),
                   ),
                   child: CheckboxListTile(
                     title: Text(
                       'Jual di Kasir?',
-                      style: TextStyle(fontWeight: FontWeight.w700, color: isDijual ? _DS.blue : _DS.textSecondary, fontSize: 14),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: isDijual ? _DS.blue : _DS.textSecondary,
+                        fontSize: 14,
+                      ),
                     ),
                     subtitle: Text(
-                      isDijual ? 'Barang akan muncul di layar pesanan' : 'Barang tidak akan tampil di layar pesanan',
-                      style: TextStyle(fontSize: 11, color: isDijual ? _DS.blue.withOpacity(0.7) : _DS.textHint),
+                      isDijual
+                          ? 'Barang akan muncul di layar pesanan'
+                          : 'Barang tidak akan tampil di layar pesanan',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDijual
+                            ? _DS.blue.withOpacity(0.7)
+                            : _DS.textHint,
+                      ),
                     ),
                     value: isDijual,
                     activeColor: _DS.blue,
-                    onChanged: (val) => setModalState(() => isDijual = val ?? false),
+                    onChanged: (val) =>
+                        setModalState(() => isDijual = val ?? false),
                     controlAffinity: ListTileControlAffinity.leading,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
                   ),
                 ),
                 if (isDijual) ...[
@@ -598,7 +772,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     controller: hargaJualCtrl,
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: _modernInputDecoration('Harga Jual per Pcs (Rp)', icon: Icons.sell_outlined),
+                    decoration: _modernInputDecoration(
+                      'Harga Jual per Pcs (Rp)',
+                      icon: Icons.sell_outlined,
+                    ),
                   ),
                 ],
               ],
@@ -606,12 +783,26 @@ class _InventoryScreenState extends State<InventoryScreen> {
           ),
           actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal', style: TextStyle(color: _DS.textSecondary, fontWeight: FontWeight.w600))),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                'Batal',
+                style: TextStyle(
+                  color: _DS.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: _DS.blue,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 14,
+                ),
                 elevation: 0,
               ),
               onPressed: () async {
@@ -627,11 +818,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   final hargaBeliBaru = int.parse(hargaBeliCtrl.text.trim());
 
                   // 1. Update data Inventory
-                  await _supabase.from('inventory').update({
-                    'nama_item': namaBaru,
-                    'stok_saat_ini': stokBaru,
-                    'harga_beli': hargaBeliBaru,
-                  }).eq('id', item['id']);
+                  await _supabase
+                      .from('inventory')
+                      .update({
+                        'nama_item': namaBaru,
+                        'stok_saat_ini': stokBaru,
+                        'harga_beli': hargaBeliBaru,
+                      })
+                      .eq('id', item['id']);
 
                   // 2. Cek apakah sudah ada baris services untuk barang ini (aktif ataupun tidak)
                   final svcRows = await _supabase
@@ -639,17 +833,22 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       .select('id')
                       .eq('inventory_id', item['id']);
                   final svcList = List<Map<String, dynamic>>.from(svcRows);
-                  final existingServiceId = svcList.isNotEmpty ? svcList.first['id'] : null;
+                  final existingServiceId = svcList.isNotEmpty
+                      ? svcList.first['id']
+                      : null;
 
                   if (isDijual) {
                     final hargaJualBaru = int.parse(hargaJualCtrl.text.trim());
                     if (existingServiceId != null) {
                       // Sudah ada baris services -> update & aktifkan kembali
-                      await _supabase.from('services').update({
-                        'nama': namaBaru,
-                        'harga_per_satuan': hargaJualBaru,
-                        'is_active': true,
-                      }).eq('id', existingServiceId);
+                      await _supabase
+                          .from('services')
+                          .update({
+                            'nama': namaBaru,
+                            'harga_per_satuan': hargaJualBaru,
+                            'is_active': true,
+                          })
+                          .eq('id', existingServiceId);
                     } else {
                       // Belum pernah dijual sebelumnya -> buat baru
                       await _supabase.from('services').insert({
@@ -665,25 +864,39 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   } else {
                     // Toggle Jual di Kasir dimatikan -> nonaktifkan baris services agar hilang dari layar Kasir
                     if (existingServiceId != null) {
-                      await _supabase.from('services').update({
-                        'is_active': false,
-                        'is_pinned': false,
-                      }).eq('id', existingServiceId);
+                      await _supabase
+                          .from('services')
+                          .update({'is_active': false, 'is_pinned': false})
+                          .eq('id', existingServiceId);
                     }
                   }
 
                   await _loadInventory();
                   if (mounted) {
-                    _showCustomDialog(title: 'Tersimpan', message: 'Data barang berhasil diperbarui.', isSuccess: true);
+                    _showCustomDialog(
+                      title: 'Tersimpan',
+                      message: 'Data barang berhasil diperbarui.',
+                      isSuccess: true,
+                    );
                   }
                 } catch (e) {
                   if (mounted) {
                     setState(() => _isLoading = false);
-                    _showCustomDialog(title: 'Gagal Menyimpan', message: e.toString(), isSuccess: false);
+                    _showCustomDialog(
+                      title: 'Gagal Menyimpan',
+                      message: e.toString(),
+                      isSuccess: false,
+                    );
                   }
                 }
               },
-              child: const Text('Simpan Perubahan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+              child: const Text(
+                'Simpan Perubahan',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         ),
@@ -712,7 +925,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
       // [UPDATE UX] KUNCI ANTI-BOLONG: Background dasar Scaffold diset ke Navy!
       backgroundColor: _DS.navy,
       appBar: AppBar(
-        title: const Text('Stok Barang Fisik', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+        title: const Text(
+          'Stok Barang Fisik',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+        ),
         backgroundColor: _DS.navy,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -725,7 +941,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
             children: [
               Container(
                 decoration: const BoxDecoration(
-                  gradient: LinearGradient(colors: [_DS.navy, _DS.blue], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                  gradient: LinearGradient(
+                    colors: [_DS.navy, _DS.blue],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                 ),
                 padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
                 child: TextField(
@@ -734,11 +954,20 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   decoration: InputDecoration(
                     hintText: 'Cari barang...',
                     hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-                    prefixIcon: Icon(Icons.search, color: Colors.white.withOpacity(0.5)),
+                    prefixIcon: Icon(
+                      Icons.search,
+                      color: Colors.white.withOpacity(0.5),
+                    ),
                     filled: true,
                     fillColor: Colors.white.withOpacity(0.1),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
                   ),
                   onChanged: _onSearchChanged,
                 ),
@@ -757,7 +986,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                               height: MediaQuery.of(context).size.height * 0.5,
                               child: Center(
                                 child: Text(
-                                  _searchCtrl.text.isEmpty ? 'Belum ada data barang' : 'Barang tidak ditemukan',
+                                  _searchCtrl.text.isEmpty
+                                      ? 'Belum ada data barang'
+                                      : 'Barang tidak ditemukan',
                                   style: const TextStyle(color: _DS.textHint),
                                 ),
                               ),
@@ -765,59 +996,117 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           ],
                         )
                       : ListView.builder(
-                          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                          physics: const AlwaysScrollableScrollPhysics(
+                            parent: BouncingScrollPhysics(),
+                          ),
                           padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
                           itemCount: _filteredInventory.length,
                           itemBuilder: (ctx, i) {
                             final item = _filteredInventory[i];
                             final stok = (item['stok_saat_ini'] as num).toInt();
 
-                            final serviceLink = _serviceLinks[item['id'].toString()];
-                            final bool isPinned = serviceLink != null && serviceLink['is_pinned'] == true;
+                            final serviceLink =
+                                _serviceLinks[item['id'].toString()];
+                            final bool isPinned =
+                                serviceLink != null &&
+                                serviceLink['is_pinned'] == true;
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 14),
                               decoration: BoxDecoration(
                                 color: _DS.surface,
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: isPinned ? Colors.amber.shade400 : _DS.border, width: isPinned ? 2 : 1.5),
+                                border: Border.all(
+                                  color: isPinned
+                                      ? Colors.amber.shade400
+                                      : _DS.border,
+                                  width: isPinned ? 2 : 1.5,
+                                ),
                                 boxShadow: _DS.cardShadow,
                               ),
                               child: Material(
                                 color: Colors.transparent,
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 14,
+                                  ),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
                                           if (isPinned)
                                             const Padding(
-                                              padding: EdgeInsets.only(right: 6),
-                                              child: Icon(Icons.push_pin_rounded, size: 15, color: Colors.amber),
+                                              padding: EdgeInsets.only(
+                                                right: 6,
+                                              ),
+                                              child: Icon(
+                                                Icons.push_pin_rounded,
+                                                size: 15,
+                                                color: Colors.amber,
+                                              ),
                                             ),
                                           Expanded(
                                             child: Text(
                                               item['nama_item'],
-                                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _DS.textPrimary),
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 15,
+                                                color: _DS.textPrimary,
+                                              ),
                                             ),
                                           ),
                                           if (_isAdmin)
                                             PopupMenuButton<String>(
-                                              icon: const Icon(Icons.more_vert_rounded, color: _DS.textHint),
+                                              icon: const Icon(
+                                                Icons.more_vert_rounded,
+                                                color: _DS.textHint,
+                                              ),
                                               onSelected: (val) {
-                                                if (val == 'edit') _showEditBarangDialog(item);
-                                                else if (val == 'hapus') _hapusBarang(item['id'], item['nama_item']);
+                                                if (val == 'edit')
+                                                  _showEditBarangDialog(item);
+                                                else if (val == 'hapus')
+                                                  _hapusBarang(
+                                                    item['id'],
+                                                    item['nama_item'],
+                                                  );
                                               },
                                               itemBuilder: (context) => [
                                                 const PopupMenuItem(
                                                   value: 'edit',
-                                                  child: Row(children: [Icon(Icons.edit_note_rounded, color: _DS.blue, size: 20), SizedBox(width: 8), Text('Edit Barang')]),
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(
+                                                        Icons.edit_note_rounded,
+                                                        color: _DS.blue,
+                                                        size: 20,
+                                                      ),
+                                                      SizedBox(width: 8),
+                                                      Text('Edit Barang'),
+                                                    ],
+                                                  ),
                                                 ),
                                                 const PopupMenuItem(
                                                   value: 'hapus',
-                                                  child: Row(children: [Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20), SizedBox(width: 8), Text('Hapus', style: TextStyle(color: Colors.red))]),
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(
+                                                        Icons
+                                                            .delete_outline_rounded,
+                                                        color: Colors.red,
+                                                        size: 20,
+                                                      ),
+                                                      SizedBox(width: 8),
+                                                      Text(
+                                                        'Hapus',
+                                                        style: TextStyle(
+                                                          color: Colors.red,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
                                                 ),
                                               ],
                                             ),
@@ -827,7 +1116,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                       Text(
                                         'Sisa Stok: $stok ${item['satuan']}',
                                         style: TextStyle(
-                                          color: stok <= 5 ? Colors.red.shade600 : _DS.textSecondary,
+                                          color: stok <= 5
+                                              ? Colors.red.shade600
+                                              : _DS.textSecondary,
                                           fontWeight: FontWeight.w600,
                                           fontSize: 12,
                                         ),
@@ -837,13 +1128,23 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                         children: [
                                           if (serviceLink != null)
                                             IconButton(
-                                              tooltip: isPinned ? 'Lepas Pin' : 'Pin ke Layar Kasir',
+                                              tooltip: isPinned
+                                                  ? 'Lepas Pin'
+                                                  : 'Pin ke Layar Kasir',
                                               icon: Icon(
-                                                isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
-                                                color: isPinned ? Colors.amber.shade700 : _DS.textHint,
+                                                isPinned
+                                                    ? Icons.push_pin_rounded
+                                                    : Icons.push_pin_outlined,
+                                                color: isPinned
+                                                    ? Colors.amber.shade700
+                                                    : _DS.textHint,
                                               ),
-                                              onPressed: () => _togglePin(serviceLink['id'], isPinned),
-                                              visualDensity: VisualDensity.compact,
+                                              onPressed: () => _togglePin(
+                                                serviceLink['id'],
+                                                isPinned,
+                                              ),
+                                              visualDensity:
+                                                  VisualDensity.compact,
                                             ),
                                           Expanded(
                                             child: ElevatedButton.icon(
@@ -851,12 +1152,28 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                                 backgroundColor: _DS.sky,
                                                 foregroundColor: _DS.blue,
                                                 elevation: 0,
-                                                padding: const EdgeInsets.symmetric(vertical: 10),
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      vertical: 10,
+                                                    ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                ),
                                               ),
-                                              onPressed: () => _showHistorySheet(item),
-                                              icon: const Icon(Icons.history_rounded, size: 16),
-                                              label: const Text('Update & Riwayat', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+                                              onPressed: () =>
+                                                  _showHistorySheet(item),
+                                              icon: const Icon(
+                                                Icons.history_rounded,
+                                                size: 16,
+                                              ),
+                                              label: const Text(
+                                                'Update & Riwayat',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ],
@@ -882,18 +1199,37 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   color: _DS.navy.withOpacity(0.2),
                   child: Center(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 40,
+                        vertical: 32,
+                      ),
                       decoration: BoxDecoration(
                         color: _DS.surface,
                         borderRadius: BorderRadius.circular(24),
-                        boxShadow: [BoxShadow(color: _DS.navy.withOpacity(0.15), blurRadius: 30, offset: const Offset(0, 10))],
+                        boxShadow: [
+                          BoxShadow(
+                            color: _DS.navy.withOpacity(0.15),
+                            blurRadius: 30,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const CircularProgressIndicator(color: _DS.blue, strokeWidth: 3.5),
+                          const CircularProgressIndicator(
+                            color: _DS.blue,
+                            strokeWidth: 3.5,
+                          ),
                           const SizedBox(height: 20),
-                          const Text('Memuat Data...', style: TextStyle(fontWeight: FontWeight.w800, color: _DS.textPrimary, fontSize: 15)),
+                          const Text(
+                            'Memuat Data...',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: _DS.textPrimary,
+                              fontSize: 15,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -906,13 +1242,27 @@ class _InventoryScreenState extends State<InventoryScreen> {
       floatingActionButton: _isAdmin
           ? Container(
               margin: const EdgeInsets.only(bottom: 10),
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), boxShadow: _DS.fabShadow),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: _DS.fabShadow,
+              ),
               child: FloatingActionButton.extended(
                 onPressed: _showAddBarangDialog,
                 elevation: 0,
                 backgroundColor: _DS.blue,
-                icon: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
-                label: const Text('Barang Baru', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
+                icon: const Icon(
+                  Icons.add_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),
+                label: const Text(
+                  'Barang Baru',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
               ),
             )
           : null,
@@ -974,7 +1324,20 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
   String _formatDateTime(String isoString) {
     try {
       final d = DateTime.parse(isoString).toLocal();
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'Mei',
+        'Jun',
+        'Jul',
+        'Ags',
+        'Sep',
+        'Okt',
+        'Nov',
+        'Des',
+      ];
       final jam = d.hour.toString().padLeft(2, '0');
       final mnt = d.minute.toString().padLeft(2, '0');
       return '${d.day} ${months[d.month - 1]} ${d.year}, $jam:$mnt';
@@ -989,8 +1352,14 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
       labelStyle: const TextStyle(color: _DS.textHint, fontSize: 14),
       filled: true,
       fillColor: _DS.ground,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _DS.blue, width: 1.5)),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _DS.blue, width: 1.5),
+      ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }
@@ -1008,11 +1377,20 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => AlertDialog(
           backgroundColor: _DS.surface,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 24,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
           title: Text(
             widget.isAdmin ? 'Koreksi Stok Fisik' : 'Tambah Stok Masuk',
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: _DS.textPrimary),
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+              color: _DS.textPrimary,
+            ),
           ),
           content: SingleChildScrollView(
             child: Column(
@@ -1023,7 +1401,14 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
                     children: [
                       Expanded(
                         child: RadioListTile<String>(
-                          title: const Text('Masuk', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.green)),
+                          title: const Text(
+                            'Masuk',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.green,
+                            ),
+                          ),
                           value: 'masuk',
                           activeColor: Colors.green,
                           groupValue: tipe,
@@ -1033,7 +1418,14 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
                       ),
                       Expanded(
                         child: RadioListTile<String>(
-                          title: const Text('Keluar / Rusak', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.red)),
+                          title: const Text(
+                            'Keluar / Rusak',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.red,
+                            ),
+                          ),
                           value: 'keluar',
                           activeColor: Colors.red,
                           groupValue: tipe,
@@ -1052,7 +1444,10 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
                   decoration: _modernInputDecoration('Jumlah Barang (Qty)'),
                 ),
                 const SizedBox(height: 12),
-                TextField(controller: ketCtrl, decoration: _modernInputDecoration('Keterangan (Wajib)')),
+                TextField(
+                  controller: ketCtrl,
+                  decoration: _modernInputDecoration('Keterangan (Wajib)'),
+                ),
                 if (tipe == 'masuk') ...[
                   const SizedBox(height: 16),
                   const Divider(color: _DS.border),
@@ -1061,12 +1456,18 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
                     controller: modalCtrl,
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: _modernInputDecoration('Total Biaya Beli (Opsional)'),
+                    decoration: _modernInputDecoration(
+                      'Total Biaya Beli (Opsional)',
+                    ),
                   ),
                   const SizedBox(height: 4),
                   const Text(
                     '*Jika diisi, akan otomatis masuk ke tabel Pengeluaran.',
-                    style: TextStyle(fontSize: 10, color: Colors.orange, fontStyle: FontStyle.italic),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.orange,
+                      fontStyle: FontStyle.italic,
+                    ),
                   ),
                 ],
               ],
@@ -1074,12 +1475,26 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
           ),
           actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
           actions: [
-            TextButton(onPressed: isSubmitting ? null : () => Navigator.pop(ctx), child: const Text('Batal', style: TextStyle(color: _DS.textSecondary, fontWeight: FontWeight.w600))),
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: const Text(
+                'Batal',
+                style: TextStyle(
+                  color: _DS.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: _DS.blue,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 elevation: 0,
               ),
               onPressed: isSubmitting
@@ -1089,10 +1504,15 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
                       setModalState(() => isSubmitting = true);
                       try {
                         final qty = int.parse(qtyCtrl.text.trim());
-                        final stokBaru = tipe == 'masuk' ? _currentStock + qty : _currentStock - qty;
+                        final stokBaru = tipe == 'masuk'
+                            ? _currentStock + qty
+                            : _currentStock - qty;
                         final kasirId = _supabase.auth.currentUser!.id;
 
-                        await _supabase.from('inventory').update({'stok_saat_ini': stokBaru}).eq('id', widget.item['id']);
+                        await _supabase
+                            .from('inventory')
+                            .update({'stok_saat_ini': stokBaru})
+                            .eq('id', widget.item['id']);
 
                         await _supabase.from('inventory_log').insert({
                           'inventory_id': widget.item['id'],
@@ -1110,7 +1530,8 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
                             await _supabase.from('expenses').insert({
                               'cashier_id': kasirId,
                               'nominal': totalBeli,
-                              'keterangan': 'Restock Barang: ${widget.item['nama_item']} ($qty pcs)',
+                              'keterangan':
+                                  'Restock Barang: ${widget.item['nama_item']} ($qty pcs)',
                             });
                           }
                         }
@@ -1121,19 +1542,38 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
                           _loadHistory();
                           widget.onUpdateFinished();
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Stok berhasil diupdate!'), backgroundColor: Colors.green),
+                            const SnackBar(
+                              content: Text('Stok berhasil diupdate!'),
+                              backgroundColor: Colors.green,
+                            ),
                           );
                         }
                       } catch (e) {
                         setModalState(() => isSubmitting = false);
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Gagal: $e'), backgroundColor: Colors.red),
+                          SnackBar(
+                            content: Text('Gagal: $e'),
+                            backgroundColor: Colors.red,
+                          ),
                         );
                       }
                     },
               child: isSubmitting
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('Simpan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Text(
+                      'Simpan',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
             ),
           ],
         ),
@@ -1155,7 +1595,9 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
             padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
             decoration: BoxDecoration(
               color: _DS.surface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
               boxShadow: _DS.softShadow,
             ),
             child: Column(
@@ -1164,7 +1606,10 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
                   child: Container(
                     width: 40,
                     height: 4,
-                    decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -1175,19 +1620,53 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(widget.item['nama_item'], style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _DS.textPrimary)),
+                          Text(
+                            widget.item['nama_item'],
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: _DS.textPrimary,
+                            ),
+                          ),
                           const SizedBox(height: 4),
-                          const Text('Riwayat Keluar Masuk Barang', style: TextStyle(color: _DS.textSecondary, fontSize: 12, fontWeight: FontWeight.w500)),
+                          const Text(
+                            'Riwayat Keluar Masuk Barang',
+                            style: TextStyle(
+                              color: _DS.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(color: _DS.sky, borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _DS.sky,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       child: Column(
                         children: [
-                          const Text('Sisa Stok', style: TextStyle(fontSize: 10, color: _DS.blue, fontWeight: FontWeight.w700)),
-                          Text('$_currentStock', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _DS.blue)),
+                          const Text(
+                            'Sisa Stok',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: _DS.blue,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Text(
+                            '$_currentStock',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: _DS.blue,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1198,69 +1677,128 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
           ),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: _DS.blue))
+                ? const Center(
+                    child: CircularProgressIndicator(color: _DS.blue),
+                  )
                 : _logs.isEmpty
-                    ? const Center(child: Text('Belum ada riwayat stok', style: TextStyle(color: _DS.textHint)))
-                    : ListView.builder(
-                        physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-                        itemCount: _logs.length,
-                        itemBuilder: (ctx, i) {
-                          final log = _logs[i];
-                          final isMasuk = log['tipe'] == 'masuk';
-                          final color = isMasuk ? Colors.green : Colors.red;
-                          final icon = isMasuk ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded;
-                          final sign = isMasuk ? '+' : '-';
+                ? const Center(
+                    child: Text(
+                      'Belum ada riwayat stok',
+                      style: TextStyle(color: _DS.textHint),
+                    ),
+                  )
+                : ListView.builder(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                    itemCount: _logs.length,
+                    itemBuilder: (ctx, i) {
+                      final log = _logs[i];
+                      final isMasuk = log['tipe'] == 'masuk';
+                      final color = isMasuk ? Colors.green : Colors.red;
+                      final icon = isMasuk
+                          ? Icons.arrow_downward_rounded
+                          : Icons.arrow_upward_rounded;
+                      final sign = isMasuk ? '+' : '-';
 
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 12),
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: _DS.surface,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: _DS.border),
+                          boxShadow: _DS.softShadow,
+                        ),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          leading: Container(
+                            padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: _DS.surface,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: _DS.border),
-                              boxShadow: _DS.softShadow,
+                              color: color.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              leading: Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                                child: Icon(icon, color: color, size: 20),
-                              ),
-                              title: Text(log['keterangan'] ?? 'Tanpa Keterangan', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: _DS.textPrimary)),
-                              subtitle: Text(_formatDateTime(log['created_at']), style: const TextStyle(fontSize: 12, color: _DS.textSecondary)),
-                              trailing: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text('$sign${log['qty']}', style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 16)),
-                                  Text('Sisa: ${log['stok_sesudah']}', style: const TextStyle(color: _DS.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
-                                ],
-                              ),
+                            child: Icon(icon, color: color, size: 20),
+                          ),
+                          title: Text(
+                            log['keterangan'] ?? 'Tanpa Keterangan',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                              color: _DS.textPrimary,
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                          subtitle: Text(
+                            _formatDateTime(log['created_at']),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: _DS.textSecondary,
+                            ),
+                          ),
+                          trailing: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '$sign${log['qty']}',
+                                style: TextStyle(
+                                  color: color,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              Text(
+                                '${log['stok_sebelum']} ➔ ${log['stok_sesudah']}',
+                                style: const TextStyle(
+                                  color: _DS.textSecondary,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
           ),
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: _DS.surface,
-              boxShadow: [BoxShadow(color: const Color(0xFF0F2557).withOpacity(0.06), blurRadius: 20, offset: const Offset(0, -4))],
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0F2557).withOpacity(0.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, -4),
+                ),
+              ],
             ),
             child: SizedBox(
               width: double.infinity,
               height: 52,
               child: ElevatedButton.icon(
-                icon: Icon(widget.isAdmin ? Icons.edit_note_rounded : Icons.add_shopping_cart_rounded),
+                icon: Icon(
+                  widget.isAdmin
+                      ? Icons.edit_note_rounded
+                      : Icons.add_shopping_cart_rounded,
+                ),
                 label: Text(
-                  widget.isAdmin ? 'Update Stok Manual' : 'Tambah Stok Baru (Restock)',
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                  widget.isAdmin
+                      ? 'Update Stok Manual'
+                      : 'Tambah Stok Baru (Restock)',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _DS.blue,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   elevation: 0,
                 ),
                 onPressed: _showUpdateStokDialog,

@@ -9,17 +9,17 @@ class AktivitasTab extends StatefulWidget {
   final List<Map<String, dynamic>> historyOrders;
   final String? customerId;
   final Future<void> Function() onRefresh;
-  
-  final int initialFilter; 
-  final bool isStandalone; 
+
+  final int initialFilter;
+  final bool isStandalone;
 
   const AktivitasTab({
     super.key,
-    this.historyOrders = const [], 
-    this.customerId,               
+    this.historyOrders = const [],
+    this.customerId,
     required this.onRefresh,
     this.initialFilter = 0,
-    this.isStandalone = false,     
+    this.isStandalone = false,
   });
 
   @override
@@ -28,14 +28,14 @@ class AktivitasTab extends StatefulWidget {
 
 class _AktivitasTabState extends State<AktivitasTab> {
   final _supabase = Supabase.instance.client;
-  late int _selectedFilter; 
+  late int _selectedFilter;
   List<Map<String, dynamic>> _pointsHistory = [];
   bool _isLoadingPoin = false;
 
   @override
   void initState() {
     super.initState();
-    _selectedFilter = widget.initialFilter; 
+    _selectedFilter = widget.initialFilter;
     if (_selectedFilter == 1) _loadPointsHistory();
   }
 
@@ -46,19 +46,24 @@ class _AktivitasTabState extends State<AktivitasTab> {
       if (targetCustomerId == null) {
         final userId = _supabase.auth.currentUser?.id;
         if (userId != null) {
-          final custData = await _supabase.from('customers').select('id').eq('profile_id', userId).maybeSingle();
+          final custData = await _supabase
+              .from('customers')
+              .select('id')
+              .eq('profile_id', userId)
+              .maybeSingle();
           targetCustomerId = custData?['id'];
         }
       }
 
       if (targetCustomerId == null) throw Exception('Customer ID not found');
 
+      // [UPDATE CASE 2] Menambahkan saldo_sesudah ke dalam query SELECT
       final data = await _supabase
           .from('points_ledger')
-          .select('tipe, jumlah, created_at, catatan')
+          .select('tipe, jumlah, created_at, catatan, saldo_sesudah')
           .eq('customer_id', targetCustomerId)
           .order('created_at', ascending: false);
-          
+
       if (mounted) {
         setState(() {
           _pointsHistory = data;
@@ -77,36 +82,60 @@ class _AktivitasTabState extends State<AktivitasTab> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: EdgeInsets.fromLTRB(24, widget.isStandalone ? 16 : 24, 24, 16),
-            child: const Text('Riwayat Aktivitas', style: TextStyle(color: CustomerTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w800)),
+            padding: EdgeInsets.fromLTRB(
+              24,
+              widget.isStandalone ? 16 : 24,
+              24,
+              16,
+            ),
+            child: const Text(
+              'Riwayat Aktivitas',
+              style: TextStyle(
+                color: CustomerTheme.textPrimary,
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ),
-          
+
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Container(
               padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(color: CustomerTheme.border.withOpacity(0.4), borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(
+                color: CustomerTheme.border.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Row(
                 children: [
-                  _buildToggleBtn(0, 'Cucian Saya', Icons.local_laundry_service_rounded),
+                  _buildToggleBtn(
+                    0,
+                    'Cucian Saya',
+                    Icons.local_laundry_service_rounded,
+                  ),
                   _buildToggleBtn(1, 'Mutasi Poin', Icons.stars_rounded),
                 ],
               ),
             ),
           ),
           const SizedBox(height: 16),
-          
+
           Expanded(
-            // [UPDATE UX] Transisi layar memudar mulus saat ganti tab filter
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 300),
               switchInCurve: Curves.easeOut,
               switchOutCurve: Curves.easeIn,
-              child: _selectedFilter == 0 
-                  ? KeyedSubtree(key: const ValueKey(0), child: _buildListCucian()) 
-                  : KeyedSubtree(key: const ValueKey(1), child: _buildListPoin()),
+              child: _selectedFilter == 0
+                  ? KeyedSubtree(
+                      key: const ValueKey(0),
+                      child: _buildListCucian(),
+                    )
+                  : KeyedSubtree(
+                      key: const ValueKey(1),
+                      child: _buildListPoin(),
+                    ),
             ),
-          )
+          ),
         ],
       ),
     );
@@ -150,9 +179,24 @@ class _AktivitasTabState extends State<AktivitasTab> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 16, color: isActive ? CustomerTheme.primary : CustomerTheme.textSecondary),
+              Icon(
+                icon,
+                size: 16,
+                color: isActive
+                    ? CustomerTheme.primary
+                    : CustomerTheme.textSecondary,
+              ),
               const SizedBox(width: 8),
-              Text(title, style: TextStyle(fontWeight: isActive ? FontWeight.w800 : FontWeight.w600, color: isActive ? CustomerTheme.primary : CustomerTheme.textSecondary, fontSize: 13)),
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
+                  color: isActive
+                      ? CustomerTheme.primary
+                      : CustomerTheme.textSecondary,
+                  fontSize: 13,
+                ),
+              ),
             ],
           ),
         ),
@@ -163,17 +207,17 @@ class _AktivitasTabState extends State<AktivitasTab> {
   Widget _buildListCucian() {
     if (widget.historyOrders.isEmpty && widget.isStandalone) {
       return const EmptyState(
-        icon: Icons.receipt_long_outlined, 
-        message: 'Akses lewat Tab Bawah', 
-        sub: 'Silakan akses Cucian Saya melalui menu tab Aktivitas di bawah.'
+        icon: Icons.receipt_long_outlined,
+        message: 'Akses lewat Tab Bawah',
+        sub: 'Silakan akses Cucian Saya melalui menu tab Aktivitas di bawah.',
       );
     }
 
     if (widget.historyOrders.isEmpty) {
       return const EmptyState(
-        icon: Icons.receipt_long_outlined, 
-        message: 'Belum ada riwayat cucian', 
-        sub: 'Cucian yang sudah selesai atau diambil akan tampil di sini.'
+        icon: Icons.receipt_long_outlined,
+        message: 'Belum ada riwayat cucian',
+        sub: 'Cucian yang sudah selesai atau diambil akan tampil di sini.',
       );
     }
 
@@ -181,7 +225,9 @@ class _AktivitasTabState extends State<AktivitasTab> {
       color: CustomerTheme.primary,
       onRefresh: widget.onRefresh,
       child: ListView.builder(
-        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
         itemCount: widget.historyOrders.length,
         itemBuilder: (context, index) {
@@ -192,10 +238,15 @@ class _AktivitasTabState extends State<AktivitasTab> {
               order: order,
               isCustomerView: true,
               onTap: () {
-                Navigator.push(context, PageRouteBuilder(
-                  pageBuilder: (ctx, anim, secAnim) => CustomerInvoiceScreen(order: order),
-                  transitionsBuilder: (ctx, anim, secAnim, child) => FadeTransition(opacity: anim, child: child),
-                ));
+                Navigator.push(
+                  context,
+                  PageRouteBuilder(
+                    pageBuilder: (ctx, anim, secAnim) =>
+                        CustomerInvoiceScreen(order: order),
+                    transitionsBuilder: (ctx, anim, secAnim, child) =>
+                        FadeTransition(opacity: anim, child: child),
+                  ),
+                );
               },
             ),
           );
@@ -206,14 +257,14 @@ class _AktivitasTabState extends State<AktivitasTab> {
 
   Widget _buildListPoin() {
     if (_isLoadingPoin) {
-      return const Center(child: ModernSpinner()); // [UPDATE UX]
+      return const Center(child: ModernSpinner());
     }
 
     if (_pointsHistory.isEmpty) {
       return const EmptyState(
-        icon: Icons.stars_rounded, 
-        message: 'Belum ada mutasi poin', 
-        sub: 'Lakukan transaksi untuk mulai mengumpulkan poin.'
+        icon: Icons.stars_rounded,
+        message: 'Belum ada mutasi poin',
+        sub: 'Lakukan transaksi untuk mulai mengumpulkan poin.',
       );
     }
 
@@ -221,16 +272,23 @@ class _AktivitasTabState extends State<AktivitasTab> {
       color: CustomerTheme.primary,
       onRefresh: _loadPointsHistory,
       child: ListView.builder(
-        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
         itemCount: _pointsHistory.length,
         itemBuilder: (context, index) {
           final poin = _pointsHistory[index];
-          
-          final isMasuk = poin['tipe'] == 'earned' || poin['tipe'] == 'adjusted';
-          final jumlah = poin['jumlah'] ?? 0;
-          final nominalStr = isMasuk ? '+ $jumlah' : '- $jumlah';
-          final iconData = isMasuk ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded;
+
+          // [UPDATE REVISI CASE 2]: Logika deteksi positif/negatif & absolut
+          final int nominal = (poin['jumlah'] as num?)?.toInt() ?? 0;
+          final isMasuk = nominal > 0;
+          final absNominal = nominal.abs();
+          final nominalStr = isMasuk ? '+ $absNominal' : '- $absNominal';
+
+          final iconData = isMasuk
+              ? Icons.arrow_downward_rounded
+              : Icons.arrow_upward_rounded;
           final color = isMasuk ? CustomerTheme.primary : Colors.red;
 
           return Container(
@@ -241,7 +299,10 @@ class _AktivitasTabState extends State<AktivitasTab> {
               children: [
                 Container(
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
                   child: Icon(iconData, color: color, size: 20),
                 ),
                 const SizedBox(width: 16),
@@ -249,13 +310,48 @@ class _AktivitasTabState extends State<AktivitasTab> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(poin['catatan'] ?? _getLabelTipe(poin['tipe']), style: const TextStyle(fontWeight: FontWeight.w700, color: CustomerTheme.textPrimary, fontSize: 14)),
+                      Text(
+                        poin['catatan'] ?? _getLabelTipe(poin['tipe']),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: CustomerTheme.textPrimary,
+                          fontSize: 14,
+                        ),
+                      ),
                       const SizedBox(height: 4),
-                      Text(_formatDate(poin['created_at']), style: const TextStyle(color: CustomerTheme.textSecondary, fontSize: 12)),
+                      Text(
+                        _formatDate(poin['created_at']),
+                        style: const TextStyle(
+                          color: CustomerTheme.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
                     ],
                   ),
                 ),
-                Text(nominalStr, style: TextStyle(fontWeight: FontWeight.w800, color: color, fontSize: 16)),
+                // [UPDATE UX CASE 2]: Tampilkan Sisa Saldo
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      nominalStr,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: color,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      'Sisa: ${poin['saldo_sesudah'] ?? '-'}',
+                      style: const TextStyle(
+                        color: CustomerTheme.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           );
@@ -282,6 +378,8 @@ class _AktivitasTabState extends State<AktivitasTab> {
       }
       d = d.toLocal();
       return '${d.day}/${d.month}/${d.year} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')} WIB';
-    } catch (e) { return '-'; }
+    } catch (e) {
+      return '-';
+    }
   }
 }

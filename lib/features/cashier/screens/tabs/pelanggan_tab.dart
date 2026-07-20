@@ -2,7 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter/services.dart'; 
+import 'package:flutter/services.dart';
 
 // ============================================================
 // DESIGN SYSTEM - KONSISTEN
@@ -51,16 +51,16 @@ class _PelangganTabState extends State<PelangganTab> {
   List<Map<String, dynamic>> _allCustomers = [];
   List<Map<String, dynamic>> _filteredCustomers = [];
   final _searchCtrl = TextEditingController();
-  
+
   bool _isLoading = true;
-  bool _isProcessing = false; // [UPDATE UX] Flag untuk loading aksi (hapus/poin)
-  bool _isAdmin = false; 
-  bool _showNonActive = false; // false = tampil pelanggan aktif, true = tampil nonaktif
+  bool _isProcessing = false;
+  bool _isAdmin = false;
+  bool _showNonActive = false;
 
   @override
   void initState() {
     super.initState();
-    _checkRoleAndLoad(); 
+    _checkRoleAndLoad();
   }
 
   @override
@@ -69,9 +69,6 @@ class _PelangganTabState extends State<PelangganTab> {
     super.dispose();
   }
 
-  // =========================================================
-  // [UPDATE UX] CUSTOM DIALOG (Sesuai Referensi)
-  // =========================================================
   void _showCustomDialog({
     required String title,
     required String message,
@@ -82,9 +79,7 @@ class _PelangganTabState extends State<PelangganTab> {
       barrierDismissible: false,
       builder: (ctx) => Dialog(
         backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
           child: Column(
@@ -115,10 +110,7 @@ class _PelangganTabState extends State<PelangganTab> {
               const SizedBox(height: 8),
               Text(
                 message,
-                style: const TextStyle(
-                  color: _DS.textSecondary,
-                  fontSize: 13,
-                ),
+                style: const TextStyle(color: _DS.textSecondary, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
@@ -151,7 +143,11 @@ class _PelangganTabState extends State<PelangganTab> {
   Future<void> _checkRoleAndLoad() async {
     try {
       final myId = _supabase.auth.currentUser!.id;
-      final myProfile = await _supabase.from('profiles').select('role').eq('id', myId).single();
+      final myProfile = await _supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', myId)
+          .single();
       _isAdmin = myProfile['role'] == 'super_admin';
     } catch (e) {
       debugPrint('Role check error: $e');
@@ -234,9 +230,6 @@ class _PelangganTabState extends State<PelangganTab> {
     );
   }
 
-  // =========================================================
-  // [FITUR BARU] RESET PASSWORD PELANGGAN (Khusus Super Admin)
-  // =========================================================
   Future<void> _resetPassword(String profileId, String namaPelanggan) async {
     final pwdCtrl = TextEditingController();
     final confirm = await showDialog<bool>(
@@ -244,36 +237,76 @@ class _PelangganTabState extends State<PelangganTab> {
       builder: (ctx) => AlertDialog(
         backgroundColor: _DS.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Reset Sandi Pelanggan', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: _DS.textPrimary)),
+        title: const Text(
+          'Reset Sandi Pelanggan',
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 18,
+            color: _DS.textPrimary,
+          ),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Masukkan kata sandi baru untuk $namaPelanggan (minimal 6 karakter).', style: const TextStyle(color: _DS.textSecondary, fontSize: 13)),
+            Text(
+              'Masukkan kata sandi baru untuk $namaPelanggan (minimal 6 karakter).',
+              style: const TextStyle(color: _DS.textSecondary, fontSize: 13),
+            ),
             const SizedBox(height: 16),
             TextField(
-              controller: pwdCtrl, 
-              obscureText: true, 
+              controller: pwdCtrl,
+              obscureText: true,
               decoration: InputDecoration(
                 labelText: 'Sandi Baru',
                 labelStyle: const TextStyle(color: _DS.textHint, fontSize: 13),
                 filled: true,
                 fillColor: _DS.ground,
-                prefixIcon: const Icon(Icons.lock_reset_rounded, color: _DS.textHint, size: 20),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _DS.blue, width: 1.5)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              )
+                prefixIcon: const Icon(
+                  Icons.lock_reset_rounded,
+                  color: _DS.textHint,
+                  size: 20,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: _DS.blue, width: 1.5),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+              ),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal', style: TextStyle(color: _DS.textSecondary))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(
+              'Batal',
+              style: TextStyle(color: _DS.textSecondary),
+            ),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _DS.blue,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
             onPressed: () {
               if (pwdCtrl.text.length >= 6) Navigator.pop(ctx, true);
             },
-            child: const Text('Reset', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Reset',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -282,16 +315,24 @@ class _PelangganTabState extends State<PelangganTab> {
     if (confirm == true) {
       setState(() => _isProcessing = true);
       try {
-        // [EDGE FUNCTION CALL] Panggil Edge Function reset-customer-password
-        await _supabase.functions.invoke('reset-customer-password', body: {
-          'user_id': profileId,
-          'new_password': pwdCtrl.text.trim(),
-        });
-        
-        if (mounted) _showCustomDialog(title: 'Berhasil Reset Sandi', message: 'Kata sandi $namaPelanggan telah diperbarui.', isSuccess: true);
+        await _supabase.functions.invoke(
+          'reset-customer-password',
+          body: {'user_id': profileId, 'new_password': pwdCtrl.text.trim()},
+        );
+
+        if (mounted)
+          _showCustomDialog(
+            title: 'Berhasil Reset Sandi',
+            message: 'Kata sandi $namaPelanggan telah diperbarui.',
+            isSuccess: true,
+          );
       } catch (e) {
         if (mounted) {
-          _showCustomDialog(title: 'Gagal Reset', message: e.toString().replaceAll('Exception: ', ''), isSuccess: false);
+          _showCustomDialog(
+            title: 'Gagal Reset',
+            message: e.toString().replaceAll('Exception: ', ''),
+            isSuccess: false,
+          );
         }
       } finally {
         if (mounted) setState(() => _isProcessing = false);
@@ -304,14 +345,37 @@ class _PelangganTabState extends State<PelangganTab> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(children: [Icon(Icons.warning_amber_rounded, color: Colors.red), SizedBox(width: 8), Text('Hapus Pelanggan?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))]),
-        content: Text('Yakin ingin menghapus $nama? Data pelanggan akan disembunyikan tapi nota lama tetap aman.'),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text(
+              'Hapus Pelanggan?',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Text(
+          'Yakin ingin menghapus $nama? Data pelanggan akan disembunyikan tapi nota lama tetap aman.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal', style: TextStyle(color: Colors.grey))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Hapus', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Hapus',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -321,11 +385,24 @@ class _PelangganTabState extends State<PelangganTab> {
       HapticFeedback.heavyImpact();
       setState(() => _isProcessing = true);
       try {
-        await _supabase.from('profiles').update({'is_active': false}).eq('id', profileId);
+        await _supabase
+            .from('profiles')
+            .update({'is_active': false})
+            .eq('id', profileId);
         await _loadCustomers();
-        if (mounted) _showCustomDialog(title: 'Terhapus', message: 'Data pelanggan berhasil dihapus.', isSuccess: true);
+        if (mounted)
+          _showCustomDialog(
+            title: 'Terhapus',
+            message: 'Data pelanggan berhasil dihapus.',
+            isSuccess: true,
+          );
       } catch (e) {
-        if (mounted) _showCustomDialog(title: 'Gagal', message: e.toString(), isSuccess: false);
+        if (mounted)
+          _showCustomDialog(
+            title: 'Gagal',
+            message: e.toString(),
+            isSuccess: false,
+          );
       } finally {
         if (mounted) setState(() => _isProcessing = false);
       }
@@ -337,14 +414,37 @@ class _PelangganTabState extends State<PelangganTab> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(children: [Icon(Icons.check_circle_outline_rounded, color: Colors.green), SizedBox(width: 8), Text('Aktifkan Pelanggan?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))]),
-        content: Text('Aktifkan kembali $nama? Pelanggan akan muncul lagi di daftar aktif.'),
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle_outline_rounded, color: Colors.green),
+            SizedBox(width: 8),
+            Text(
+              'Aktifkan Pelanggan?',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Text(
+          'Aktifkan kembali $nama? Pelanggan akan muncul lagi di daftar aktif.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal', style: TextStyle(color: Colors.grey))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade600, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green.shade600,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Aktifkan', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Aktifkan',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -354,11 +454,24 @@ class _PelangganTabState extends State<PelangganTab> {
       HapticFeedback.heavyImpact();
       setState(() => _isProcessing = true);
       try {
-        await _supabase.from('profiles').update({'is_active': true}).eq('id', profileId);
+        await _supabase
+            .from('profiles')
+            .update({'is_active': true})
+            .eq('id', profileId);
         await _loadCustomers();
-        if (mounted) _showCustomDialog(title: 'Berhasil', message: 'Pelanggan berhasil diaktifkan kembali.', isSuccess: true);
+        if (mounted)
+          _showCustomDialog(
+            title: 'Berhasil',
+            message: 'Pelanggan berhasil diaktifkan kembali.',
+            isSuccess: true,
+          );
       } catch (e) {
-        if (mounted) _showCustomDialog(title: 'Gagal', message: e.toString(), isSuccess: false);
+        if (mounted)
+          _showCustomDialog(
+            title: 'Gagal',
+            message: e.toString(),
+            isSuccess: false,
+          );
       } finally {
         if (mounted) setState(() => _isProcessing = false);
       }
@@ -372,41 +485,113 @@ class _PelangganTabState extends State<PelangganTab> {
     bool isSubmitting = false;
 
     showModalBottomSheet(
-      context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => Container(
-          padding: EdgeInsets.fromLTRB(24, 16, 24, MediaQuery.of(ctx).viewInsets.bottom + 32),
-          decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+          padding: EdgeInsets.fromLTRB(
+            24,
+            16,
+            24,
+            MediaQuery.of(ctx).viewInsets.bottom + 32,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
           child: Column(
-            mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
               const SizedBox(height: 20),
-              Text('Koreksi Poin: $nama', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _DS.textPrimary)),
+              Text(
+                'Koreksi Poin: $nama',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: _DS.textPrimary,
+                ),
+              ),
               const SizedBox(height: 4),
-              Text('Poin pelanggan saat ini: $currentPoin', style: const TextStyle(color: _DS.textSecondary, fontSize: 14)),
+              Text(
+                'Poin pelanggan saat ini: $currentPoin',
+                style: const TextStyle(color: _DS.textSecondary, fontSize: 14),
+              ),
               const SizedBox(height: 24),
 
               Row(
                 children: [
                   Expanded(
                     child: GestureDetector(
-                      onTap: () { HapticFeedback.selectionClick(); setModalState(() => tipeAdjust = 1); },
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setModalState(() => tipeAdjust = 1);
+                      },
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(color: tipeAdjust == 1 ? Colors.green.shade50 : Colors.white, border: Border.all(color: tipeAdjust == 1 ? Colors.green : _DS.border), borderRadius: BorderRadius.circular(12)),
-                        child: Center(child: Text('+ Tambah Poin', style: TextStyle(color: tipeAdjust == 1 ? Colors.green.shade700 : _DS.textSecondary, fontWeight: FontWeight.w700))),
+                        decoration: BoxDecoration(
+                          color: tipeAdjust == 1
+                              ? Colors.green.shade50
+                              : Colors.white,
+                          border: Border.all(
+                            color: tipeAdjust == 1 ? Colors.green : _DS.border,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Center(
+                          child: Text(
+                            '+ Tambah Poin',
+                            style: TextStyle(
+                              color: tipeAdjust == 1
+                                  ? Colors.green.shade700
+                                  : _DS.textSecondary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: GestureDetector(
-                      onTap: () { HapticFeedback.selectionClick(); setModalState(() => tipeAdjust = -1); },
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        setModalState(() => tipeAdjust = -1);
+                      },
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(color: tipeAdjust == -1 ? Colors.red.shade50 : Colors.white, border: Border.all(color: tipeAdjust == -1 ? Colors.red : _DS.border), borderRadius: BorderRadius.circular(12)),
-                        child: Center(child: Text('- Kurangi Poin', style: TextStyle(color: tipeAdjust == -1 ? Colors.red.shade700 : _DS.textSecondary, fontWeight: FontWeight.w700))),
+                        decoration: BoxDecoration(
+                          color: tipeAdjust == -1
+                              ? Colors.red.shade50
+                              : Colors.white,
+                          border: Border.all(
+                            color: tipeAdjust == -1 ? Colors.red : _DS.border,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Center(
+                          child: Text(
+                            '- Kurangi Poin',
+                            style: TextStyle(
+                              color: tipeAdjust == -1
+                                  ? Colors.red.shade700
+                                  : _DS.textSecondary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -417,65 +602,124 @@ class _PelangganTabState extends State<PelangganTab> {
               TextField(
                 controller: amtCtrl,
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: 'Jumlah Poin', hintText: 'Contoh: 10', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                decoration: InputDecoration(
+                  labelText: 'Jumlah Poin',
+                  hintText: 'Contoh: 10',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: noteCtrl,
-                decoration: InputDecoration(labelText: 'Catatan/Alasan (Wajib)', hintText: 'Contoh: Kompensasi cucian tertukar', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                decoration: InputDecoration(
+                  labelText: 'Catatan/Alasan (Wajib)',
+                  hintText: 'Contoh: Kompensasi cucian tertukar',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
               const SizedBox(height: 32),
 
               SizedBox(
-                width: double.infinity, height: 52,
+                width: double.infinity,
+                height: 52,
                 child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0),
-                  onPressed: isSubmitting ? null : () async {
-                    final val = int.tryParse(amtCtrl.text.trim()) ?? 0;
-                    final note = noteCtrl.text.trim();
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _DS.blue,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 0,
+                  ),
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          final val = int.tryParse(amtCtrl.text.trim()) ?? 0;
+                          final note = noteCtrl.text.trim();
 
-                    if (val <= 0 || note.isEmpty) {
-                      _showCustomDialog(title: 'Tidak Valid', message: 'Jumlah poin harus lebih dari 0 dan Catatan wajib diisi!', isSuccess: false);
-                      return;
-                    }
+                          if (val <= 0 || note.isEmpty) {
+                            _showCustomDialog(
+                              title: 'Tidak Valid',
+                              message:
+                                  'Jumlah poin harus lebih dari 0 dan Catatan wajib diisi!',
+                              isSuccess: false,
+                            );
+                            return;
+                          }
 
-                    final saldoSesudah = currentPoin + (val * tipeAdjust);
-                    if (saldoSesudah < 0) {
-                      _showCustomDialog(title: 'Koreksi Gagal', message: 'Poin pelanggan tidak boleh minus!', isSuccess: false);
-                      return;
-                    }
+                          final saldoSesudah = currentPoin + (val * tipeAdjust);
+                          if (saldoSesudah < 0) {
+                            _showCustomDialog(
+                              title: 'Koreksi Gagal',
+                              message: 'Poin pelanggan tidak boleh minus!',
+                              isSuccess: false,
+                            );
+                            return;
+                          }
 
-                    HapticFeedback.heavyImpact();
-                    setModalState(() => isSubmitting = true);
+                          HapticFeedback.heavyImpact();
+                          setModalState(() => isSubmitting = true);
 
-                    try {
-                      final adminId = _supabase.auth.currentUser!.id;
+                          try {
+                            final adminId = _supabase.auth.currentUser!.id;
 
-                      await _supabase.from('customers').update({'poin_saldo': saldoSesudah}).eq('id', custId);
+                            await _supabase
+                                .from('customers')
+                                .update({'poin_saldo': saldoSesudah})
+                                .eq('id', custId);
 
-                      await _supabase.from('points_ledger').insert({
-                        'customer_id': custId,
-                        'tipe': 'adjusted',
-                        'jumlah': val,
-                        'saldo_sebelum': currentPoin,
-                        'saldo_sesudah': saldoSesudah,
-                        'dilakukan_oleh': adminId,
-                        'catatan': note
-                      });
+                            await _supabase.from('points_ledger').insert({
+                              'customer_id': custId,
+                              'tipe': 'adjusted',
+                              'jumlah':
+                                  val *
+                                  tipeAdjust, // FIXED: Ensure positive/negative saved correctly
+                              'saldo_sebelum': currentPoin,
+                              'saldo_sesudah': saldoSesudah,
+                              'dilakukan_oleh': adminId,
+                              'catatan': note,
+                            });
 
-                      if (mounted) {
-                        Navigator.pop(ctx);
-                        _loadCustomers();
-                        _showCustomDialog(title: 'Berhasil', message: 'Poin pelanggan berhasil dikoreksi!', isSuccess: true);
-                      }
-                    } catch (e) {
-                      if (mounted) {
-                        setModalState(() => isSubmitting = false);
-                        _showCustomDialog(title: 'Error', message: e.toString(), isSuccess: false);
-                      }
-                    }
-                  },
-                  child: isSubmitting ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Simpan Perubahan', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                            if (mounted) {
+                              Navigator.pop(ctx);
+                              _loadCustomers();
+                              _showCustomDialog(
+                                title: 'Berhasil',
+                                message: 'Poin pelanggan berhasil dikoreksi!',
+                                isSuccess: true,
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              setModalState(() => isSubmitting = false);
+                              _showCustomDialog(
+                                title: 'Error',
+                                message: e.toString(),
+                                isSuccess: false,
+                              );
+                            }
+                          }
+                        },
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'Simpan Perubahan',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                          ),
+                        ),
                 ),
               ),
             ],
@@ -488,10 +732,12 @@ class _PelangganTabState extends State<PelangganTab> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // [UPDATE UX] Background Navy agar seamless pull-to-refresh
       backgroundColor: _DS.navy,
       appBar: AppBar(
-        title: const Text('Data Pelanggan', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+        title: const Text(
+          'Data Pelanggan',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+        ),
         backgroundColor: _DS.navy,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -504,14 +750,41 @@ class _PelangganTabState extends State<PelangganTab> {
                 decoration: const BoxDecoration(color: _DS.navy),
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
                 child: Container(
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withOpacity(0.2))),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withOpacity(0.2)),
+                  ),
                   child: TextField(
                     controller: _searchCtrl,
                     style: const TextStyle(color: Colors.white, fontSize: 13),
                     decoration: InputDecoration(
-                      hintText: 'Cari nama atau nomor HP...', hintStyle: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13), prefixIcon: Icon(Icons.search, color: Colors.white.withOpacity(0.5)),
-                      border: InputBorder.none, contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      suffixIcon: _searchCtrl.text.isNotEmpty ? IconButton(icon: const Icon(Icons.clear, color: Colors.white), onPressed: () { _searchCtrl.clear(); _searchCustomer(''); }) : null,
+                      hintText: 'Cari nama atau nomor HP...',
+                      hintStyle: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
+                        fontSize: 13,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search,
+                        color: Colors.white.withOpacity(0.5),
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      suffixIcon: _searchCtrl.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(
+                                Icons.clear,
+                                color: Colors.white,
+                              ),
+                              onPressed: () {
+                                _searchCtrl.clear();
+                                _searchCustomer('');
+                              },
+                            )
+                          : null,
                     ),
                     onChanged: _searchCustomer,
                   ),
@@ -525,96 +798,355 @@ class _PelangganTabState extends State<PelangganTab> {
                     children: [
                       Expanded(
                         child: GestureDetector(
-                          onTap: _showNonActive ? () { setState(() => _showNonActive = false); _loadCustomers(); } : null,
+                          onTap: _showNonActive
+                              ? () {
+                                  setState(() => _showNonActive = false);
+                                  _loadCustomers();
+                                }
+                              : null,
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 10),
-                            decoration: BoxDecoration(color: !_showNonActive ? Colors.white : Colors.white.withOpacity(0.1), borderRadius: const BorderRadius.horizontal(left: Radius.circular(10))),
-                            child: Center(child: Text('Aktif', style: TextStyle(color: !_showNonActive ? _DS.blue : Colors.white.withOpacity(0.7), fontWeight: FontWeight.w700, fontSize: 13))),
+                            decoration: BoxDecoration(
+                              color: !_showNonActive
+                                  ? Colors.white
+                                  : Colors.white.withOpacity(0.1),
+                              borderRadius: const BorderRadius.horizontal(
+                                left: Radius.circular(10),
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                'Aktif',
+                                style: TextStyle(
+                                  color: !_showNonActive
+                                      ? _DS.blue
+                                      : Colors.white.withOpacity(0.7),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
                       Expanded(
                         child: GestureDetector(
-                          onTap: !_showNonActive ? () { setState(() => _showNonActive = true); _loadCustomers(); } : null,
+                          onTap: !_showNonActive
+                              ? () {
+                                  setState(() => _showNonActive = true);
+                                  _loadCustomers();
+                                }
+                              : null,
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 10),
-                            decoration: BoxDecoration(color: _showNonActive ? Colors.white : Colors.white.withOpacity(0.1), borderRadius: const BorderRadius.horizontal(right: Radius.circular(10))),
-                            child: Center(child: Text('Nonaktif', style: TextStyle(color: _showNonActive ? _DS.blue : Colors.white.withOpacity(0.7), fontWeight: FontWeight.w700, fontSize: 13))),
+                            decoration: BoxDecoration(
+                              color: _showNonActive
+                                  ? Colors.white
+                                  : Colors.white.withOpacity(0.1),
+                              borderRadius: const BorderRadius.horizontal(
+                                right: Radius.circular(10),
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                'Nonaktif',
+                                style: TextStyle(
+                                  color: _showNonActive
+                                      ? _DS.blue
+                                      : Colors.white.withOpacity(0.7),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ],
                   ),
                 ),
-              
+
               Expanded(
                 child: Container(
                   color: _DS.ground,
                   child: _isLoading
-                      ? const Center(child: CircularProgressIndicator(color: _DS.blue))
+                      ? const Center(
+                          child: CircularProgressIndicator(color: _DS.blue),
+                        )
                       : RefreshIndicator(
-                          onRefresh: _loadCustomers, color: _DS.blue, backgroundColor: _DS.surface,
+                          onRefresh: _loadCustomers,
+                          color: _DS.blue,
+                          backgroundColor: _DS.surface,
                           child: _filteredCustomers.isEmpty
-                              ? ListView(physics: const AlwaysScrollableScrollPhysics(), children: [SizedBox(height: 300, child: Center(child: Text('Pelanggan tidak ditemukan.', style: TextStyle(color: _DS.textHint))))])
+                              ? ListView(
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  children: [
+                                    SizedBox(
+                                      height: 300,
+                                      child: Center(
+                                        child: Text(
+                                          'Pelanggan tidak ditemukan.',
+                                          style: TextStyle(color: _DS.textHint),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )
                               : ListView.builder(
-                                  physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-                                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+                                  physics: const AlwaysScrollableScrollPhysics(
+                                    parent: BouncingScrollPhysics(),
+                                  ),
+                                  padding: const EdgeInsets.fromLTRB(
+                                    20,
+                                    20,
+                                    20,
+                                    100,
+                                  ),
                                   itemCount: _filteredCustomers.length,
                                   itemBuilder: (context, i) {
                                     final c = _filteredCustomers[i];
-                                    final extracted = _extractCustData(c['customers']); 
+                                    final extracted = _extractCustData(
+                                      c['customers'],
+                                    );
                                     final poin = extracted['poin'];
                                     final custId = extracted['customerId'];
 
                                     return Container(
                                       margin: const EdgeInsets.only(bottom: 12),
-                                      decoration: BoxDecoration(color: _DS.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: _DS.border, width: 1.5), boxShadow: _DS.cardShadow),
+                                      decoration: BoxDecoration(
+                                        color: _DS.surface,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: _DS.border,
+                                          width: 1.5,
+                                        ),
+                                        boxShadow: _DS.cardShadow,
+                                      ),
                                       child: ListTile(
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                        leading: Container(width: 44, height: 44, decoration: BoxDecoration(color: _DS.sky, borderRadius: BorderRadius.circular(12)), child: Center(child: Text(c['nama_lengkap']?[0]?.toUpperCase() ?? '?', style: const TextStyle(color: _DS.blue, fontWeight: FontWeight.w800, fontSize: 16)))),
-                                        title: Text(c['nama_lengkap'] ?? '-', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _DS.textPrimary)),
-                                        subtitle: Text(c['nomor_hp'] ?? '-', style: const TextStyle(color: _DS.textSecondary, fontSize: 12)),
-                                        trailing: Row( 
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 8,
+                                            ),
+                                        leading: Container(
+                                          width: 44,
+                                          height: 44,
+                                          decoration: BoxDecoration(
+                                            color: _DS.sky,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              c['nama_lengkap']?[0]
+                                                      ?.toUpperCase() ??
+                                                  '?',
+                                              style: const TextStyle(
+                                                color: _DS.blue,
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 16,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        title: Text(
+                                          c['nama_lengkap'] ?? '-',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 15,
+                                            color: _DS.textPrimary,
+                                          ),
+                                        ),
+                                        subtitle: Text(
+                                          c['nomor_hp'] ?? '-',
+                                          style: const TextStyle(
+                                            color: _DS.textSecondary,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        trailing: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                              decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(10)),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 6,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.amber.shade50,
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                              ),
                                               child: Row(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  Icon(Icons.stars_rounded, color: Colors.amber.shade600, size: 16),
+                                                  Icon(
+                                                    Icons.stars_rounded,
+                                                    color:
+                                                        Colors.amber.shade600,
+                                                    size: 16,
+                                                  ),
                                                   const SizedBox(width: 4),
-                                                  Text('$poin', style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.w800, fontSize: 14)),
+                                                  Text(
+                                                    '$poin',
+                                                    style: TextStyle(
+                                                      color:
+                                                          Colors.amber.shade900,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
                                                 ],
                                               ),
                                             ),
                                             if (_isAdmin) ...[
                                               const SizedBox(width: 4),
                                               PopupMenuButton<String>(
-                                                icon: const Icon(Icons.more_vert_rounded, color: _DS.textHint),
+                                                icon: const Icon(
+                                                  Icons.more_vert_rounded,
+                                                  color: _DS.textHint,
+                                                ),
                                                 onSelected: (val) {
-                                                  if (val == 'edit_poin') { 
-                                                    if (custId != null) _showAdjustPointsSheet(custId, c['nama_lengkap'] ?? 'Pelanggan', poin); 
-                                                    else _showCustomDialog(title: 'Gagal', message: 'Data pelanggan belum lengkap (Dompet Poin kosong).', isSuccess: false); 
-                                                  } 
-                                                  // [FITUR BARU] Panggil fungsi reset sandi
-                                                  else if (val == 'reset_sandi') { _resetPassword(c['id'], c['nama_lengkap'] ?? 'Pelanggan'); }
-                                                  else if (val == 'hapus') { _hapusPelanggan(c['id'], c['nama_lengkap'] ?? 'Pelanggan'); }
-                                                  else if (val == 'aktifkan') { _aktifkanPelanggan(c['id'], c['nama_lengkap'] ?? 'Pelanggan'); }
+                                                  if (val == 'edit_poin') {
+                                                    if (custId != null)
+                                                      _showAdjustPointsSheet(
+                                                        custId,
+                                                        c['nama_lengkap'] ??
+                                                            'Pelanggan',
+                                                        poin,
+                                                      );
+                                                    else
+                                                      _showCustomDialog(
+                                                        title: 'Gagal',
+                                                        message:
+                                                            'Data pelanggan belum lengkap (Dompet Poin kosong).',
+                                                        isSuccess: false,
+                                                      );
+                                                  } else if (val ==
+                                                      'reset_sandi') {
+                                                    _resetPassword(
+                                                      c['id'],
+                                                      c['nama_lengkap'] ??
+                                                          'Pelanggan',
+                                                    );
+                                                  } else if (val == 'hapus') {
+                                                    _hapusPelanggan(
+                                                      c['id'],
+                                                      c['nama_lengkap'] ??
+                                                          'Pelanggan',
+                                                    );
+                                                  } else if (val ==
+                                                      'aktifkan') {
+                                                    _aktifkanPelanggan(
+                                                      c['id'],
+                                                      c['nama_lengkap'] ??
+                                                          'Pelanggan',
+                                                    );
+                                                  }
                                                 },
-                                                itemBuilder: (context) => _showNonActive
+                                                itemBuilder: (context) =>
+                                                    _showNonActive
                                                     ? [
-                                                        const PopupMenuItem(value: 'aktifkan', child: Row(children: [Icon(Icons.check_circle_outline_rounded, color: Colors.green, size: 20), SizedBox(width: 8), Text('Aktifkan Kembali', style: TextStyle(color: Colors.green))])),
+                                                        const PopupMenuItem(
+                                                          value: 'aktifkan',
+                                                          child: Row(
+                                                            children: [
+                                                              Icon(
+                                                                Icons
+                                                                    .check_circle_outline_rounded,
+                                                                color: Colors
+                                                                    .green,
+                                                                size: 20,
+                                                              ),
+                                                              SizedBox(
+                                                                width: 8,
+                                                              ),
+                                                              Text(
+                                                                'Aktifkan Kembali',
+                                                                style: TextStyle(
+                                                                  color: Colors
+                                                                      .green,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
                                                       ]
                                                     : [
-                                                        const PopupMenuItem(value: 'edit_poin', child: Row(children: [Icon(Icons.edit_note_rounded, color: _DS.blue, size: 20), SizedBox(width: 8), Text('Koreksi Poin')])),
-                                                        // [FITUR BARU] Tombol Reset Sandi khusus Admin
-                                                        const PopupMenuItem(value: 'reset_sandi', child: Row(children: [Icon(Icons.lock_reset_rounded, color: Colors.orange, size: 20), SizedBox(width: 8), Text('Reset Sandi', style: TextStyle(color: Colors.orange))])),
-                                                        const PopupMenuItem(value: 'hapus', child: Row(children: [Icon(Icons.delete_outline_rounded, color: Colors.red, size: 20), SizedBox(width: 8), Text('Hapus Akun', style: TextStyle(color: Colors.red))])),
+                                                        const PopupMenuItem(
+                                                          value: 'edit_poin',
+                                                          child: Row(
+                                                            children: [
+                                                              Icon(
+                                                                Icons
+                                                                    .edit_note_rounded,
+                                                                color: _DS.blue,
+                                                                size: 20,
+                                                              ),
+                                                              SizedBox(
+                                                                width: 8,
+                                                              ),
+                                                              Text(
+                                                                'Koreksi Poin',
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                        const PopupMenuItem(
+                                                          value: 'reset_sandi',
+                                                          child: Row(
+                                                            children: [
+                                                              Icon(
+                                                                Icons
+                                                                    .lock_reset_rounded,
+                                                                color: Colors
+                                                                    .orange,
+                                                                size: 20,
+                                                              ),
+                                                              SizedBox(
+                                                                width: 8,
+                                                              ),
+                                                              Text(
+                                                                'Reset Sandi',
+                                                                style: TextStyle(
+                                                                  color: Colors
+                                                                      .orange,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                        const PopupMenuItem(
+                                                          value: 'hapus',
+                                                          child: Row(
+                                                            children: [
+                                                              Icon(
+                                                                Icons
+                                                                    .delete_outline_rounded,
+                                                                color:
+                                                                    Colors.red,
+                                                                size: 20,
+                                                              ),
+                                                              SizedBox(
+                                                                width: 8,
+                                                              ),
+                                                              Text(
+                                                                'Hapus Akun',
+                                                                style: TextStyle(
+                                                                  color: Colors
+                                                                      .red,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
                                                       ],
                                               ),
-                                            ]
+                                            ],
                                           ],
                                         ),
                                         onTap: () => _showCustomerDetail(c),
@@ -628,7 +1160,6 @@ class _PelangganTabState extends State<PelangganTab> {
             ],
           ),
 
-          // [UPDATE UX] Overlay Loading Simpel Transparan khusus Tab
           if (_isProcessing)
             Positioned.fill(
               child: Container(
@@ -694,8 +1225,11 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
     super.dispose();
   }
 
-  // [UPDATE UX] CUSTOM DIALOG
-  void _showCustomDialog({required String title, required String message, required bool isSuccess}) {
+  void _showCustomDialog({
+    required String title,
+    required String message,
+    required bool isSuccess,
+  }) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -709,20 +1243,50 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
             children: [
               Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: isSuccess ? Colors.green.shade50 : Colors.red.shade50, shape: BoxShape.circle),
-                child: Icon(isSuccess ? Icons.check_circle : Icons.cancel, color: isSuccess ? Colors.green : Colors.red, size: 48),
+                decoration: BoxDecoration(
+                  color: isSuccess ? Colors.green.shade50 : Colors.red.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isSuccess ? Icons.check_circle : Icons.cancel,
+                  color: isSuccess ? Colors.green : Colors.red,
+                  size: 48,
+                ),
               ),
               const SizedBox(height: 24),
-              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: _DS.textPrimary), textAlign: TextAlign.center),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: _DS.textPrimary,
+                ),
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 8),
-              Text(message, style: const TextStyle(color: _DS.textSecondary, fontSize: 13), textAlign: TextAlign.center),
+              Text(
+                message,
+                style: const TextStyle(color: _DS.textSecondary, fontSize: 13),
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 32),
               SizedBox(
-                width: double.infinity, height: 48,
+                width: double.infinity,
+                height: 48,
                 child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _DS.blue,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Mengerti', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  child: const Text(
+                    'Mengerti',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
                 ),
               ),
             ],
@@ -739,9 +1303,10 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
     }
 
     try {
+      // [UPDATE CASE 2] Tambahkan field saldo_sesudah dalam query SELECT
       final mutasiData = await _supabase
           .from('points_ledger')
-          .select()
+          .select('tipe, jumlah, created_at, catatan, eksekutor, saldo_sesudah')
           .eq('customer_id', widget.customerId!)
           .order('created_at', ascending: false);
 
@@ -780,14 +1345,35 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Tukar Barang?', style: TextStyle(fontWeight: FontWeight.w800, color: _DS.textPrimary)),
-        content: Text('Tukarkan $poinReq koin milik ${widget.namaLengkap} dengan $rewardName?\n\nKoin akan otomatis terpotong permanen.', style: const TextStyle(height: 1.4)),
+        title: const Text(
+          'Tukar Barang?',
+          style: TextStyle(fontWeight: FontWeight.w800, color: _DS.textPrimary),
+        ),
+        content: Text(
+          'Tukarkan $poinReq koin milik ${widget.namaLengkap} dengan $rewardName?\n\nKoin akan otomatis terpotong permanen.',
+          style: const TextStyle(height: 1.4),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal', style: TextStyle(color: _DS.textSecondary))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(
+              'Batal',
+              style: TextStyle(color: _DS.textSecondary),
+            ),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, elevation: 0),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _DS.blue,
+              elevation: 0,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Tukar Koin', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+            child: const Text(
+              'Tukar Koin',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
@@ -799,16 +1385,29 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
 
     try {
       final kasirId = _supabase.auth.currentUser!.id;
-      final kasirProfile = await _supabase.from('profiles').select('role').eq('id', kasirId).single();
-      final roleName = kasirProfile['role'] == 'super_admin' ? 'admin' : 'kasir';
+      final kasirProfile = await _supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', kasirId)
+          .single();
+      final roleName = kasirProfile['role'] == 'super_admin'
+          ? 'admin'
+          : 'kasir';
 
-      final custData = await _supabase.from('customers').select('poin_saldo').eq('id', widget.customerId!).single();
+      final custData = await _supabase
+          .from('customers')
+          .select('poin_saldo')
+          .eq('id', widget.customerId!)
+          .single();
       final int saldoSblm = (custData['poin_saldo'] as num).toInt();
 
       if (saldoSblm < poinReq) throw 'Koin pelanggan tidak cukup!';
       final int saldoSsdh = saldoSblm - poinReq;
 
-      await _supabase.from('customers').update({'poin_saldo': saldoSsdh}).eq('id', widget.customerId!);
+      await _supabase
+          .from('customers')
+          .update({'poin_saldo': saldoSsdh})
+          .eq('id', widget.customerId!);
 
       await _supabase.from('points_ledger').insert({
         'customer_id': widget.customerId!,
@@ -825,10 +1424,19 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
       widget.onPoinBerubah();
 
       if (mounted) {
-        _showCustomDialog(title: 'Berhasil', message: '$rewardName berhasil ditukar!', isSuccess: true);
+        _showCustomDialog(
+          title: 'Berhasil',
+          message: '$rewardName berhasil ditukar!',
+          isSuccess: true,
+        );
       }
     } catch (e) {
-      if (mounted) _showCustomDialog(title: 'Gagal', message: e.toString(), isSuccess: false);
+      if (mounted)
+        _showCustomDialog(
+          title: 'Gagal',
+          message: e.toString(),
+          isSuccess: false,
+        );
     } finally {
       setState(() => _isRedeeming = false);
     }
@@ -854,12 +1462,29 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
             decoration: BoxDecoration(
               color: _DS.surface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-              boxShadow: [BoxShadow(color: _DS.navy.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _DS.navy.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: Column(
               children: [
-                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -867,19 +1492,50 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(widget.namaLengkap, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _DS.textPrimary)),
+                        Text(
+                          widget.namaLengkap,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: _DS.textPrimary,
+                          ),
+                        ),
                         const SizedBox(height: 4),
-                        const Text('Detail Loyalitas Pelanggan', style: TextStyle(color: _DS.textSecondary, fontSize: 13)),
+                        const Text(
+                          'Detail Loyalitas Pelanggan',
+                          style: TextStyle(
+                            color: _DS.textSecondary,
+                            fontSize: 13,
+                          ),
+                        ),
                       ],
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.amber.shade200)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.amber.shade200),
+                      ),
                       child: Row(
                         children: [
-                          Icon(Icons.stars_rounded, color: Colors.amber.shade600, size: 20),
+                          Icon(
+                            Icons.stars_rounded,
+                            color: Colors.amber.shade600,
+                            size: 20,
+                          ),
                           const SizedBox(width: 6),
-                          Text('$_currentPoin', style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.w800, fontSize: 18)),
+                          Text(
+                            '$_currentPoin',
+                            style: TextStyle(
+                              color: Colors.amber.shade900,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 18,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -889,16 +1545,29 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
                 // TAB BAR
                 Container(
                   padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(color: _DS.ground, borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(
+                    color: _DS.ground,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: TabBar(
                     controller: _tabController,
-                    indicator: BoxDecoration(color: _DS.surface, borderRadius: BorderRadius.circular(10), boxShadow: _DS.softShadow),
+                    indicator: BoxDecoration(
+                      color: _DS.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: _DS.softShadow,
+                    ),
                     labelColor: _DS.blue,
                     unselectedLabelColor: _DS.textSecondary,
-                    labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                    labelStyle: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                    ),
                     indicatorSize: TabBarIndicatorSize.tab,
                     dividerColor: Colors.transparent,
-                    tabs: const [Tab(text: 'Riwayat Mutasi'), Tab(text: 'Tukar Fisik')],
+                    tabs: const [
+                      Tab(text: 'Riwayat Mutasi'),
+                      Tab(text: 'Tukar Fisik'),
+                    ],
                   ),
                 ),
               ],
@@ -908,47 +1577,152 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
           // KONTEN TAB
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: _DS.blue))
+                ? const Center(
+                    child: CircularProgressIndicator(color: _DS.blue),
+                  )
                 : TabBarView(
                     controller: _tabController,
                     children: [
                       // TAB 1: MUTASI POIN
                       _mutasiList.isEmpty
-                          ? const Center(child: Text('Belum ada riwayat koin.', style: TextStyle(color: _DS.textHint)))
+                          ? const Center(
+                              child: Text(
+                                'Belum ada riwayat koin.',
+                                style: TextStyle(color: _DS.textHint),
+                              ),
+                            )
                           : ListView.builder(
-                              padding: const EdgeInsets.all(20), physics: const BouncingScrollPhysics(), itemCount: _mutasiList.length,
+                              padding: const EdgeInsets.all(20),
+                              physics: const BouncingScrollPhysics(),
+                              itemCount: _mutasiList.length,
                               itemBuilder: (ctx, i) {
                                 final m = _mutasiList[i];
-                                final isPlus = m['tipe'] == 'earned';
-                                final jumlah = m['jumlah'] > 0 ? '+${m['jumlah']}' : '${m['jumlah']}';
-                                final eksekutor = m['eksekutor'] ?? 'pelanggan'; 
+
+                                // [UPDATE REVISI CASE 2]: Logika deteksi positif/negatif & absolut
+                                final int nominal =
+                                    (m['jumlah'] as num?)?.toInt() ?? 0;
+                                final isPlus = nominal > 0;
+                                final absNominal = nominal.abs();
+                                final jumlahStr = isPlus
+                                    ? '+$absNominal'
+                                    : '-$absNominal';
+
+                                final eksekutor = m['eksekutor'] ?? 'pelanggan';
 
                                 return Container(
-                                  margin: const EdgeInsets.only(bottom: 12), padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(color: _DS.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: _DS.border, width: 1.5)),
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: _DS.surface,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: _DS.border,
+                                      width: 1.5,
+                                    ),
+                                  ),
                                   child: Row(
                                     children: [
-                                      Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: isPlus ? Colors.green.shade50 : Colors.red.shade50, shape: BoxShape.circle), child: Icon(isPlus ? Icons.add_business_rounded : Icons.outbox_rounded, color: isPlus ? Colors.green : Colors.red, size: 20)),
+                                      Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: isPlus
+                                              ? Colors.green.shade50
+                                              : Colors.red.shade50,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          isPlus
+                                              ? Icons.add_business_rounded
+                                              : Icons.outbox_rounded,
+                                          color: isPlus
+                                              ? Colors.green
+                                              : Colors.red,
+                                          size: 20,
+                                        ),
+                                      ),
                                       const SizedBox(width: 14),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
-                                            Text(m['catatan'] ?? 'Transaksi Koin', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: _DS.textPrimary)),
+                                            Text(
+                                              m['catatan'] ?? 'Transaksi Koin',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 14,
+                                                color: _DS.textPrimary,
+                                              ),
+                                            ),
                                             const SizedBox(height: 4),
                                             Row(
                                               children: [
-                                                Text(_formatTgl(m['created_at']), style: const TextStyle(color: _DS.textSecondary, fontSize: 11)),
-                                                if (eksekutor != 'pelanggan') ...[
+                                                Text(
+                                                  _formatTgl(m['created_at']),
+                                                  style: const TextStyle(
+                                                    color: _DS.textSecondary,
+                                                    fontSize: 11,
+                                                  ),
+                                                ),
+                                                if (eksekutor !=
+                                                    'pelanggan') ...[
                                                   const SizedBox(width: 6),
-                                                  Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: _DS.sky, borderRadius: BorderRadius.circular(4)), child: Text('by $eksekutor', style: const TextStyle(color: _DS.blue, fontSize: 9, fontWeight: FontWeight.w800))),
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 6,
+                                                          vertical: 2,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: _DS.sky,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            4,
+                                                          ),
+                                                    ),
+                                                    child: Text(
+                                                      'by $eksekutor',
+                                                      style: const TextStyle(
+                                                        color: _DS.blue,
+                                                        fontSize: 9,
+                                                        fontWeight:
+                                                            FontWeight.w800,
+                                                      ),
+                                                    ),
+                                                  ),
                                                 ],
                                               ],
                                             ),
                                           ],
                                         ),
                                       ),
-                                      Text(jumlah, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: isPlus ? Colors.green.shade700 : Colors.red.shade700)),
+                                      // [UPDATE UX CASE 2]: Tampilkan Sisa Saldo
+                                      Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            jumlahStr,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 16,
+                                              color: isPlus
+                                                  ? Colors.green.shade700
+                                                  : Colors.red.shade700,
+                                            ),
+                                          ),
+                                          Text(
+                                            'Sisa: ${m['saldo_sesudah'] ?? '-'}',
+                                            style: const TextStyle(
+                                              color: _DS.textSecondary,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ],
                                   ),
                                 );
@@ -957,28 +1731,108 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
 
                       // TAB 2: BARANG FISIK
                       _fisikRewards.isEmpty
-                          ? const Center(child: Text('Tidak ada hadiah fisik tersedia.', style: TextStyle(color: _DS.textHint)))
+                          ? const Center(
+                              child: Text(
+                                'Tidak ada hadiah fisik tersedia.',
+                                style: TextStyle(color: _DS.textHint),
+                              ),
+                            )
                           : ListView.builder(
-                              padding: const EdgeInsets.all(20), physics: const BouncingScrollPhysics(), itemCount: _fisikRewards.length,
+                              padding: const EdgeInsets.all(20),
+                              physics: const BouncingScrollPhysics(),
+                              itemCount: _fisikRewards.length,
                               itemBuilder: (ctx, i) {
                                 final r = _fisikRewards[i];
-                                final poinReq = (r['poin_dibutuhkan'] as num).toInt();
+                                final poinReq = (r['poin_dibutuhkan'] as num)
+                                    .toInt();
                                 final isEnough = _currentPoin >= poinReq;
 
                                 return Container(
-                                  margin: const EdgeInsets.only(bottom: 12), decoration: BoxDecoration(color: isEnough ? _DS.surface : _DS.border.withOpacity(0.3), borderRadius: BorderRadius.circular(16), border: Border.all(color: _DS.border)),
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  decoration: BoxDecoration(
+                                    color: isEnough
+                                        ? _DS.surface
+                                        : _DS.border.withOpacity(0.3),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: _DS.border),
+                                  ),
                                   child: ListTile(
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                    leading: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: isEnough ? Colors.amber.shade50 : Colors.grey.shade200, borderRadius: BorderRadius.circular(12)), child: Icon(Icons.inventory_2_rounded, color: isEnough ? Colors.amber.shade700 : Colors.grey)),
-                                    title: Text(r['nama'] ?? '-', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: isEnough ? _DS.textPrimary : _DS.textSecondary)),
-                                    subtitle: Padding(padding: const EdgeInsets.only(top: 4), child: Text('$poinReq Koin', style: TextStyle(color: isEnough ? _DS.blue : _DS.textHint, fontWeight: FontWeight.w700, fontSize: 13))),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 10,
+                                    ),
+                                    leading: Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: isEnough
+                                            ? Colors.amber.shade50
+                                            : Colors.grey.shade200,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Icon(
+                                        Icons.inventory_2_rounded,
+                                        color: isEnough
+                                            ? Colors.amber.shade700
+                                            : Colors.grey,
+                                      ),
+                                    ),
+                                    title: Text(
+                                      r['nama'] ?? '-',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 14,
+                                        color: isEnough
+                                            ? _DS.textPrimary
+                                            : _DS.textSecondary,
+                                      ),
+                                    ),
+                                    subtitle: Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        '$poinReq Koin',
+                                        style: TextStyle(
+                                          color: isEnough
+                                              ? _DS.blue
+                                              : _DS.textHint,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
                                     trailing: isEnough
                                         ? ElevatedButton(
-                                            style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, elevation: 0, padding: const EdgeInsets.symmetric(horizontal: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                                            onPressed: _isRedeeming ? null : () => _prosesTukarFisik(r),
-                                            child: const Text('Tukar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: _DS.blue,
+                                              elevation: 0,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 16,
+                                                  ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                              ),
+                                            ),
+                                            onPressed: _isRedeeming
+                                                ? null
+                                                : () => _prosesTukarFisik(r),
+                                            child: const Text(
+                                              'Tukar',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 13,
+                                              ),
+                                            ),
                                           )
-                                        : const Text('Koin Kurang', style: TextStyle(color: _DS.textHint, fontWeight: FontWeight.w600, fontSize: 12)),
+                                        : const Text(
+                                            'Koin Kurang',
+                                            style: TextStyle(
+                                              color: _DS.textHint,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 12,
+                                            ),
+                                          ),
                                   ),
                                 );
                               },

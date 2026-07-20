@@ -120,7 +120,6 @@ class _RewardManagementScreenState extends State<RewardManagementScreen> {
     final poinCtrl = TextEditingController(text: isEdit ? (reward['poin_dibutuhkan']?.toString() ?? '') : '');
     final nilaiCtrl = TextEditingController(text: isEdit ? (reward['nilai_reward']?.toString() ?? '') : '');
     
-    // [UPDATE REVISI] Controller untuk Min Transaksi & Maks Diskon
     final minTransaksiCtrl = TextEditingController(text: isEdit ? (reward['min_transaksi']?.toString() ?? '0') : '0');
     final maksDiskonCtrl = TextEditingController(text: isEdit ? (reward['maks_diskon']?.toString() ?? '0') : '0');
     
@@ -169,11 +168,11 @@ class _RewardManagementScreenState extends State<RewardManagementScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
-                TextField(controller: nilaiCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration(tipeSelected == 'diskon_persen' ? 'Nilai Diskon (Cth: 10 untuk 10%)' : 'Nilai Hadiah (Cth: 10000 untuk Rp 10.000)')),
                 
-                // [UPDATE REVISI] Kolom Khusus Aturan Diskon
+                // [UPDATE UX FINAL] Sembunyikan isian uang jika pilih Barang Fisik
                 if (tipeSelected != 'gratis_layanan') ...[
+                  const SizedBox(height: 12),
+                  TextField(controller: nilaiCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration(tipeSelected == 'diskon_persen' ? 'Nilai Diskon (Cth: 10 untuk 10%)' : 'Nilai Diskon Rp (Cth: 10000)')),
                   const SizedBox(height: 12),
                   TextField(controller: minTransaksiCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Minimal Transaksi (Rp) - Isi 0 jika tanpa batas')),
                 ],
@@ -190,20 +189,20 @@ class _RewardManagementScreenState extends State<RewardManagementScreen> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), elevation: 0),
               onPressed: isSubmitting ? null : () async {
-                if (namaCtrl.text.isEmpty || poinCtrl.text.isEmpty || nilaiCtrl.text.isEmpty) return;
+                // Validasi Cerdas
+                if (namaCtrl.text.isEmpty || poinCtrl.text.isEmpty || (tipeSelected != 'gratis_layanan' && nilaiCtrl.text.isEmpty)) return;
                 setModalState(() => isSubmitting = true);
                 
                 final String? deskripsiFinal = deskripsiCtrl.text.trim().isNotEmpty ? deskripsiCtrl.text.trim() : null;
 
-                // [UPDATE REVISI] Payload ditambahkan min_transaksi dan maks_diskon
                 final payload = {
                   'nama': namaCtrl.text.trim(),
                   'deskripsi': deskripsiFinal,
                   'poin_dibutuhkan': int.tryParse(poinCtrl.text.trim()) ?? 0,
                   'tipe_reward': tipeSelected,
-                  'nilai_reward': int.tryParse(nilaiCtrl.text.trim()) ?? 0,
-                  'min_transaksi': int.tryParse(minTransaksiCtrl.text.trim()) ?? 0,
-                  'maks_diskon': int.tryParse(maksDiskonCtrl.text.trim()) ?? 0,
+                  'nilai_reward': tipeSelected == 'gratis_layanan' ? 0 : (int.tryParse(nilaiCtrl.text.trim()) ?? 0),
+                  'min_transaksi': tipeSelected == 'gratis_layanan' ? 0 : (int.tryParse(minTransaksiCtrl.text.trim()) ?? 0),
+                  'maks_diskon': tipeSelected == 'gratis_layanan' ? 0 : (int.tryParse(maksDiskonCtrl.text.trim()) ?? 0),
                   'is_active': true,
                 };
 
@@ -242,32 +241,48 @@ class _RewardManagementScreenState extends State<RewardManagementScreen> {
     return 'Rp ${buffer.toString()}';
   }
 
-  // [UPDATE REVISI] Tampilan Deskripsi diubah agar memperlihatkan Min/Maks
+  // ============================================================
+  // [UPDATE REVISI FINAL]: PEMISAHAN LOGIKA BARANG FISIK & DISKON
+  // ============================================================
   String _getSubtitle(Map<String, dynamic> r) {
     final tipe = r['tipe_reward']?.toString() ?? '';
     final nilai = int.tryParse(r['nilai_reward']?.toString() ?? '0') ?? 0;
     final minTx = int.tryParse(r['min_transaksi']?.toString() ?? '0') ?? 0;
     final maksD = int.tryParse(r['maks_diskon']?.toString() ?? '0') ?? 0;
     
-    String hasil = '';
-    
-    if (tipe == 'diskon_nominal') {
-      hasil = 'Memotong tagihan sebesar ${_formatRupiah(nilai)}';
-      if (minTx > 0) hasil += '\n(Min. Transaksi ${_formatRupiah(minTx)})';
-    } else if (tipe == 'diskon_persen') {
-      hasil = 'Diskon sebesar $nilai% dari total transaksi';
-      if (maksD > 0) hasil += ' (Maks. ${_formatRupiah(maksD)})';
-      if (minTx > 0) hasil += '\n(Min. Transaksi ${_formatRupiah(minTx)})';
-    } else {
-      hasil = 'Mendapatkan barang/layanan senilai ${_formatRupiah(nilai)}';
-    }
-
     final deskripsiManual = r['deskripsi']?.toString() ?? '';
-    if (deskripsiManual.isNotEmpty) {
-      return '$deskripsiManual\n\n*Info Sistem:\n$hasil';
+    
+    // Bersihkan deskripsi dari string error lama database 
+    String deskripsiBersih = '';
+    if (deskripsiManual.isNotEmpty && !deskripsiManual.toLowerCase().contains('layanan sebesar rp 0')) {
+      deskripsiBersih = deskripsiManual;
     }
     
-    return hasil;
+    // 1. LOGIKA KHUSUS BARANG FISIK
+    if (tipe == 'gratis_layanan') {
+      if (deskripsiBersih.isNotEmpty) {
+        return deskripsiBersih;
+      } else {
+        return 'Tukarkan koin untuk mendapatkan hadiah fisik ini.';
+      }
+    } 
+    // 2. LOGIKA KHUSUS VOUCHER DISKON
+    else {
+      String hasil = '';
+      if (tipe == 'diskon_nominal') {
+        hasil = 'Memotong tagihan sebesar ${_formatRupiah(nilai)}';
+        if (minTx > 0) hasil += '\n(Min. Transaksi ${_formatRupiah(minTx)})';
+      } else if (tipe == 'diskon_persen') {
+        hasil = 'Diskon sebesar $nilai% dari total transaksi';
+        if (maksD > 0) hasil += ' (Maks. ${_formatRupiah(maksD)})';
+        if (minTx > 0) hasil += '\n(Min. Transaksi ${_formatRupiah(minTx)})';
+      }
+
+      if (deskripsiBersih.isNotEmpty) {
+        return '$deskripsiBersih\n\n*Info Sistem:\n$hasil';
+      }
+      return hasil;
+    }
   }
 
   Widget _buildTabBtn(int index, String title, IconData icon) {

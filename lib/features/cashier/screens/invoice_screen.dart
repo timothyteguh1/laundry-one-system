@@ -5,7 +5,7 @@ import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:laundry_one/features/cashier/screens/printer_selection_screen.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // [TAMBAHAN] Wajib untuk database
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ============================================================
 // DESIGN SYSTEM - KONSISTEN
@@ -90,29 +90,20 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   BluetoothDevice? _selectedDevice;
   bool _connected = false;
 
-  // [TAMBAHAN] Variabel Admin & Supabase
-  // bool _isAdmin = false;
   final _supabase = Supabase.instance.client;
 
   @override
   void initState() {
     super.initState();
     _initBluetooth();
-    // _checkAdminRole(); // [TAMBAHAN] Cek Otoritas
   }
 
-  // // [TAMBAHAN] Cek Otoritas Admin
-  // Future<void> _checkAdminRole() async {
-  //   try {
-  //     final myId = _supabase.auth.currentUser!.id;
-  //     final profile = await _supabase.from('profiles').select('role').eq('id', myId).single();
-  //     if (mounted) setState(() => _isAdmin = profile['role'] == 'super_admin');
-  //   } catch (e) {
-  //     debugPrint('Error role check: $e');
-  //   }
-  // }
-
-  // [TAMBAHAN] Fungsi Void / Hapus Nota
+  // ============================================================
+  // [UPDATE REVISI CASE 4]: LOGIKA HAPUS NOTA & RESET COOLDOWN 90 HARI
+  // ============================================================
+  // ============================================================
+  // [UPDATE REVISI FINAL]: LOGIKA HAPUS NOTA SUPER DETEKTIF + NOTIFIKASI
+  // ============================================================
   Future<void> _hapusNota() async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -133,19 +124,19 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
     if (confirm == true) {
       HapticFeedback.heavyImpact();
-      // Tampilkan Loading
       showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)));
 
       try {
         final orderId = widget.orderId;
         final currentKasirId = _supabase.auth.currentUser!.id;
 
-        // 1. TARIK POIN YANG DIDAPAT (Jika pelanggan dapat poin dari nota ini)
-        final orderData = await _supabase.from('orders').select('customer_id, poin_didapat, poin_sudah_diberikan').eq('id', orderId).single();
-        final custId = orderData['customer_id'];
-        final int poin = orderData['poin_didapat'] ?? 0;
-        final bool poinDiberikan = orderData['poin_sudah_diberikan'] == true;
+        // Tarik data order selengkap mungkin dari database
+        final ord = await _supabase.from('orders').select().eq('id', orderId).single();
+        final custId = ord['customer_id'];
+        final int poin = ord['poin_didapat'] ?? 0;
+        final bool poinDiberikan = ord['poin_sudah_diberikan'] == true;
 
+        // 1. TARIK POIN YANG DIDAPAT DARI TRANSAKSI INI
         if (custId != null && poinDiberikan && poin > 0) {
           final custData = await _supabase.from('customers').select('poin_saldo').eq('id', custId).single();
           final int saldoSaatIni = custData['poin_saldo'] ?? 0;
@@ -153,7 +144,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
           
           await _supabase.from('customers').update({'poin_saldo': saldoBaru}).eq('id', custId);
           
-          // Catat penarikan poin di ledger
           await _supabase.from('points_ledger').insert({
             'customer_id': custId,
             'tipe': 'reversed',
@@ -165,9 +155,36 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
           });
         }
 
-        // 2. KEMBALIKAN POIN DARI VOUCHER & HAPUS VOUCHER
-        final redemptions = await _supabase.from('reward_redemptions').select('id, poin_digunakan, customer_id').eq('dipakai_di_order', orderId);
+        // 2. PENCARIAN VOUCHER SUPER DETEKTIF
+        List<dynamic> redemptions = [];
         
+        // Jaring 1: Coba cari langsung dari kolom dipakai_di_order
+        try {
+          final res = await _supabase.from('reward_redemptions').select().eq('dipakai_di_order', orderId);
+          if (res.isNotEmpty) redemptions.addAll(res);
+        } catch (_) {}
+
+        // Jaring 2 (ULTIMATE): Cari voucher 'dipakai' terbaru pelanggan ini yang kolom ordernya NULL (Nyangkut)
+        if (redemptions.isEmpty && custId != null) {
+          try {
+            final res = await _supabase
+                .from('reward_redemptions')
+                .select()
+                .eq('customer_id', custId)
+                .eq('status', 'dipakai')
+                .order('dipakai_at', ascending: false)
+                .limit(5); // Ambil 5 riwayat terbaru
+                
+            for (var v in res) {
+              if (v['dipakai_di_order'] == null) {
+                redemptions.add(v);
+                break; // Cukup tangkap 1 voucher nyangkut saja
+              }
+            }
+          } catch (_) {}
+        }
+
+        // Eksekusi Pengembalian Saldo & PENGHANCURAN VOUCHER
         for (var red in redemptions) {
           final int poinDigunakan = red['poin_digunakan'] ?? 0;
           final String? redCustId = red['customer_id'];
@@ -177,10 +194,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
             final int saldoSaatIni = custData['poin_saldo'] ?? 0;
             final int saldoBaru = saldoSaatIni + poinDigunakan;
 
-            // Kembalikan poin utuh ke saldo pelanggan
             await _supabase.from('customers').update({'poin_saldo': saldoBaru}).eq('id', redCustId);
 
-            // Catat pengembalian di ledger agar history jelas
             await _supabase.from('points_ledger').insert({
               'customer_id': redCustId,
               'tipe': 'reversed',
@@ -192,21 +207,26 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
             });
           }
 
-          // Hapus data voucher karena transaksinya batal dan poin sudah dikembalikan
+          // [AMUNISI BARU]: Hapus Notifikasi yang menempel ke voucher ini DULU agar tidak error!
+          try {
+             await _supabase.from('notifications').delete().eq('redemption_id', red['id']);
+          } catch (_) {}
+
+          // HAPUS VOUCHER PERMANEN AGAR COOLDOWN 90 HARI LANGSUNG RESET!
           await _supabase.from('reward_redemptions').delete().eq('id', red['id']);
         }
 
-        // 3. Eksekusi Hapus Nota (Tabel item & ledger pembayaran akan bersih karena CASCADE di database)
+        // 3. Eksekusi Hapus Nota Utama
         await _supabase.from('orders').delete().eq('id', orderId);
 
         if (mounted) {
-          Navigator.pop(context); // Tutup loading
-          Navigator.pop(context, 'dihapus'); // Keluar dan beritahu beranda agar refresh
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Nota berhasil dibatalkan & Poin dikembalikan!'), backgroundColor: Colors.green));
+          Navigator.pop(context); 
+          Navigator.pop(context, 'dihapus'); 
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Nota batal & Hukuman 90 Hari di-reset!'), backgroundColor: Colors.green));
         }
       } catch (e) {
         if (mounted) {
-          Navigator.pop(context); // Tutup loading
+          Navigator.pop(context); 
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus: $e'), backgroundColor: Colors.red));
         }
       }
@@ -214,12 +234,10 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   }
 
   Future<void> _initBluetooth() async {
-    // --- PELINDUNG: Cegah eksekusi di Windows / Web ---
     if (kIsWeb || !Platform.isAndroid) {
       debugPrint('Bluetooth Printer dilewati (Bukan Android).');
       return;
     }
-    // --------------------------------------------------
 
     try {
       List<BluetoothDevice> devices = await bluetooth.getBondedDevices();
@@ -252,12 +270,9 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     return 'Rp ${buffer.toString()}';
   }
 
-  // 👇 UPDATE: PERBAIKAN WAKTU WIB DI KASIR
   String _formatDateTime(String? isoString) {
     if (isoString == null || isoString.isEmpty) return '-';
     try {
-      // 1. Cukup parse dan toLocal(). Jangan pakai pemaksaan 'Z' lagi.
-      // Dart sudah sangat pintar mengenali mana yang UTC dan mana yang WIB.
       DateTime d = DateTime.parse(isoString).toLocal();
 
       const months = [
@@ -283,9 +298,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     }
   }
 
-  // ============================================================
-  // FITUR SHARE KE WHATSAPP (TEKS RAPI)
-  // ============================================================
   void _shareReceipt() {
     HapticFeedback.lightImpact();
     final statusText = widget.isPiutang
@@ -322,13 +334,9 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     Share.share(sb.toString(), subject: 'Nota Pesanan ${widget.nomorOrder}');
   }
 
-  // ============================================================
-  // FITUR PRINT BLUETOOTH THERMAL
-  // ============================================================
   void _showPrinterDialog() async {
     HapticFeedback.lightImpact();
 
-    // --- PELINDUNG: Cegah eksekusi di Windows / Web ---
     if (kIsWeb || !Platform.isAndroid) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -341,15 +349,12 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       );
       return;
     }
-    // --------------------------------------------------
 
-    // BUKA LAYAR SELEKSI PRINTER YANG BARU DIBUAT
     final selectedDevice = await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const PrinterSelectionScreen()),
     );
 
-    // JIKA KASIR MEMILIH PRINTER, LANGSUNG EKSEKUSI CETAK
     if (selectedDevice != null && selectedDevice is BluetoothDevice) {
       _connectAndPrint(selectedDevice);
     }
@@ -362,8 +367,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         await bluetooth.connect(device);
       }
 
-      // LOGIKA CETAK KERTAS STRUK
-      bluetooth.printCustom("HAPPY LAUNDRY", 3, 1); // Size 3, Align Center
+      bluetooth.printCustom("HAPPY LAUNDRY", 3, 1); 
       bluetooth.printNewLine();
       bluetooth.printCustom(widget.nomorOrder, 1, 1);
       bluetooth.printCustom(_formatDateTime(widget.created_at), 1, 1);
@@ -377,7 +381,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         final nama = item['service']?['nama'] ?? 'Item';
         final qty = item['qty'] ?? 0;
         final sub = item['subtotal'] ?? 0;
-        bluetooth.printCustom("$qty x $nama", 1, 0); // Align Left
+        bluetooth.printCustom("$qty x $nama", 1, 0); 
         bluetooth.printLeftRight("", _formatRupiah(sub.toDouble()), 1);
       }
 
@@ -408,7 +412,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       bluetooth.printCustom("Terima Kasih!", 1, 1);
       bluetooth.printNewLine();
       bluetooth.printNewLine();
-      bluetooth.paperCut(); // Potong kertas otomatis (jika didukung)
+      bluetooth.paperCut(); 
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -435,8 +439,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
             )
           : null,
       body: SafeArea(
-        child: Center( // [TAMBAHAN] Agar konten tidak melar di tablet/layar lebar
-          child: ConstrainedBox( // [TAMBAHAN] Batasi lebar maksimal nota
+        child: Center( 
+          child: ConstrainedBox( 
             constraints: const BoxConstraints(maxWidth: 500),
             child: Column(
               children: [
@@ -448,7 +452,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                       children: [
                         const SizedBox(height: 10),
 
-                        // CEKLIS HIJAU (Hanya jika order baru)
                         if (!widget.isFromHome) ...[
                           Container(
                             padding: const EdgeInsets.all(16),
@@ -476,7 +479,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                           const SizedBox(height: 24),
                         ],
 
-                        // KERTAS NOTA MENGAMBANG
                         Container(
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
@@ -779,7 +781,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   ),
                 ),
 
-                // ACTION BUTTONS (STICKY BAWAH) KONSISTEN DENGAN DS
                 Container(
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                   decoration: BoxDecoration(
@@ -925,7 +926,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                         ),
                       ],
 
-                      // [TAMBAHAN BARU] TOMBOL HAPUS KHUSUS ADMIN
                       if (widget.isAdmin) ...[
                         const SizedBox(height: 12),
                         SizedBox(

@@ -29,7 +29,6 @@ class _KatalogTabState extends State<KatalogTab> {
   List<Map<String, dynamic>> _services = [];
   List<Map<String, dynamic>> _activeVouchers = []; 
   
-  // [UPDATE] Pemisahan Map untuk status dipakai vs hangus
   Map<String, DateTime> _lastUsedRewards = {}; 
   Map<String, DateTime> _lastExpiredRewards = {}; 
   
@@ -50,7 +49,7 @@ class _KatalogTabState extends State<KatalogTab> {
       
       List<Map<String, dynamic>> validVouchers = [];
       Map<String, DateTime> usedDates = {};
-      Map<String, DateTime> expiredDates = {}; // [UPDATE] Penampung data hangus
+      Map<String, DateTime> expiredDates = {}; 
       
       if (widget.customerId != null) {
         final resVouchers = await _supabase
@@ -70,27 +69,20 @@ class _KatalogTabState extends State<KatalogTab> {
               usedDates[safeRewardId] = usedAt;
             }
           } 
-          // GABUNGKAN PENGECEKAN AKTIF & EXPIRED
           else if (v['status'] == 'aktif' || (v['status'] == 'expired' && v['berlaku_sampai'] != null)) {
             final expiredAtUtc = DateTime.parse(v['berlaku_sampai']).toUtc();
             
-            // Cek apakah waktu kedaluwarsa sudah lewat
             if (nowUtc.isAfter(expiredAtUtc)) {
-              
-              // 1. CATAT KE STATE LOKAL DULU (Agar UI langsung menampilkan hitung mundur 60 menit)
               final currentExp = expiredDates[safeRewardId];
               if (currentExp == null || expiredAtUtc.isAfter(currentExp)) {
                 expiredDates[safeRewardId] = expiredAtUtc;
               }
               
-              // 2. UPDATE DATABASE DI LATAR BELAKANG
-              // Dijalankan tanpa "await" agar aplikasi tidak crash jika Supabase menolak (RLS)
               if (v['status'] == 'aktif') {
                 _supabase.from('reward_redemptions').update({'status': 'expired'}).eq('id', v['id']).catchError((_) {});
               }
               
             } else {
-              // Jika waktu belum lewat, pastikan masuk daftar aktif
               if (v['status'] == 'aktif') {
                 validVouchers.add(v);
               }
@@ -105,7 +97,7 @@ class _KatalogTabState extends State<KatalogTab> {
           _services = resServices;
           _activeVouchers = validVouchers;
           _lastUsedRewards = usedDates;
-          _lastExpiredRewards = expiredDates; // [UPDATE] Simpan ke State
+          _lastExpiredRewards = expiredDates; 
           _isLoading = false;
         });
       }
@@ -123,7 +115,6 @@ class _KatalogTabState extends State<KatalogTab> {
     final namaReward = reward['nama']?.toString() ?? 'Hadiah';
 
     if (!isBarang) {
-      // 1. Cek Cooldown 90 Hari (Jika dipakai)
       if (_lastUsedRewards.containsKey(safeRewardId)) {
         final lastUsed = _lastUsedRewards[safeRewardId]!;
         final cooldownEnd = lastUsed.add(const Duration(days: 90));
@@ -133,7 +124,6 @@ class _KatalogTabState extends State<KatalogTab> {
         }
       }
 
-      // 2. [UPDATE] Cek Cooldown 1 Jam (Jika Hangus)
       if (_lastExpiredRewards.containsKey(safeRewardId)) {
         final lastExpired = _lastExpiredRewards[safeRewardId]!;
         final expCooldownEnd = lastExpired.add(const Duration(hours: 1));
@@ -246,6 +236,50 @@ class _KatalogTabState extends State<KatalogTab> {
       result = str[str.length - 1 - i] + result;
     }
     return 'Rp $result';
+  }
+
+  // ============================================================
+  // [UPDATE REVISI FINAL]: PEMISAHAN LOGIKA BARANG FISIK & DISKON
+  // ============================================================
+  String _getRewardDescription(Map<String, dynamic> r) {
+    final tipe = r['tipe_reward']?.toString() ?? '';
+    final nilai = int.tryParse(r['nilai_reward']?.toString() ?? '0') ?? 0;
+    final minTx = int.tryParse(r['min_transaksi']?.toString() ?? '0') ?? 0;
+    final maksD = int.tryParse(r['maks_diskon']?.toString() ?? '0') ?? 0;
+    
+    final deskripsiManual = r['deskripsi']?.toString() ?? '';
+    
+    // Bersihkan deskripsi dari string error lama database (jika telanjur tersimpan)
+    String deskripsiBersih = '';
+    if (deskripsiManual.isNotEmpty && !deskripsiManual.toLowerCase().contains('layanan sebesar rp 0')) {
+      deskripsiBersih = deskripsiManual;
+    }
+    
+    // 1. LOGIKA KHUSUS BARANG FISIK
+    if (tipe == 'gratis_layanan') {
+      if (deskripsiBersih.isNotEmpty) {
+        return deskripsiBersih;
+      } else {
+        return 'Tukarkan koin Anda untuk mendapatkan hadiah fisik ini.';
+      }
+    } 
+    // 2. LOGIKA KHUSUS VOUCHER DISKON
+    else {
+      String hasil = '';
+      if (tipe == 'diskon_nominal') {
+        hasil = 'Memotong tagihan sebesar ${_formatCurrency(nilai)}';
+        if (minTx > 0) hasil += '\n(Min. Transaksi ${_formatCurrency(minTx)})';
+      } else if (tipe == 'diskon_persen') {
+        hasil = 'Diskon sebesar $nilai% dari total transaksi';
+        if (maksD > 0) hasil += ' (Maks. ${_formatCurrency(maksD)})';
+        if (minTx > 0) hasil += '\n(Min. Transaksi ${_formatCurrency(minTx)})';
+      }
+
+      if (deskripsiBersih.isNotEmpty) {
+        return '$deskripsiBersih\n\n$hasil';
+      }
+      return hasil;
+    }
   }
 
   @override
@@ -383,25 +417,22 @@ class _KatalogTabState extends State<KatalogTab> {
               final String safeRewardId = r['id']?.toString() ?? '';
               final isAlreadyActive = _activeVouchers.any((v) => v['reward_id']?.toString() == safeRewardId);
               
-              // [UPDATE] Logika Tampilan Tombol Cooldown
               bool isCooldown = false;
               bool isExpiredCooldown = false;
               int daysLeft = 0;
               int minutesLeft = 0;
               
               if (!isBarangTab) {
-                // Prioritas 1: Cek apakah kena limit 90 hari karena 'dipakai'
                 if (_lastUsedRewards.containsKey(safeRewardId)) {
                   final lastUsed = _lastUsedRewards[safeRewardId]!;
                   final expiryDate = lastUsed.add(const Duration(days: 90)); 
                   if (DateTime.now().toUtc().isBefore(expiryDate)) {
                     isCooldown = true;
                     daysLeft = expiryDate.difference(DateTime.now().toUtc()).inDays;
-                    if (daysLeft == 0) daysLeft = 1; // Format tampilan
+                    if (daysLeft == 0) daysLeft = 1; 
                   }
                 }
 
-                // Prioritas 2: Jika tidak kena 90 hari, cek apakah kena limit 1 jam karena 'hangus'
                 if (!isCooldown && _lastExpiredRewards.containsKey(safeRewardId)) {
                   final lastExpired = _lastExpiredRewards[safeRewardId]!;
                   final expCooldownDate = lastExpired.add(const Duration(hours: 1));
@@ -419,7 +450,6 @@ class _KatalogTabState extends State<KatalogTab> {
               if (isBarangTab) {
                 if (!bisaDitebus) { btnText = 'Butuh $poinDibutuhkan Koin'; } else { btnText = 'Tukar $poinDibutuhkan Koin'; }
               } else {
-                // [UPDATE] Urutan Pengecekan Text Tombol
                 if (isCooldown) { 
                   btnText = 'Tersedia dlm $daysLeft hari'; 
                   isButtonDisabled = true; 
@@ -462,7 +492,12 @@ class _KatalogTabState extends State<KatalogTab> {
                         children: [
                           Text(r['nama']?.toString() ?? '-', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: CustomerTheme.textPrimary)),
                           const SizedBox(height: 4),
-                          Text(r['deskripsi']?.toString() ?? '', style: const TextStyle(fontSize: 12, color: CustomerTheme.textSecondary), maxLines: 2, overflow: TextOverflow.ellipsis),
+                          Text(
+                            _getRewardDescription(r), 
+                            style: const TextStyle(fontSize: 12, color: CustomerTheme.textSecondary, height: 1.3), 
+                            maxLines: 4, 
+                            overflow: TextOverflow.ellipsis
+                          ),
                           const SizedBox(height: 12),
                           
                           SizedBox(
