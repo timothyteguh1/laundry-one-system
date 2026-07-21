@@ -1,6 +1,6 @@
 import 'dart:ui';
 import 'dart:math' as math;
-import 'dart:async'; // [TAMBAHAN]: Untuk Timer AJAX (Debounce)
+import 'dart:async'; // Untuk Timer AJAX (Debounce)
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -65,8 +65,7 @@ class _PelangganTabState extends State<PelangganTab> {
   final int _perPage = 15;
   bool _hasMore = true;
   bool _isLoadingMore = false;
-  bool _isSearching =
-      false; // <-- [UPDATE UX]: Indikator loading mini untuk pencarian
+  bool _isSearching = false;
 
   @override
   void initState() {
@@ -81,14 +80,11 @@ class _PelangganTabState extends State<PelangganTab> {
     super.dispose();
   }
 
-  // [UPDATE UX]: Fungsi Debounce Pencarian Gaib (AJAX)
   void _onSearchChanged(String val) {
     if (_searchDebounce?.isActive ?? false) _searchDebounce!.cancel();
-    setState(
-      () => _isSearching = true,
-    ); // Munculkan loading mini tanpa mengosongkan layar
+    setState(() => _isSearching = true);
     _searchDebounce = Timer(const Duration(milliseconds: 500), () {
-      _loadCustomers(showFullLoading: false); // Tarik data baru
+      _loadCustomers(showFullLoading: false);
     });
   }
 
@@ -178,9 +174,6 @@ class _PelangganTabState extends State<PelangganTab> {
     _loadCustomers();
   }
 
-  // ==========================================================
-  // [TAMBAHAN]: FUNGSI EDIT NAMA (KHUSUS ADMIN)
-  // ==========================================================
   Future<void> _editNamaPelanggan(String profileId, String namaLama) async {
     final namaCtrl = TextEditingController(text: namaLama);
     final formKey = GlobalKey<FormState>();
@@ -255,9 +248,7 @@ class _PelangganTabState extends State<PelangganTab> {
               ),
             ),
             onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.pop(ctx, true);
-              }
+              if (formKey.currentState!.validate()) Navigator.pop(ctx, true);
             },
             child: const Text(
               'Simpan',
@@ -279,7 +270,6 @@ class _PelangganTabState extends State<PelangganTab> {
             .from('profiles')
             .update({'nama_lengkap': newName})
             .eq('id', profileId);
-
         await _loadCustomers(showFullLoading: false);
         if (mounted)
           _showCustomDialog(
@@ -300,7 +290,6 @@ class _PelangganTabState extends State<PelangganTab> {
     }
   }
 
-  // [UPDATE UX]: Tambah parameter showFullLoading agar layar tidak berkedip putih saat AJAX
   Future<void> _loadCustomers({bool showFullLoading = true}) async {
     if (showFullLoading) setState(() => _isLoading = true);
     _page = 0;
@@ -312,7 +301,6 @@ class _PelangganTabState extends State<PelangganTab> {
           .eq('role', 'customer')
           .eq('is_active', !_showNonActive);
 
-      // [AJAX FILTER SISI SERVER]
       if (_searchCtrl.text.isNotEmpty) {
         final q = _searchCtrl.text;
         query = query.or('nama_lengkap.ilike.%$q%,nomor_hp.ilike.%$q%');
@@ -325,11 +313,10 @@ class _PelangganTabState extends State<PelangganTab> {
           _allCustomers = List<Map<String, dynamic>>.from(data);
           if (_allCustomers.length < _perPage) _hasMore = false;
           _isLoading = false;
-          _isSearching = false; // Matikan indikator mini AJAX
+          _isSearching = false;
         });
       }
     } catch (e) {
-      debugPrint('Load customers error: $e');
       if (mounted)
         setState(() {
           _isLoading = false;
@@ -403,6 +390,7 @@ class _PelangganTabState extends State<PelangganTab> {
         customerId: customerId,
         namaLengkap: namaLengkap,
         poinSaldoAwal: poinSaldo,
+        isAdmin: _isAdmin, // DILEMPAR AGAR TOMBOL BATAL BISA BACA ROLE
         onPoinBerubah: () => _loadCustomers(showFullLoading: false),
       ),
     );
@@ -871,8 +859,8 @@ class _PelangganTabState extends State<PelangganTab> {
                         },
                   child: isSubmitting
                       ? const SizedBox(
-                          width: 40,
-                          height: 16,
+                          width: 54,
+                          height: 20,
                           child: Center(
                             child: _ModernLoadingDots(
                               color: Colors.white,
@@ -940,7 +928,6 @@ class _PelangganTabState extends State<PelangganTab> {
                         horizontal: 16,
                         vertical: 14,
                       ),
-                      // [UPDATE UX]: Indikator Gaib di sudut kanan kotak pencarian
                       suffixIcon: _isSearching
                           ? const Padding(
                               padding: EdgeInsets.all(12),
@@ -1101,7 +1088,7 @@ class _PelangganTabState extends State<PelangganTab> {
                                         _allCustomers.length +
                                         (_hasMore ? 1 : 0),
                                     itemBuilder: (context, i) {
-                                      if (i == _allCustomers.length) {
+                                      if (i == _allCustomers.length)
                                         return Padding(
                                           padding: const EdgeInsets.symmetric(
                                             vertical: 20,
@@ -1115,7 +1102,7 @@ class _PelangganTabState extends State<PelangganTab> {
                                                 : const SizedBox(),
                                           ),
                                         );
-                                      }
+
                                       final c = _allCustomers[i];
                                       final extracted = _extractCustData(
                                         c['customers'],
@@ -1406,7 +1393,6 @@ class _PelangganTabState extends State<PelangganTab> {
             ],
           ),
 
-          // [UPDATE UX]: Pop-up Modern Glassmorphism untuk proses aksi
           if (_isProcessing)
             Positioned.fill(
               child: BackdropFilter(
@@ -1457,13 +1443,14 @@ class _PelangganTabState extends State<PelangganTab> {
 }
 
 // =========================================================
-// WIDGET BOTTOM SHEET (DETAIL & REDEEM)
+// WIDGET BOTTOM SHEET (DETAIL & REDEEM & REFUND)
 // =========================================================
 class _CustomerDetailModal extends StatefulWidget {
   final String profileId;
   final String? customerId;
   final String namaLengkap;
   final int poinSaldoAwal;
+  final bool isAdmin; // <--- UPDATE: Terima data Role
   final VoidCallback onPoinBerubah;
 
   const _CustomerDetailModal({
@@ -1471,6 +1458,7 @@ class _CustomerDetailModal extends StatefulWidget {
     required this.customerId,
     required this.namaLengkap,
     required this.poinSaldoAwal,
+    required this.isAdmin,
     required this.onPoinBerubah,
   });
 
@@ -1582,20 +1570,26 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
     try {
       final mutasiData = await _supabase
           .from('points_ledger')
-          .select('tipe, jumlah, created_at, catatan, eksekutor, saldo_sesudah')
+          // [UPDATE]: Menambahkan id & redemption_id
+          .select(
+            'id, tipe, jumlah, created_at, catatan, eksekutor, saldo_sesudah, redemption_id',
+          )
           .eq('customer_id', widget.customerId!)
           .order('created_at', ascending: false);
+
       final rewardData = await _supabase
           .from('rewards_catalog')
           .select()
           .eq('tipe_reward', 'gratis_layanan')
           .eq('is_active', true)
           .order('poin_dibutuhkan');
+
       final custFresh = await _supabase
           .from('customers')
           .select('poin_saldo')
           .eq('id', widget.customerId!)
           .single();
+
       if (mounted) {
         setState(() {
           _mutasiList = List<Map<String, dynamic>>.from(mutasiData);
@@ -1710,6 +1704,118 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
     }
   }
 
+  // ==========================================================
+  // FUNGSI BATAL TUKAR FISIK (REFUND KOIN) - REVISI ANTI-DOUBLE
+  // ==========================================================
+  Future<void> _batalMutasi(Map<String, dynamic> m) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Batal & Refund Koin?',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Aksi ini akan membatalkan penukaran barang fisik ini dan mengembalikan koin secara utuh ke dompet pelanggan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Kembali', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Ya, Batalkan',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    // Menyalakan state loading (kaca buram)
+    setState(() => _isRedeeming = true);
+    try {
+      final adminId = _supabase.auth.currentUser!.id;
+      final kasirProfile = await _supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', adminId)
+          .single();
+      final roleName = kasirProfile['role'] == 'super_admin'
+          ? 'admin'
+          : 'kasir';
+
+      final mutasiId = m['id']; // <--- Ini ID dari points_ledger
+      final int jumlahMinus = (m['jumlah'] as num).toInt();
+      final int koinKembali = jumlahMinus.abs();
+      final oldCatatan = m['catatan'] ?? '';
+      final redemptionId = m['redemption_id'];
+
+      // 1. Tarik saldo terbaru pelanggan
+      final custData = await _supabase
+          .from('customers')
+          .select('poin_saldo')
+          .eq('id', widget.customerId!)
+          .single();
+      final int saldoSblm = (custData['poin_saldo'] as num).toInt();
+      final int saldoSsdh = saldoSblm + koinKembali;
+
+      // 2. Kembalikan Koin
+      await _supabase
+          .from('customers')
+          .update({'poin_saldo': saldoSsdh})
+          .eq('id', widget.customerId!);
+
+      // 3. Catat mutasi Refund DENGAN TALI PENGIKAT (Ref ID)
+      await _supabase.from('points_ledger').insert({
+        'customer_id': widget.customerId!,
+        'tipe': 'reversed',
+        'jumlah': koinKembali,
+        'saldo_sebelum': saldoSblm,
+        'saldo_sesudah': saldoSsdh,
+        'dilakukan_oleh': adminId,
+        'eksekutor': roleName,
+        'catatan': 'Refund [Ref ID: $mutasiId] - $oldCatatan',
+      });
+
+      // 4. Hanguskan voucher jika dari App Pelanggan
+      if (redemptionId != null) {
+        await _supabase
+            .from('reward_redemptions')
+            .update({'status': 'expired'})
+            .eq('id', redemptionId);
+      }
+
+      await _loadDetailData();
+      widget.onPoinBerubah();
+      if (mounted)
+        _showCustomDialog(
+          title: 'Berhasil',
+          message: 'Koin pelanggan berhasil dikembalikan!',
+          isSuccess: true,
+        );
+    } catch (e) {
+      if (mounted)
+        _showCustomDialog(
+          title: 'Gagal',
+          message: e.toString(),
+          isSuccess: false,
+        );
+    } finally {
+      // Mematikan state loading
+      setState(() => _isRedeeming = false);
+    }
+  }
+
   String _formatTgl(String isoString) {
     final d = DateTime.parse(isoString).toLocal();
     return DateFormat('dd MMM yyyy, HH:mm').format(d);
@@ -1717,388 +1823,228 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.9,
-      decoration: const BoxDecoration(
-        color: _DS.ground,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-            decoration: BoxDecoration(
-              color: _DS.surface,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(28),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: _DS.navy.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Stack(
+      children: [
+        Container(
+          height: MediaQuery.of(context).size.height * 0.9,
+          decoration: const BoxDecoration(color: _DS.ground, borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                decoration: BoxDecoration(color: _DS.surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(28)), boxShadow: [BoxShadow(color: _DS.navy.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]),
+                child: Column(
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          widget.namaLengkap,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            color: _DS.textPrimary,
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(widget.namaLengkap, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _DS.textPrimary)),
+                            const SizedBox(height: 4),
+                            const Text('Detail Loyalitas Pelanggan', style: TextStyle(color: _DS.textSecondary, fontSize: 13)),
+                          ],
                         ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Detail Loyalitas Pelanggan',
-                          style: TextStyle(
-                            color: _DS.textSecondary,
-                            fontSize: 13,
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.amber.shade200)),
+                          child: Row(
+                            children: [
+                              Icon(Icons.stars_rounded, color: Colors.amber.shade600, size: 20),
+                              const SizedBox(width: 6),
+                              Text('$_currentPoin', style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.w800, fontSize: 18)),
+                            ],
                           ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 24),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.shade50,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.amber.shade200),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.stars_rounded,
-                            color: Colors.amber.shade600,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            '$_currentPoin',
-                            style: TextStyle(
-                              color: Colors.amber.shade900,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 18,
-                            ),
-                          ),
-                        ],
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(color: _DS.ground, borderRadius: BorderRadius.circular(12)),
+                      child: TabBar(
+                        controller: _tabController,
+                        indicator: BoxDecoration(color: _DS.surface, borderRadius: BorderRadius.circular(10), boxShadow: _DS.softShadow),
+                        labelColor: _DS.blue, unselectedLabelColor: _DS.textSecondary,
+                        labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                        indicatorSize: TabBarIndicatorSize.tab, dividerColor: Colors.transparent,
+                        tabs: const [Tab(text: 'Riwayat Mutasi'), Tab(text: 'Tukar Fisik')],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: _DS.ground,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: TabBar(
-                    controller: _tabController,
-                    indicator: BoxDecoration(
-                      color: _DS.surface,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: _DS.softShadow,
-                    ),
-                    labelColor: _DS.blue,
-                    unselectedLabelColor: _DS.textSecondary,
-                    labelStyle: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13,
-                    ),
-                    indicatorSize: TabBarIndicatorSize.tab,
-                    dividerColor: Colors.transparent,
-                    tabs: const [
-                      Tab(text: 'Riwayat Mutasi'),
-                      Tab(text: 'Tukar Fisik'),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: _isLoading
-                ? const Center(
-                    child: _ModernLoadingDots(color: _DS.blue, size: 14),
-                  )
-                : TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _mutasiList.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'Belum ada riwayat koin.',
-                                style: TextStyle(color: _DS.textHint),
-                              ),
-                            )
-                          : ListView.builder(
-                              padding: const EdgeInsets.all(20),
-                              physics: const BouncingScrollPhysics(),
-                              itemCount: _mutasiList.length,
-                              itemBuilder: (ctx, i) {
-                                final m = _mutasiList[i];
-                                final int nominal =
-                                    (m['jumlah'] as num?)?.toInt() ?? 0;
-                                final isPlus = nominal > 0;
-                                final absNominal = nominal.abs();
-                                final jumlahStr = isPlus
-                                    ? '+$absNominal'
-                                    : '-$absNominal';
-                                final eksekutor = m['eksekutor'] ?? 'pelanggan';
+              ),
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: _ModernLoadingDots(color: _DS.blue, size: 14))
+                    : TabBarView(
+                        controller: _tabController,
+                        children: [
+                          _mutasiList.isEmpty
+                              ? const Center(child: Text('Belum ada riwayat koin.', style: TextStyle(color: _DS.textHint)))
+                              : ListView.builder(
+                                  padding: const EdgeInsets.all(20),
+                                  physics: const BouncingScrollPhysics(),
+                                  itemCount: _mutasiList.length,
+                                  itemBuilder: (ctx, i) {
+                                    final m = _mutasiList[i];
+                                    final int nominal = (m['jumlah'] as num?)?.toInt() ?? 0;
+                                    final isPlus = nominal > 0;
+                                    final absNominal = nominal.abs();
+                                    final jumlahStr = isPlus ? '+$absNominal' : '-$absNominal';
+                                    final eksekutor = m['eksekutor'] ?? 'pelanggan';
 
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 12),
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: _DS.surface,
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: _DS.border,
-                                      width: 1.5,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: isPlus
-                                              ? Colors.green.shade50
-                                              : Colors.red.shade50,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Icon(
-                                          isPlus
-                                              ? Icons.add_business_rounded
-                                              : Icons.outbox_rounded,
-                                          color: isPlus
-                                              ? Colors.green
-                                              : Colors.red,
-                                          size: 20,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 14),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              m['catatan'] ?? 'Transaksi Koin',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 14,
-                                                color: _DS.textPrimary,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Row(
+                                    // LOGIKA PENDETEKSI TALI PENGIKAT (REF ID)
+                                    final currentId = m['id']?.toString() ?? '';
+                                    final catatanLengkap = m['catatan']?.toString() ?? '';
+                                    final bool isRedeemed = m['tipe'] == 'redeemed';
+                                    final bool isBarang = catatanLengkap.toLowerCase().contains('barang') || catatanLengkap.toLowerCase().contains('fisik');
+                                    
+                                    // Cek ke SELURUH riwayat, adakah yang me-refund ID mutasi ini?
+                                    final bool isCanceled = _mutasiList.any((mutasiLain) {
+                                      final catLain = mutasiLain['catatan']?.toString() ?? '';
+                                      return catLain.contains('[Ref ID: $currentId]');
+                                    });
+
+                                    final bool canCancel = widget.isAdmin && isRedeemed && isBarang && !isCanceled;
+
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 12),
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(color: _DS.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: _DS.border, width: 1.5)),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(10),
+                                            decoration: BoxDecoration(color: isPlus ? Colors.green.shade50 : Colors.red.shade50, shape: BoxShape.circle),
+                                            child: Icon(isPlus ? Icons.add_business_rounded : Icons.outbox_rounded, color: isPlus ? Colors.green : Colors.red, size: 20),
+                                          ),
+                                          const SizedBox(width: 14),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                Text(
-                                                  _formatTgl(m['created_at']),
-                                                  style: const TextStyle(
-                                                    color: _DS.textSecondary,
-                                                    fontSize: 11,
-                                                  ),
-                                                ),
-                                                if (eksekutor !=
-                                                    'pelanggan') ...[
-                                                  const SizedBox(width: 6),
-                                                  Container(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 6,
-                                                          vertical: 2,
-                                                        ),
-                                                    decoration: BoxDecoration(
-                                                      color: _DS.sky,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            4,
-                                                          ),
-                                                    ),
-                                                    child: Text(
-                                                      'by $eksekutor',
-                                                      style: const TextStyle(
-                                                        color: _DS.blue,
-                                                        fontSize: 9,
-                                                        fontWeight:
-                                                            FontWeight.w800,
+                                                Text(m['catatan'] ?? 'Transaksi Koin', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: _DS.textPrimary)),
+                                                const SizedBox(height: 4),
+                                                Row(
+                                                  children: [
+                                                    Text(_formatTgl(m['created_at']), style: const TextStyle(color: _DS.textSecondary, fontSize: 11)),
+                                                    if (eksekutor != 'pelanggan') ...[
+                                                      const SizedBox(width: 6),
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                        decoration: BoxDecoration(color: _DS.sky, borderRadius: BorderRadius.circular(4)),
+                                                        child: Text('by $eksekutor', style: const TextStyle(color: _DS.blue, fontSize: 9, fontWeight: FontWeight.w800)),
                                                       ),
-                                                    ),
-                                                  ),
-                                                ],
+                                                    ],
+                                                  ],
+                                                ),
                                               ],
                                             ),
-                                          ],
-                                        ),
-                                      ),
-                                      Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.end,
-                                        children: [
-                                          Text(
-                                            jumlahStr,
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w800,
-                                              fontSize: 16,
-                                              color: isPlus
-                                                  ? Colors.green.shade700
-                                                  : Colors.red.shade700,
-                                            ),
                                           ),
-                                          Text(
-                                            'Sisa: ${m['saldo_sesudah'] ?? '-'}',
-                                            style: const TextStyle(
-                                              color: _DS.textSecondary,
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w600,
-                                            ),
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            mainAxisAlignment: MainAxisAlignment.end,
+                                            children: [
+                                              Column(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                crossAxisAlignment: CrossAxisAlignment.end,
+                                                children: [
+                                                  Text(jumlahStr, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: isPlus ? Colors.green.shade700 : Colors.red.shade700)),
+                                                  Text('Sisa: ${m['saldo_sesudah'] ?? '-'}', style: const TextStyle(color: _DS.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
+                                                ],
+                                              ),
+                                              if (canCancel) ...[
+                                                const SizedBox(width: 8),
+                                                IconButton(
+                                                  onPressed: _isRedeeming ? null : () => _batalMutasi(m),
+                                                  icon: const Icon(Icons.undo_rounded, color: Colors.red),
+                                                  tooltip: 'Batal & Refund Koin',
+                                                  padding: EdgeInsets.zero,
+                                                  constraints: const BoxConstraints(),
+                                                ),
+                                              ]
+                                            ],
                                           ),
                                         ],
                                       ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                      _fisikRewards.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'Tidak ada hadiah fisik tersedia.',
-                                style: TextStyle(color: _DS.textHint),
-                              ),
-                            )
-                          : ListView.builder(
-                              padding: const EdgeInsets.all(20),
-                              physics: const BouncingScrollPhysics(),
-                              itemCount: _fisikRewards.length,
-                              itemBuilder: (ctx, i) {
-                                final r = _fisikRewards[i];
-                                final poinReq = (r['poin_dibutuhkan'] as num)
-                                    .toInt();
-                                final isEnough = _currentPoin >= poinReq;
+                                    );
+                                  },
+                                ),
+                          _fisikRewards.isEmpty
+                              ? const Center(child: Text('Tidak ada hadiah fisik tersedia.', style: TextStyle(color: _DS.textHint)))
+                              : ListView.builder(
+                                  padding: const EdgeInsets.all(20),
+                                  physics: const BouncingScrollPhysics(),
+                                  itemCount: _fisikRewards.length,
+                                  itemBuilder: (ctx, i) {
+                                    final r = _fisikRewards[i];
+                                    final poinReq = (r['poin_dibutuhkan'] as num).toInt();
+                                    final isEnough = _currentPoin >= poinReq;
 
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 12),
-                                  decoration: BoxDecoration(
-                                    color: isEnough
-                                        ? _DS.surface
-                                        : _DS.border.withOpacity(0.3),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: _DS.border),
-                                  ),
-                                  child: ListTile(
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 10,
-                                    ),
-                                    leading: Container(
-                                      padding: const EdgeInsets.all(10),
-                                      decoration: BoxDecoration(
-                                        color: isEnough
-                                            ? Colors.amber.shade50
-                                            : Colors.grey.shade200,
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Icon(
-                                        Icons.inventory_2_rounded,
-                                        color: isEnough
-                                            ? Colors.amber.shade700
-                                            : Colors.grey,
-                                      ),
-                                    ),
-                                    title: Text(
-                                      r['nama'] ?? '-',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 14,
-                                        color: isEnough
-                                            ? _DS.textPrimary
-                                            : _DS.textSecondary,
-                                      ),
-                                    ),
-                                    subtitle: Padding(
-                                      padding: const EdgeInsets.only(top: 4),
-                                      child: Text(
-                                        '$poinReq Koin',
-                                        style: TextStyle(
-                                          color: isEnough
-                                              ? _DS.blue
-                                              : _DS.textHint,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 13,
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 12),
+                                      decoration: BoxDecoration(color: isEnough ? _DS.surface : _DS.border.withOpacity(0.3), borderRadius: BorderRadius.circular(16), border: Border.all(color: _DS.border)),
+                                      child: ListTile(
+                                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                        leading: Container(
+                                          padding: const EdgeInsets.all(10),
+                                          decoration: BoxDecoration(color: isEnough ? Colors.amber.shade50 : Colors.grey.shade200, borderRadius: BorderRadius.circular(12)),
+                                          child: Icon(Icons.inventory_2_rounded, color: isEnough ? Colors.amber.shade700 : Colors.grey),
                                         ),
+                                        title: Text(r['nama'] ?? '-', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: isEnough ? _DS.textPrimary : _DS.textSecondary)),
+                                        subtitle: Padding(
+                                          padding: const EdgeInsets.only(top: 4),
+                                          child: Text('$poinReq Koin', style: TextStyle(color: isEnough ? _DS.blue : _DS.textHint, fontWeight: FontWeight.w700, fontSize: 13)),
+                                        ),
+                                        trailing: isEnough
+                                            ? ElevatedButton(
+                                                style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, elevation: 0, padding: const EdgeInsets.symmetric(horizontal: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                                                onPressed: _isRedeeming ? null : () => _prosesTukarFisik(r),
+                                                child: const Text('Tukar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                                              )
+                                            : const Text('Koin Kurang', style: TextStyle(color: _DS.textHint, fontWeight: FontWeight.w600, fontSize: 12)),
                                       ),
-                                    ),
-                                    trailing: isEnough
-                                        ? ElevatedButton(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: _DS.blue,
-                                              elevation: 0,
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 16,
-                                                  ),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                              ),
-                                            ),
-                                            onPressed: _isRedeeming
-                                                ? null
-                                                : () => _prosesTukarFisik(r),
-                                            child: const Text(
-                                              'Tukar',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 13,
-                                              ),
-                                            ),
-                                          )
-                                        : const Text(
-                                            'Koin Kurang',
-                                            style: TextStyle(
-                                              color: _DS.textHint,
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                  ),
-                                );
-                              },
-                            ),
-                    ],
-                  ),
+                                    );
+                                  },
+                                ),
+                        ],
+                      ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        
+        // ==========================================================
+        // OVERLAY LOADING SPINNER ANTI-FREEZE & ANTI-DOUBLE CLICK
+        // ==========================================================
+        if (_isRedeeming)
+          Positioned.fill(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Container(
+                color: _DS.navy.withOpacity(0.3),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
+                    decoration: BoxDecoration(color: _DS.surface, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: _DS.navy.withOpacity(0.2), blurRadius: 30, offset: const Offset(0, 10))]),
+                    child: const Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _ModernLoadingDots(color: _DS.blue, size: 14),
+                        SizedBox(height: 20),
+                        Text('Memproses...', style: TextStyle(fontWeight: FontWeight.w800, color: _DS.textPrimary, fontSize: 15)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -2149,7 +2095,6 @@ class _ModernLoadingDotsState extends State<_ModernLoadingDots>
             final delay = index * 0.2;
             var val = (_controller.value - delay) % 1.0;
             if (val < 0) val += 1.0;
-
             final offset = math.sin(val * math.pi * 2) * (widget.size / 2.5);
             final opacity = (math.cos(val * math.pi * 2) + 1) / 2 * 0.5 + 0.5;
 

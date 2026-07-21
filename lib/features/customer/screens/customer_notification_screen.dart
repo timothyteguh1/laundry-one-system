@@ -45,16 +45,14 @@ class _CustomerNotificationScreenState extends State<CustomerNotificationScreen>
         _notifications = List<Map<String, dynamic>>.from(notifResponse);
       });
 
-      // 👇 UPDATE: Logika pembersih badge yang disempurnakan
+      // Update status lokal agar titik merah di layar ini langsung hilang
       if (_notifications.any((n) => n['is_read'] == false)) {
-        // 1. Update di Database Supabase
         await _supabase
             .from('notifications')
             .update({'is_read': true})
             .eq('customer_id', customerId)
             .eq('is_read', false); 
             
-        // 2. Update status lokal agar titik merah di layar ini langsung hilang seketika
         setState(() {
           for (var n in _notifications) {
             n['is_read'] = true;
@@ -68,7 +66,6 @@ class _CustomerNotificationScreenState extends State<CustomerNotificationScreen>
     }
   }
 
-  // Tentukan Ikon berdasarkan Tipe
   IconData _getIconForType(String type) {
     switch (type) {
       case 'promo': return Icons.local_offer_rounded;
@@ -79,7 +76,6 @@ class _CustomerNotificationScreenState extends State<CustomerNotificationScreen>
     }
   }
 
-  // Tentukan Warna berdasarkan Tipe (Menggunakan tema)
   Color _getColorForType(String type) {
     switch (type) {
       case 'promo': return Colors.orange;
@@ -90,18 +86,24 @@ class _CustomerNotificationScreenState extends State<CustomerNotificationScreen>
     }
   }
 
-  // Format tanggal simpel
+  // ========================================================
+  // [PERBAIKAN]: LOGIKA KALENDER ABSOLUT (BUKAN 24 JAM)
+  // ========================================================
   String _formatDate(String isoDate) {
-    final date = DateTime.parse(isoDate).toLocal();
+    final d = DateTime.parse(isoDate).toLocal();
     final now = DateTime.now();
-    final difference = now.difference(date);
 
-    if (difference.inDays == 0) {
-      return "Hari ini, ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}";
-    } else if (difference.inDays == 1) {
-      return "Kemarin, ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}";
-    }
-    return "${date.day}/${date.month}/${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}";
+    // Buang unsur jam, menit, detik agar selisih hari benar-benar bulat
+    final today = DateTime(now.year, now.month, now.day);
+    final dateToCheck = DateTime(d.year, d.month, d.day);
+    final diff = today.difference(dateToCheck).inDays;
+
+    final jam = d.hour.toString().padLeft(2, '0');
+    final mnt = d.minute.toString().padLeft(2, '0');
+
+    if (diff == 0) return "Hari ini, $jam:$mnt";
+    if (diff == 1) return "Kemarin, $jam:$mnt";
+    return "${d.day}/${d.month}/${d.year} $jam:$mnt";
   }
 
   @override

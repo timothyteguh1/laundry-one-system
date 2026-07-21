@@ -29,8 +29,17 @@ class AktivitasTab extends StatefulWidget {
 class _AktivitasTabState extends State<AktivitasTab> {
   final _supabase = Supabase.instance.client;
   late int _selectedFilter;
+
   List<Map<String, dynamic>> _pointsHistory = [];
   bool _isLoadingPoin = false;
+
+  // ==========================================
+  // VARIABEL PAGINASI (INFINITE SCROLL)
+  // ==========================================
+  int _pagePoin = 0;
+  final int _perPage = 15;
+  bool _hasMorePoin = true;
+  bool _isLoadingMorePoin = false;
 
   @override
   void initState() {
@@ -39,8 +48,21 @@ class _AktivitasTabState extends State<AktivitasTab> {
     if (_selectedFilter == 1) _loadPointsHistory();
   }
 
-  Future<void> _loadPointsHistory() async {
-    setState(() => _isLoadingPoin = true);
+  // ==========================================
+  // FUNGSI LOAD DATA AWAL (HALAMAN 1)
+  // ==========================================
+  Future<void> _loadPointsHistory({bool isRefresh = false}) async {
+    if (isRefresh) {
+      setState(() {
+        _pagePoin = 0;
+        _hasMorePoin = true;
+      });
+    } else {
+      setState(() => _isLoadingPoin = true);
+      _pagePoin = 0;
+      _hasMorePoin = true;
+    }
+
     try {
       String? targetCustomerId = widget.customerId;
       if (targetCustomerId == null) {
@@ -57,21 +79,71 @@ class _AktivitasTabState extends State<AktivitasTab> {
 
       if (targetCustomerId == null) throw Exception('Customer ID not found');
 
-      // [UPDATE CASE 2] Menambahkan saldo_sesudah ke dalam query SELECT
       final data = await _supabase
           .from('points_ledger')
           .select('tipe, jumlah, created_at, catatan, saldo_sesudah')
           .eq('customer_id', targetCustomerId)
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false)
+          .range(0, _perPage - 1); // <--- [UPDATE] Batasi hanya 15 data pertama
 
       if (mounted) {
         setState(() {
-          _pointsHistory = data;
+          _pointsHistory = List<Map<String, dynamic>>.from(data);
+          if (data.length < _perPage)
+            _hasMorePoin = false; // Matikan jika data sudah habis
           _isLoadingPoin = false;
         });
       }
     } catch (e) {
       if (mounted) setState(() => _isLoadingPoin = false);
+    }
+  }
+
+  // ==========================================
+  // FUNGSI LOAD DATA TAMBAHAN (SCROLL BAWAH)
+  // ==========================================
+  Future<void> _loadMorePointsHistory() async {
+    if (_isLoadingMorePoin || !_hasMorePoin) return;
+    setState(() => _isLoadingMorePoin = true);
+
+    try {
+      _pagePoin++;
+      final start = _pagePoin * _perPage;
+      final end = start + _perPage - 1;
+
+      String? targetCustomerId = widget.customerId;
+      if (targetCustomerId == null) {
+        final userId = _supabase.auth.currentUser?.id;
+        if (userId != null) {
+          final custData = await _supabase
+              .from('customers')
+              .select('id')
+              .eq('profile_id', userId)
+              .maybeSingle();
+          targetCustomerId = custData?['id'];
+        }
+      }
+
+      final data = await _supabase
+          .from('points_ledger')
+          .select('tipe, jumlah, created_at, catatan, saldo_sesudah')
+          .eq('customer_id', targetCustomerId!)
+          .order('created_at', ascending: false)
+          .range(start, end); // <--- [UPDATE] Tarik data rentang selanjutnya
+
+      if (mounted) {
+        setState(() {
+          final newData = List<Map<String, dynamic>>.from(data);
+          if (newData.length < _perPage)
+            _hasMorePoin = false; // Matikan jika sudah habis
+          _pointsHistory.addAll(
+            newData,
+          ); // Sambungkan data lama dengan data baru
+          _isLoadingMorePoin = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingMorePoin = false);
     }
   }
 
@@ -268,94 +340,124 @@ class _AktivitasTabState extends State<AktivitasTab> {
       );
     }
 
-    return RefreshIndicator(
-      color: CustomerTheme.primary,
-      onRefresh: _loadPointsHistory,
-      child: ListView.builder(
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
-        ),
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-        itemCount: _pointsHistory.length,
-        itemBuilder: (context, index) {
-          final poin = _pointsHistory[index];
-
-          // [UPDATE REVISI CASE 2]: Logika deteksi positif/negatif & absolut
-          final int nominal = (poin['jumlah'] as num?)?.toInt() ?? 0;
-          final isMasuk = nominal > 0;
-          final absNominal = nominal.abs();
-          final nominalStr = isMasuk ? '+ $absNominal' : '- $absNominal';
-
-          final iconData = isMasuk
-              ? Icons.arrow_downward_rounded
-              : Icons.arrow_upward_rounded;
-          final color = isMasuk ? CustomerTheme.primary : Colors.red;
-
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(16),
-            decoration: CustomerTheme.menuDecoration,
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(iconData, color: color, size: 20),
+    // [UPDATE] Membungkus dengan NotificationListener untuk mendeteksi scroll
+    return NotificationListener<ScrollNotification>(
+      onNotification: (ScrollNotification scrollInfo) {
+        // Jika belum loading, masih ada data, dan scroll sudah hampir mentok bawah (sisa 100px)
+        if (!_isLoadingMorePoin &&
+            _hasMorePoin &&
+            scrollInfo.metrics.pixels >=
+                scrollInfo.metrics.maxScrollExtent - 100) {
+          _loadMorePointsHistory();
+        }
+        return false;
+      },
+      child: RefreshIndicator(
+        color: CustomerTheme.primary,
+        onRefresh: () => _loadPointsHistory(isRefresh: true),
+        child: ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+          // [UPDATE] Tambah 1 kotak ekstra di bawah untuk tempat loading spinner
+          itemCount: _pointsHistory.length + (_hasMorePoin ? 1 : 0),
+          itemBuilder: (context, index) {
+            // Render spinner mini jika berada di index paling terakhir
+            if (index == _pointsHistory.length) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: _isLoadingMorePoin
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: CustomerTheme.primary,
+                            strokeWidth: 2.5,
+                          ),
+                        )
+                      : const SizedBox(),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              );
+            }
+
+            final poin = _pointsHistory[index];
+            final int nominal = (poin['jumlah'] as num?)?.toInt() ?? 0;
+            final isMasuk = nominal > 0;
+            final absNominal = nominal.abs();
+            final nominalStr = isMasuk ? '+ $absNominal' : '- $absNominal';
+
+            final iconData = isMasuk
+                ? Icons.arrow_downward_rounded
+                : Icons.arrow_upward_rounded;
+            final color = isMasuk ? CustomerTheme.primary : Colors.red;
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(16),
+              decoration: CustomerTheme.menuDecoration,
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(iconData, color: color, size: 20),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          poin['catatan'] ?? _getLabelTipe(poin['tipe']),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: CustomerTheme.textPrimary,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _formatDate(poin['created_at']),
+                          style: const TextStyle(
+                            color: CustomerTheme.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        poin['catatan'] ?? _getLabelTipe(poin['tipe']),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: CustomerTheme.textPrimary,
-                          fontSize: 14,
+                        nominalStr,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: color,
+                          fontSize: 16,
                         ),
                       ),
-                      const SizedBox(height: 4),
                       Text(
-                        _formatDate(poin['created_at']),
+                        'Sisa: ${poin['saldo_sesudah'] ?? '-'}',
                         style: const TextStyle(
                           color: CustomerTheme.textSecondary,
-                          fontSize: 12,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
                   ),
-                ),
-                // [UPDATE UX CASE 2]: Tampilkan Sisa Saldo
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      nominalStr,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: color,
-                        fontSize: 16,
-                      ),
-                    ),
-                    Text(
-                      'Sisa: ${poin['saldo_sesudah'] ?? '-'}',
-                      style: const TextStyle(
-                        color: CustomerTheme.textSecondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          );
-        },
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }

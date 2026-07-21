@@ -182,8 +182,12 @@ class _KatalogTabState extends State<KatalogTab> {
       final nowUtcStr = DateTime.now().toUtc().toIso8601String();
       final expiredTimeUtc = DateTime.now().toUtc().add(const Duration(minutes: 5)).toIso8601String();
 
+      // [PERBAIKAN]: Buat wadah untuk menangkap hasil Insert
+      Map<String, dynamic> insertedVoucher;
+
       if (isBarang) {
-        await _supabase.from('reward_redemptions').insert({
+        // [PERBAIKAN]: Tambahkan .select().single()
+        insertedVoucher = await _supabase.from('reward_redemptions').insert({
           'customer_id': widget.customerId,
           'reward_id': safeRewardId,
           'kode_voucher': randomCode,
@@ -191,16 +195,17 @@ class _KatalogTabState extends State<KatalogTab> {
           'dipakai_at': nowUtcStr,
           'berlaku_sampai': nowUtcStr, 
           'poin_digunakan': poinDibutuhkan,
-        });
+        }).select().single();
       } else {
-        await _supabase.from('reward_redemptions').insert({
+        // [PERBAIKAN]: Tambahkan .select().single()
+        insertedVoucher = await _supabase.from('reward_redemptions').insert({
           'customer_id': widget.customerId,
           'reward_id': safeRewardId,
           'kode_voucher': randomCode,
           'status': 'aktif',
           'berlaku_sampai': expiredTimeUtc, 
           'poin_digunakan': poinDibutuhkan,
-        });
+        }).select().single();
       }
 
       await _supabase.from('points_ledger').insert({
@@ -209,6 +214,7 @@ class _KatalogTabState extends State<KatalogTab> {
         'jumlah': -poinDibutuhkan,
         'saldo_sebelum': currentDbPoin,
         'saldo_sesudah': newSaldo,
+        'redemption_id': insertedVoucher['id'], // <--- [PERBAIKAN UTAMA]: Ini benang merahnya!
         'catatan': isBarang ? 'Ambil Barang: $namaReward' : 'Tukar Voucher: $namaReward'
       });
 
