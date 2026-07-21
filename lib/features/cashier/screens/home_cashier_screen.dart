@@ -1,3 +1,7 @@
+import 'dart:ui';
+import 'dart:math' as math;
+import 'dart:async'; // [TAMBAHAN]: Untuk Timer AJAX (Debounce)
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:laundry_one/features/cashier/screens/point_settings_screen.dart';
@@ -9,9 +13,7 @@ import 'package:laundry_one/features/cashier/screens/inventory_screen.dart';
 import 'package:laundry_one/features/cashier/screens/tabs/report_tab.dart';
 import 'package:laundry_one/features/cashier/screens/tabs/pelanggan_tab.dart';
 import 'package:laundry_one/features/cashier/screens/invoice_screen.dart';
-// Sesuaikan dengan letak file register_screen Anda
 import 'package:laundry_one/features/auth/screens/register_screen.dart';
-
 
 // ============================================================
 // DESIGN SYSTEM — Laundry One POS
@@ -91,7 +93,20 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   List<Map<String, dynamic>> _allPiutangOrders = [];
 
   bool _isLoading = true;
-  bool _isProcessing = false; 
+  bool _isProcessing = false;
+
+  // =========================================================
+  // PAGINASI & PENCARIAN (AJAX SILENT SEARCH)
+  // =========================================================
+  int _orderPage = 0;
+  final int _perPage = 25;
+  bool _hasMoreOrders = true;
+  bool _isLoadingMore = false;
+
+  bool _isSearching = false; // <-- [UPDATE UX]: Indikator loading mini
+  String _searchQuery = '';
+  final _searchCtrl = TextEditingController();
+  Timer? _searchDebounce;
 
   String? _kasirNama;
 
@@ -122,12 +137,25 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   @override
   void dispose() {
     _fabAnim?.dispose();
+    _searchCtrl.dispose();
+    _searchDebounce?.cancel();
     super.dispose();
   }
 
-  // =========================================================
-  // CUSTOM DIALOG (Sesuai Referensi Gambar Anda)
-  // =========================================================
+  // [UPDATE UX]: Fungsi Debounce Pencarian Gaib (AJAX)
+  void _onSearchChanged(String val) {
+    if (_searchDebounce?.isActive ?? false) _searchDebounce!.cancel();
+    setState(
+      () => _isSearching = true,
+    ); // Munculkan indikator mini tanpa mengosongkan layar
+    _searchDebounce = Timer(const Duration(milliseconds: 500), () {
+      setState(() => _searchQuery = val);
+      _loadData(
+        showFullLoading: false,
+      ); // Tarik data tanpa memunculkan skeleton
+    });
+  }
+
   void _showCustomDialog({
     required String title,
     required String message,
@@ -138,9 +166,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       barrierDismissible: false,
       builder: (ctx) => Dialog(
         backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
           child: Column(
@@ -171,10 +197,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
               const SizedBox(height: 8),
               Text(
                 message,
-                style: const TextStyle(
-                  color: _DS.textSecondary,
-                  fontSize: 13,
-                ),
+                style: const TextStyle(color: _DS.textSecondary, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
@@ -318,7 +341,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                     _showRedeemVoucherDialog();
                   },
                 ),
-
                 if (isAdmin) ...[
                   const Divider(height: 32),
                   const Padding(
@@ -394,7 +416,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                     },
                   ),
                 ],
-
                 const Divider(height: 32),
                 const Padding(
                   padding: EdgeInsets.only(left: 16, bottom: 8),
@@ -416,33 +437,32 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  onTap: () async {
+                  onTap: () {
                     HapticFeedback.mediumImpact();
-                    await _authService.logout();
-                    if (mounted)
-                      Navigator.pushAndRemoveUntil( // <-- Ubah ke pushAndRemoveUntil
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const LoginScreen(
-                            config: LoginConfig(
-                              roleName: 'Staf Kasir',
-                              roleDatabase: 'cashier',
-                              labelIdentifier: 'Nomor HP',
-                              hint: '081234567890',
-                              keyboardType: TextInputType.phone,
-                              primaryColor: Color(0xFF1565C0),
-                              secondaryColor: Color(0xFF0D47A1),
-                              backgroundColor: Colors.white,
-                              icon: Icons.point_of_sale_rounded,
-                              tagline: 'Kelola pesanan dengan cepat & mudah',
-                              homeScreen: HomeCashierScreen(),
-                              showRegister: true,
-                              registerScreen: RegisterScreen(), // <-- TAMBAHKAN INI
-                            ),
+                    _authService.logout();
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const LoginScreen(
+                          config: LoginConfig(
+                            roleName: 'Staf Kasir',
+                            roleDatabase: 'cashier',
+                            labelIdentifier: 'Nomor HP',
+                            hint: '081234567890',
+                            keyboardType: TextInputType.phone,
+                            primaryColor: Color(0xFF1565C0),
+                            secondaryColor: Color(0xFF0D47A1),
+                            backgroundColor: Colors.white,
+                            icon: Icons.point_of_sale_rounded,
+                            tagline: 'Kelola pesanan dengan cepat & mudah',
+                            homeScreen: HomeCashierScreen(),
+                            showRegister: true,
+                            registerScreen: RegisterScreen(),
                           ),
                         ),
-                        (route) => false, // <-- Bersihkan semua tumpukan layar
-                      );
+                      ),
+                      (route) => false,
+                    );
                   },
                 ),
               ],
@@ -613,11 +633,10 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                     },
               child: isSubmitting
                   ? const SizedBox(
-                      width: 16,
+                      width: 40,
                       height: 16,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
+                      child: Center(
+                        child: _ModernLoadingDots(color: Colors.white, size: 8),
                       ),
                     )
                   : const Text(
@@ -631,31 +650,132 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     );
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+  Future<void> _loadMoreOrders() async {
+    if (_isLoadingMore || !_hasMoreOrders) return;
+    setState(() => _isLoadingMore = true);
+
+    try {
+      _orderPage++;
+      final startRow = _orderPage * _perPage;
+      final endRow = startRow + _perPage - 1;
+
+      final startOfRangeLocal = DateTime(
+        _startDate.year,
+        _startDate.month,
+        _startDate.day,
+        0,
+        0,
+        0,
+      );
+      final endOfRangeLocal = DateTime(
+        _endDate.year,
+        _endDate.month,
+        _endDate.day,
+        23,
+        59,
+        59,
+      );
+      final startStr = startOfRangeLocal.toUtc().toIso8601String();
+      final endStr = endOfRangeLocal.toUtc().toIso8601String();
+
+      final queryStr =
+          'id, nomor_order, cashier_id, status, total_harga, is_piutang, metode_bayar_awal, created_at, estimasi_selesai, jatuh_tempo, customer_id, poin_didapat, poin_sudah_diberikan, customers(profiles(nama_lengkap, nomor_hp)), profiles!orders_cashier_id_fkey(nama_lengkap), order_items(jumlah, harga_satuan, services(nama))';
+
+      var query = _supabase
+          .from('orders')
+          .select(queryStr)
+          .gte('created_at', startStr)
+          .lte('created_at', endStr)
+          .order('created_at', ascending: false);
+
+      final newData = await query.range(startRow, endRow);
+      final newOrders = List<Map<String, dynamic>>.from(newData);
+
+      if (mounted) {
+        setState(() {
+          if (newOrders.length < _perPage) _hasMoreOrders = false;
+          _tabOrders.addAll(newOrders);
+          _isLoadingMore = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingMore = false);
+    }
+  }
+
+  // [UPDATE UX]: Tambah parameter showFullLoading agar layar tidak berkedip putih saat AJAX
+  Future<void> _loadData({bool showFullLoading = true}) async {
+    if (showFullLoading) setState(() => _isLoading = true);
+    _orderPage = 0;
+    _hasMoreOrders = true;
+
     try {
       final now = DateTime.now();
 
-    // [FIX TIMEZONE] Bangun batas waktu sebagai WIB (local time) lalu convert ke UTC
-      // agar filter Supabase presisi sesuai jam lokal, bukan digeser 7 jam.
-      final startOfRangeLocal = DateTime(_startDate.year, _startDate.month, _startDate.day, 0, 0, 0);
-      final endOfRangeLocal = DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59, 59);
+      final startOfRangeLocal = DateTime(
+        _startDate.year,
+        _startDate.month,
+        _startDate.day,
+        0,
+        0,
+        0,
+      );
+      final endOfRangeLocal = DateTime(
+        _endDate.year,
+        _endDate.month,
+        _endDate.day,
+        23,
+        59,
+        59,
+      );
       final startOfTodayLocal = DateTime(now.year, now.month, now.day, 0, 0, 0);
-      final endOfTodayLocal = DateTime(now.year, now.month, now.day, 23, 59, 59);
+      final endOfTodayLocal = DateTime(
+        now.year,
+        now.month,
+        now.day,
+        23,
+        59,
+        59,
+      );
 
       final startStr = startOfRangeLocal.toUtc().toIso8601String();
       final endStr = endOfRangeLocal.toUtc().toIso8601String();
       final todayStart = startOfTodayLocal.toUtc().toIso8601String();
       final todayEnd = endOfTodayLocal.toUtc().toIso8601String();
 
-      // [TAMBAH cashier_id DI SINI]
       final queryStr =
           'id, nomor_order, cashier_id, status, total_harga, is_piutang, metode_bayar_awal, created_at, estimasi_selesai, jatuh_tempo, customer_id, poin_didapat, poin_sudah_diberikan, customers(profiles(nama_lengkap, nomor_hp)), profiles!orders_cashier_id_fkey(nama_lengkap), order_items(jumlah, harga_satuan, services(nama))';
+
+      var queryOrders = _supabase
+          .from('orders')
+          .select(queryStr)
+          .gte('created_at', startStr)
+          .lte('created_at', endStr)
+          .order('created_at', ascending: false);
+
+      if (_searchQuery.isEmpty) {
+        queryOrders = queryOrders.range(0, _perPage - 1);
+      }
+
       final results = await Future.wait([
-        _supabase.from('orders').select(queryStr).gte('created_at', startStr).lte('created_at', endStr).order('created_at', ascending: false),
-        _supabase.from('orders').select(queryStr).gte('created_at', todayStart).lte('created_at', todayEnd).order('created_at', ascending: false),
-        _supabase.from('orders').select(queryStr).eq('is_piutang', true).neq('status', 'dibatalkan').order('created_at', ascending: false),
-        _supabase.from('order_payments').select('jumlah, metode').gte('created_at', todayStart).lte('created_at', todayEnd),
+        queryOrders,
+        _supabase
+            .from('orders')
+            .select(queryStr)
+            .gte('created_at', todayStart)
+            .lte('created_at', todayEnd)
+            .order('created_at', ascending: false),
+        _supabase
+            .from('orders')
+            .select(queryStr)
+            .eq('is_piutang', true)
+            .neq('status', 'dibatalkan')
+            .order('created_at', ascending: false),
+        _supabase
+            .from('order_payments')
+            .select('jumlah, metode')
+            .gte('created_at', todayStart)
+            .lte('created_at', todayEnd),
       ]);
 
       final tabOrdersData = List<Map<String, dynamic>>.from(results[0]);
@@ -663,34 +783,24 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       final allPiutangData = List<Map<String, dynamic>>.from(results[2]);
       final todayPaymentsData = List<Map<String, dynamic>>.from(results[3]);
 
-      // 🔍 DEBUG: cek bentuk field 'profiles' (kasir) hasil join dari Supabase.
-      // Buka Chrome DevTools (F12) -> tab Console untuk melihat output ini.
-      if (todayOrdersData.isNotEmpty) {
-        debugPrint('=== DEBUG _loadData: ORDER[0] RAW ===');
-        debugPrint('order_id           : ${todayOrdersData[0]['id']}');
-        debugPrint('nomor_order        : ${todayOrdersData[0]['nomor_order']}');
-        debugPrint('cashier_id (FK)    : ${todayOrdersData[0]['cashier_id']}');
-        debugPrint('profiles (raw)     : ${todayOrdersData[0]['profiles']}');
-        debugPrint('profiles.runtimeType: ${todayOrdersData[0]['profiles'].runtimeType}');
-        debugPrint('======================================');
-      } else {
-        debugPrint('=== DEBUG _loadData: todayOrdersData KOSONG ===');
+      if (_searchQuery.isNotEmpty || tabOrdersData.length < _perPage) {
+        _hasMoreOrders = false;
       }
 
-      // [UPDATE LOGIKA 2]: Pemisahan Omset (pesanan) vs Kas Masuk (pembayaran)
       double kasTunaiHariIni = 0;
       double kasNonTunaiHariIni = 0;
       for (final p in todayPaymentsData) {
         final amt = (p['jumlah'] ?? 0).toDouble();
-        if (p['metode'] == 'cash') kasTunaiHariIni += amt;
-        else kasNonTunaiHariIni += amt;
+        if (p['metode'] == 'cash')
+          kasTunaiHariIni += amt;
+        else
+          kasNonTunaiHariIni += amt;
       }
 
       double omsetHariIni = 0;
       for (final o in todayOrdersData) {
-        if (o['status'] != 'dibatalkan') {
+        if (o['status'] != 'dibatalkan')
           omsetHariIni += (o['total_harga'] ?? 0).toDouble();
-        }
       }
 
       if (mounted) {
@@ -698,10 +808,10 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
           _tabOrders = tabOrdersData;
           _todayOrders = todayOrdersData;
           _allPiutangOrders = allPiutangData;
-          _totalPenjualanHariIni = omsetHariIni; 
+          _totalPenjualanHariIni = omsetHariIni;
           _totalCashHariIni = kasTunaiHariIni;
           _totalNonCashHariIni = kasNonTunaiHariIni;
-           // [FIX] Isi statistik header (sebelumnya selalu 0 karena tidak pernah di-assign)
+
           _todayTotalOrder = todayOrdersData
               .where((o) => o['status'] != 'dibatalkan')
               .length;
@@ -709,8 +819,10 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
               .where((o) => o['status'] == 'diproses')
               .length;
           _todaySelesai = todayOrdersData
-              .where((o) =>
-                  o['status'] == 'selesai' || o['status'] == 'dibayar_lunas')
+              .where(
+                (o) =>
+                    o['status'] == 'selesai' || o['status'] == 'dibayar_lunas',
+              )
               .length;
 
           _totalPiutangAllTime = allPiutangData.fold(
@@ -718,27 +830,29 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
             (sum, o) => sum + (o['total_harga'] ?? 0).toDouble(),
           );
           _isLoading = false;
+          _isSearching = false; // Matikan indikator mini AJAX
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted)
+        setState(() {
+          _isLoading = false;
+          _isSearching = false;
+        });
     }
   }
+
   void _subscribeRealtime() {
     final userId = _supabase.auth.currentUser!.id;
-
-    // 1. Telinga untuk Pesanan (Order)
     _supabase
         .channel('orders_rt')
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'orders',
-          callback: (_) => _loadData(),
+          callback: (_) => _loadData(showFullLoading: false),
         )
         .subscribe();
-
-    // 2. Telinga Status Kasir (Jika "Cabut Akses" -> status jadi rejected)
     _supabase
         .channel('kasir_status_rt')
         .onPostgresChanges(
@@ -751,14 +865,11 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
             value: userId,
           ),
           callback: (payload) {
-            if (payload.newRecord['status'] == 'rejected') {
+            if (payload.newRecord['status'] == 'rejected')
               _forceLogout('Akses Anda telah dicabut oleh Admin.');
-            }
           },
         )
         .subscribe();
-
-    // 3. Telinga Hapus Akun (Jika akun lenyap sepenuhnya dari database)
     _supabase
         .channel('kasir_delete_rt')
         .onPostgresChanges(
@@ -768,7 +879,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
           filter: PostgresChangeFilter(
             type: PostgresChangeFilterType.eq,
             column: 'id',
-            value: userId, // ID pada tabel profiles adalah ID User
+            value: userId,
           ),
           callback: (payload) {
             _forceLogout('Akun Kasir Anda telah dihapus permanen.');
@@ -777,11 +888,8 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
         .subscribe();
   }
 
-  // =========================================================
-  // FUNGSI HELPER: LOGOUT PAKSA
-  // =========================================================
   Future<void> _forceLogout(String pesan) async {
-    await _authService.logout();
+    _authService.logout();
     if (mounted) {
       Navigator.pushAndRemoveUntil(
         context,
@@ -800,13 +908,12 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
               tagline: 'Kelola pesanan dengan cepat & mudah',
               homeScreen: HomeCashierScreen(),
               showRegister: true,
-              registerScreen: RegisterScreen(), 
+              registerScreen: RegisterScreen(),
             ),
           ),
         ),
         (route) => false,
       );
-      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Sesi diakhiri: $pesan'),
@@ -834,7 +941,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
           .from('orders')
           .update({'status': newStatus})
           .eq('id', orderId);
-      await _loadData();
+      await _loadData(showFullLoading: false);
       if (mounted)
         _showCustomDialog(
           title: 'Status Diperbarui',
@@ -1015,7 +1122,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                                   'poin_sudah_diberikan': true,
                                 })
                                 .eq('id', orderId);
-
                             await _supabase.from('order_payments').insert({
                               'order_id': orderId,
                               'jumlah': total.toInt(),
@@ -1054,7 +1160,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
 
                             if (mounted) {
                               Navigator.pop(ctx);
-                              _loadData();
+                              _loadData(showFullLoading: false);
                               _showCustomDialog(
                                 title: 'Pelunasan Berhasil',
                                 message:
@@ -1075,11 +1181,13 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                         },
                   child: isSubmitting
                       ? const SizedBox(
-                          width: 22,
+                          width: 40,
                           height: 22,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
+                          child: Center(
+                            child: _ModernLoadingDots(
+                              color: Colors.white,
+                              size: 10,
+                            ),
                           ),
                         )
                       : const Text(
@@ -1117,11 +1225,19 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                       _PesananTab(
                         orders: _tabOrders,
                         isLoading: _isLoading,
+                        isLoadingMore: _isLoadingMore,
+                        hasMore: _hasMoreOrders,
+                        isSearching:
+                            _isSearching, // <--- Oper indikator gaib ke Tab
+                        onLoadMore: _loadMoreOrders,
                         onRefresh: _loadData,
                         onUpdate: _handleUpdateStatus,
                         onDetail: _showDetail,
                         dateText: _dateRangeText,
                         onPickDate: _pickDate,
+                        searchQuery: _searchQuery,
+                        searchCtrl: _searchCtrl,
+                        onSearchChanged: _onSearchChanged,
                       ),
                       const PelangganTab(),
                       _buildTabLaporan(),
@@ -1132,15 +1248,45 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
             ],
           ),
 
-          // [UPDATE UX] Loading Overlay Sederhana Tanpa Kotak Putih
           if (_isProcessing)
             Positioned.fill(
-              child: Container(
-                color: Colors.black.withOpacity(0.3),
-                child: const Center(
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 3,
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                child: Container(
+                  color: _DS.navy.withOpacity(0.3),
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 40,
+                        vertical: 32,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _DS.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _DS.navy.withOpacity(0.2),
+                            blurRadius: 30,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: const Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _ModernLoadingDots(color: _DS.blue, size: 14),
+                          SizedBox(height: 20),
+                          Text(
+                            'Memproses...',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              color: _DS.textPrimary,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1169,7 +1315,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                         builder: (_) => const CreateOrderScreen(),
                       ),
                     );
-                    if (r == true) _loadData();
+                    if (r == true) _loadData(showFullLoading: false);
                   },
                   backgroundColor: _DS.blue,
                   foregroundColor: Colors.white,
@@ -1203,7 +1349,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       child: SafeArea(
         bottom: false,
         child: RefreshIndicator(
-          onRefresh: _loadData,
+          onRefresh: () => _loadData(showFullLoading: false),
           color: _DS.blue,
           backgroundColor: _DS.surface,
           child: CustomScrollView(
@@ -1230,7 +1376,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                         ),
                         child: Row(
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.info_outline_rounded,
                               color: _DS.blue,
                               size: 20,
@@ -1239,7 +1385,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                             Expanded(
                               child: Text(
                                 'Menampilkan ringkasan transaksi khusus Hari Ini (${_formatDateStr(DateTime.now())}).',
-                                style: TextStyle(
+                                style: const TextStyle(
                                   color: _DS.blue,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
@@ -1260,7 +1406,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                           ],
                         ),
                       ),
-
                       if (siap.isNotEmpty) ...[
                         _buildSectionHeader(
                           '✅  Pesanan Selesai',
@@ -1286,7 +1431,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                             )
                             .toList(),
                       ],
-
                       _buildSectionHeader(
                         'Sedang Diproses',
                         count: _todayAktif,
@@ -1299,10 +1443,16 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                       ),
 
                       if (_isLoading)
-                        const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(40),
-                            child: CircularProgressIndicator(color: _DS.blue),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Column(
+                            children: List.generate(
+                              3,
+                              (index) => const Padding(
+                                padding: EdgeInsets.only(bottom: 10),
+                                child: _SkeletonOrderCard(),
+                              ),
+                            ),
                           ),
                         )
                       else if (aktif.isEmpty)
@@ -1329,7 +1479,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                               ),
                             )
                             .toList(),
-
                       const SizedBox(height: 100),
                     ],
                   ),
@@ -1446,34 +1595,32 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                     color: Colors.white.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                     child: InkWell(
-                      onTap: () async {
+                      onTap: () {
                         HapticFeedback.mediumImpact();
-                        await AuthService().logout();
-                        if (mounted) {
-                          Navigator.pushAndRemoveUntil( // <-- Gunakan pushAndRemoveUntil
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const LoginScreen(
-                                config: LoginConfig(
-                                  roleName: 'Staf Kasir',
-                                  roleDatabase: 'cashier',
-                                  labelIdentifier: 'Nomor HP',
-                                  hint: '081234567890',
-                                  keyboardType: TextInputType.phone,
-                                  primaryColor: Color(0xFF1565C0),
-                                  secondaryColor: Color(0xFF0D47A1),
-                                  backgroundColor: Colors.white,
-                                  icon: Icons.point_of_sale_rounded,
-                                  tagline: 'Kelola pesanan dengan cepat & mudah',
-                                  homeScreen: HomeCashierScreen(),
-                                  showRegister: true,
-                                  registerScreen: RegisterScreen(), // <-- Tambahkan ini!
-                                ),
+                        _authService.logout();
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const LoginScreen(
+                              config: LoginConfig(
+                                roleName: 'Staf Kasir',
+                                roleDatabase: 'cashier',
+                                labelIdentifier: 'Nomor HP',
+                                hint: '081234567890',
+                                keyboardType: TextInputType.phone,
+                                primaryColor: Color(0xFF1565C0),
+                                secondaryColor: Color(0xFF0D47A1),
+                                backgroundColor: Colors.white,
+                                icon: Icons.point_of_sale_rounded,
+                                tagline: 'Kelola pesanan dengan cepat & mudah',
+                                homeScreen: HomeCashierScreen(),
+                                showRegister: true,
+                                registerScreen: RegisterScreen(),
                               ),
                             ),
-                            (route) => false,
-                          );
-                        }
+                          ),
+                          (route) => false,
+                        );
                       },
                       borderRadius: BorderRadius.circular(12),
                       child: const Padding(
@@ -1646,9 +1793,8 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     );
   }
 
-void _showPenjualanDetail() {
+  void _showPenjualanDetail() {
     final totalPembayaranDiterima = _totalCashHariIni + _totalNonCashHariIni;
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1721,7 +1867,6 @@ void _showPenjualanDetail() {
                 ),
               ),
               const SizedBox(height: 16),
-
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Container(
@@ -1773,7 +1918,6 @@ void _showPenjualanDetail() {
                   ),
                 ),
               ),
-
               const SizedBox(height: 16),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -1817,35 +1961,9 @@ void _showPenjualanDetail() {
       ),
     );
   }
-  String _extractCashierName(Map<String, dynamic> order) {
-    try {
-      final kasirData = order['kasir'];
-      
-      if (kasirData == null) return 'Sistem';
-
-      // Jika Supabase mengembalikannya sebagai Map { 'nama_lengkap': 'toti1' }
-      if (kasirData is Map<String, dynamic>) {
-        return kasirData['nama_lengkap']?.toString() ?? 'Sistem';
-      }
-      
-      // Jika Supabase mengembalikannya sebagai List [ { 'nama_lengkap': 'toti1' } ]
-      if (kasirData is List && kasirData.isNotEmpty) {
-        final firstItem = kasirData.first;
-        if (firstItem is Map<String, dynamic>) {
-          return firstItem['nama_lengkap']?.toString() ?? 'Sistem';
-        }
-      }
-      
-      return 'Sistem';
-    } catch (e) {
-      debugPrint('Error ekstrak nama kasir: $e');
-      return 'Sistem';
-    }
-  }
 
   Future<void> _showDetail(Map<String, dynamic> order) async {
     HapticFeedback.lightImpact();
-    
     final List<Map<String, dynamic>> mappedItems =
         (order['order_items'] as List? ?? [])
             .map(
@@ -1859,36 +1977,14 @@ void _showPenjualanDetail() {
             )
             .toList();
 
-    // ==========================================
-    // LOGIKA DETEKTIF: AMBIL NAMA KASIR AKURAT
-    // ==========================================
     String namaKasirFinal = 'Sistem';
     final dataKasir = order['profiles'];
-
-    // 🔍 DEBUG: cek bentuk field 'profiles' (kasir) tepat sebelum diparse.
-    // Buka Chrome DevTools (F12) -> tab Console untuk melihat output ini.
-    debugPrint('--- DEBUG _showDetail: cek data kasir ---');
-    debugPrint('order[id]           : ${order['id']}');
-    debugPrint('order[nomor_order]  : ${order['nomor_order']}');
-    debugPrint('order[cashier_id]   : ${order['cashier_id']}');
-    debugPrint('order[profiles] raw : $dataKasir');
-    debugPrint('order[profiles] type: ${dataKasir.runtimeType}');
-    debugPrint('------------------------------------------');
-    
     if (dataKasir != null) {
-      // Jika Supabase mengirimkannya sebagai List (Array)
-      if (dataKasir is List && dataKasir.isNotEmpty) {
+      if (dataKasir is List && dataKasir.isNotEmpty)
         namaKasirFinal = dataKasir[0]['nama_lengkap']?.toString() ?? 'Sistem';
-      } 
-      // Jika Supabase mengirimkannya sebagai Objek (Map)
-      else if (dataKasir is Map) {
+      else if (dataKasir is Map)
         namaKasirFinal = dataKasir['nama_lengkap']?.toString() ?? 'Sistem';
-      }
     }
-
-    // 🔍 DEBUG: hasil akhir nama kasir yang akan ditampilkan di nota
-    debugPrint('DEBUG _showDetail: namaKasirFinal = $namaKasirFinal');
-    // ==========================================
 
     final action = await Navigator.push(
       context,
@@ -1901,10 +1997,7 @@ void _showPenjualanDetail() {
           namaPelanggan:
               order['customers']?['profiles']?['nama_lengkap'] ?? 'Umum',
           nomorHp: order['customers']?['profiles']?['nomor_hp'] ?? '-',
-          
-          // Masukkan variabel yang sudah diekstrak dengan aman
           namaKasir: namaKasirFinal,
-          
           items: mappedItems,
           subtotal: (order['total_harga'] ?? 0).toDouble(),
           diskon: 0,
@@ -1916,13 +2009,12 @@ void _showPenjualanDetail() {
         ),
       ),
     );
-    
     if (action == 'selesai')
       _handleUpdateStatus(order, 'selesai');
     else if (action == 'dibayar_lunas')
       _handleUpdateStatus(order, 'dibayar_lunas');
     else if (action == 'dihapus')
-      _loadData();
+      _loadData(showFullLoading: false);
   }
 
   Widget _buildSectionHeader(
@@ -2070,7 +2162,6 @@ void _showPenjualanDetail() {
                     'Pesanan',
                     badge: _todayAktif > 0 ? '$_todayAktif' : null,
                   ),
-                  // const Expanded(flex: 2, child: SizedBox()),
                   _buildNavItem(
                     2,
                     Icons.people_alt_rounded,
@@ -2398,12 +2489,10 @@ class _EmptyState extends StatelessWidget {
 class _PiutangBottomSheet extends StatefulWidget {
   final List<Map<String, dynamic>> allPiutangOrders;
   final Function(Map<String, dynamic>) onNotaTapped;
-
   const _PiutangBottomSheet({
     required this.allPiutangOrders,
     required this.onNotaTapped,
   });
-
   @override
   State<_PiutangBottomSheet> createState() => _PiutangBottomSheetState();
 }
@@ -2411,7 +2500,6 @@ class _PiutangBottomSheet extends StatefulWidget {
 class _PiutangBottomSheetState extends State<_PiutangBottomSheet> {
   String _searchQuery = '';
   final _searchCtrl = TextEditingController();
-
   @override
   void dispose() {
     _searchCtrl.dispose();
@@ -2443,7 +2531,6 @@ class _PiutangBottomSheetState extends State<_PiutangBottomSheet> {
       if (!grouped.containsKey(nama)) grouped[nama] = [];
       grouped[nama]!.add(order);
     }
-
     final totalUtangTertampil = filtered.fold(
       0,
       (sum, o) => sum + ((o['total_harga'] as num?)?.toInt() ?? 0),
@@ -2525,16 +2612,16 @@ class _PiutangBottomSheetState extends State<_PiutangBottomSheet> {
               ),
               child: TextField(
                 controller: _searchCtrl,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   hintText: 'Cari nama pelanggan...',
-                  hintStyle: const TextStyle(color: _DS.textHint, fontSize: 14),
-                  prefixIcon: const Icon(
+                  hintStyle: TextStyle(color: _DS.textHint, fontSize: 14),
+                  prefixIcon: Icon(
                     Icons.search_rounded,
                     color: _DS.textHint,
                     size: 20,
                   ),
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
+                  contentPadding: EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 14,
                   ),
@@ -2777,20 +2864,35 @@ class _PiutangBottomSheetState extends State<_PiutangBottomSheet> {
 class _PesananTab extends StatefulWidget {
   final List<Map<String, dynamic>> orders;
   final bool isLoading;
-  final Future<void> Function() onRefresh;
+  final bool isLoadingMore;
+  final bool hasMore;
+  final bool isSearching; // <-- [UPDATE UX]: Menangkap status gaib
+  final VoidCallback onLoadMore;
+  final Future<void> Function({bool showFullLoading}) onRefresh;
   final Function(Map<String, dynamic>, String) onUpdate;
   final Function(Map<String, dynamic>) onDetail;
   final String dateText;
   final Future<void> Function() onPickDate;
 
+  final String searchQuery;
+  final TextEditingController searchCtrl;
+  final ValueChanged<String> onSearchChanged;
+
   const _PesananTab({
     required this.orders,
     required this.isLoading,
+    required this.isLoadingMore,
+    required this.hasMore,
+    required this.isSearching,
+    required this.onLoadMore,
     required this.onRefresh,
     required this.onUpdate,
     required this.onDetail,
     required this.dateText,
     required this.onPickDate,
+    required this.searchQuery,
+    required this.searchCtrl,
+    required this.onSearchChanged,
   });
 
   @override
@@ -2802,9 +2904,6 @@ class _PesananTabState extends State<_PesananTab>
   late TabController _tc;
   final List<String> _tabs = ['Aktif', 'Selesai'];
 
-  String _searchQuery = '';
-  final _searchCtrl = TextEditingController();
-
   @override
   void initState() {
     super.initState();
@@ -2814,7 +2913,6 @@ class _PesananTabState extends State<_PesananTab>
   @override
   void dispose() {
     _tc.dispose();
-    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -2827,15 +2925,16 @@ class _PesananTabState extends State<_PesananTab>
                     o['status'] == 'selesai' || o['status'] == 'dibayar_lunas',
               )
               .toList();
-    if (_searchQuery.trim().isNotEmpty) {
+
+    if (widget.searchQuery.trim().isNotEmpty) {
       listData = listData.where((order) {
         final nama =
             (order['customers']?['profiles']?['nama_lengkap'] ?? 'Umum')
                 .toString()
                 .toLowerCase();
         final noOrder = (order['nomor_order'] ?? '').toString().toLowerCase();
-        return nama.contains(_searchQuery.toLowerCase()) ||
-            noOrder.contains(_searchQuery.toLowerCase());
+        return nama.contains(widget.searchQuery.toLowerCase()) ||
+            noOrder.contains(widget.searchQuery.toLowerCase());
       }).toList();
     }
     return listData;
@@ -2924,7 +3023,7 @@ class _PesananTabState extends State<_PesananTab>
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: TextField(
-                      controller: _searchCtrl,
+                      controller: widget.searchCtrl,
                       style: const TextStyle(color: Colors.white, fontSize: 13),
                       decoration: InputDecoration(
                         hintText: 'Cari nama atau no order...',
@@ -2943,8 +3042,33 @@ class _PesananTabState extends State<_PesananTab>
                           vertical: 12,
                         ),
                         isDense: true,
+                        // [UPDATE UX]: Indikator Gaib di sudut kanan kotak pencarian
+                        suffixIcon: widget.isSearching
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              )
+                            : widget.searchCtrl.text.isNotEmpty
+                            ? IconButton(
+                                icon: Icon(
+                                  Icons.clear,
+                                  color: Colors.white.withOpacity(0.5),
+                                ),
+                                onPressed: () {
+                                  widget.searchCtrl.clear();
+                                  widget.onSearchChanged('');
+                                },
+                              )
+                            : null,
                       ),
-                      onChanged: (val) => setState(() => _searchQuery = val),
+                      onChanged: widget.onSearchChanged,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -3012,45 +3136,80 @@ class _PesananTabState extends State<_PesananTab>
             Expanded(
               child: Container(
                 color: _DS.ground,
-                child: TabBarView(
-                  controller: _tc,
-                  children: _tabs.map<Widget>((String tab) {
-                    final list = _filtered(tab);
-                    if (widget.isLoading)
-                      return const Center(
-                        child: CircularProgressIndicator(color: _DS.blue),
-                      );
-                    if (list.isEmpty)
-                      return _searchQuery.isNotEmpty
-                          ? const _EmptyState(
-                              icon: Icons.search_off_rounded,
-                              message: 'Pesanan tidak ditemukan',
-                            )
-                          : const _EmptyState(
-                              icon: Icons.inbox_outlined,
-                              message: 'Tidak ada pesanan',
-                            );
-                    return RefreshIndicator(
-                      onRefresh: widget.onRefresh,
-                      color: _DS.blue,
-                      backgroundColor: _DS.surface,
-                      child: ListView.builder(
-                        physics: const AlwaysScrollableScrollPhysics(
-                          parent: BouncingScrollPhysics(),
-                        ),
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                        itemCount: list.length,
-                        itemBuilder: (_, i) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _PremiumOrderCard(
-                            order: list[i],
-                            onUpdate: widget.onUpdate,
-                            onTap: () => widget.onDetail(list[i]),
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (ScrollNotification scrollInfo) {
+                    if (!widget.isLoadingMore &&
+                        widget.hasMore &&
+                        scrollInfo.metrics.pixels >=
+                            scrollInfo.metrics.maxScrollExtent - 100) {
+                      widget.onLoadMore();
+                    }
+                    return false;
+                  },
+                  child: TabBarView(
+                    controller: _tc,
+                    children: _tabs.map<Widget>((String tab) {
+                      final list = _filtered(tab);
+                      if (widget.isLoading) {
+                        return ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                          itemCount: 5,
+                          itemBuilder: (_, i) => const Padding(
+                            padding: EdgeInsets.only(bottom: 12),
+                            child: _SkeletonOrderCard(),
                           ),
+                        );
+                      }
+                      if (list.isEmpty)
+                        return widget.searchQuery.isNotEmpty
+                            ? const _EmptyState(
+                                icon: Icons.search_off_rounded,
+                                message: 'Pesanan tidak ditemukan',
+                              )
+                            : const _EmptyState(
+                                icon: Icons.inbox_outlined,
+                                message: 'Tidak ada pesanan',
+                              );
+                      return RefreshIndicator(
+                        onRefresh: () =>
+                            widget.onRefresh(showFullLoading: false),
+                        color: _DS.blue,
+                        backgroundColor: _DS.surface,
+                        child: ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(
+                            parent: BouncingScrollPhysics(),
+                          ),
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                          itemCount: list.length + (widget.hasMore ? 1 : 0),
+                          itemBuilder: (_, i) {
+                            if (i == list.length) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 20,
+                                ),
+                                child: Center(
+                                  child: widget.isLoadingMore
+                                      ? const _ModernLoadingDots(
+                                          color: _DS.blue,
+                                          size: 10,
+                                        )
+                                      : const SizedBox(),
+                                ),
+                              );
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _PremiumOrderCard(
+                                order: list[i],
+                                onUpdate: widget.onUpdate,
+                                onTap: () => widget.onDetail(list[i]),
+                              ),
+                            );
+                          },
                         ),
-                      ),
-                    );
-                  }).toList(),
+                      );
+                    }).toList(),
+                  ),
                 ),
               ),
             ),
@@ -3290,5 +3449,178 @@ class _PremiumOrderCard extends StatelessWidget {
       b.write(str[i]);
     }
     return 'Rp ${b.toString()}';
+  }
+}
+
+// ============================================================
+// WIDGET: SKELETON SHIMMER (LOADING AWAL KARTU)
+// ============================================================
+class _SkeletonOrderCard extends StatefulWidget {
+  const _SkeletonOrderCard();
+  @override
+  State<_SkeletonOrderCard> createState() => _SkeletonOrderCardState();
+}
+
+class _SkeletonOrderCardState extends State<_SkeletonOrderCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _anim;
+  @override
+  void initState() {
+    super.initState();
+    _anim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.4, end: 1.0).animate(_anim),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _DS.border),
+          boxShadow: _DS.softShadow,
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            children: [
+              Container(
+                width: 4,
+                decoration: const BoxDecoration(
+                  color: _DS.ground,
+                  borderRadius: BorderRadius.horizontal(
+                    left: Radius.circular(16),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: _DS.ground,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  height: 14,
+                                  width: double.infinity,
+                                  color: _DS.ground,
+                                ),
+                                const SizedBox(height: 4),
+                                Container(
+                                  height: 10,
+                                  width: 100,
+                                  color: _DS.ground,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Container(height: 18, width: 120, color: _DS.ground),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// WIDGET: MODERN 3-DOTS LOADING (PENGGANTI SPINNER BULAT)
+// ============================================================
+class _ModernLoadingDots extends StatefulWidget {
+  final Color color;
+  final double size;
+  const _ModernLoadingDots({
+    this.color = const Color(0xFF1565C0),
+    this.size = 12.0,
+  });
+
+  @override
+  State<_ModernLoadingDots> createState() => _ModernLoadingDotsState();
+}
+
+class _ModernLoadingDotsState extends State<_ModernLoadingDots>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(3, (index) {
+        return AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            final delay = index * 0.2;
+            var val = (_controller.value - delay) % 1.0;
+            if (val < 0) val += 1.0;
+
+            final offset = math.sin(val * math.pi * 2) * (widget.size / 2.5);
+            final opacity = (math.cos(val * math.pi * 2) + 1) / 2 * 0.5 + 0.5;
+
+            return Transform.translate(
+              offset: Offset(0, offset < 0 ? offset : 0),
+              child: Opacity(
+                opacity: opacity,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  width: widget.size,
+                  height: widget.size,
+                  decoration: BoxDecoration(
+                    color: widget.color,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      }),
+    );
   }
 }

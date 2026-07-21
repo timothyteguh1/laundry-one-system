@@ -1,4 +1,7 @@
 import 'dart:ui'; // [UPDATE UX] Ditambahkan untuk efek BackdropFilter (Blur)
+import 'dart:math' as math; // [TAMBAHAN]: Untuk animasi titik melompat
+import 'dart:async'; // [TAMBAHAN]: Untuk Timer AJAX (Debounce)
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -85,8 +88,19 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   DateTime? _estimasiSelesai;
   DateTime? _jatuhTempo;
 
-  bool _isLoading = false;
+  bool _isLoading = false; // Untuk loading simpan transaksi
+  bool _isFetchingCustomers = true; // Untuk loading daftar pelanggan awal
   double _rupiahPerPoin = 50000.0;
+
+  // =========================================================
+  // [TAMBAHAN]: PAGINASI & PENCARIAN GAIB PELANGGAN
+  // =========================================================
+  int _customerPage = 0;
+  final int _customerPerPage = 15;
+  bool _hasMoreCustomers = true;
+  bool _isLoadingMoreCustomers = false;
+  bool _isSearchingCustomer = false; // Indikator loading mini di kotak search
+  Timer? _searchCustomerDebounce;
 
   @override
   void initState() {
@@ -102,6 +116,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   void dispose() {
     _searchCtrl.dispose();
     _searchLayananCtrl.dispose();
+    _searchCustomerDebounce?.cancel();
     super.dispose();
   }
 
@@ -225,34 +240,90 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       setState(() => _services = List<Map<String, dynamic>>.from(data));
   }
 
-  Future<void> _loadCustomers() async {
-    final data = await _supabase
-        .from('profiles')
-        .select('id, nama_lengkap, nomor_hp')
-        .eq('role', 'customer')
-        .eq('is_active', true)
-        .order('nama_lengkap');
-    if (mounted) {
-      setState(() {
-        _allCustomers = List<Map<String, dynamic>>.from(data);
-        _filteredCustomers = _allCustomers;
-      });
+  // [UPDATE UX]: Fungsi Debounce Pencarian Gaib Pelanggan (AJAX)
+  void _onSearchCustomerChanged(String val) {
+    if (_searchCustomerDebounce?.isActive ?? false) _searchCustomerDebounce!.cancel();
+    setState(() => _isSearchingCustomer = true);
+    _searchCustomerDebounce = Timer(const Duration(milliseconds: 500), () {
+      _loadCustomers(showFullLoading: false);
+    });
+  }
+
+  // [UPDATE UX]: Paginasi Load Customers
+  Future<void> _loadCustomers({bool showFullLoading = true}) async {
+    if (showFullLoading) setState(() => _isFetchingCustomers = true);
+    _customerPage = 0;
+    _hasMoreCustomers = true;
+
+    try {
+      var query = _supabase
+          .from('profiles')
+          .select('id, nama_lengkap, nomor_hp')
+          .eq('role', 'customer')
+          .eq('is_active', true);
+
+      if (_searchCtrl.text.isNotEmpty) {
+        final q = _searchCtrl.text;
+        query = query.or('nama_lengkap.ilike.%$q%,nomor_hp.ilike.%$q%');
+      }
+
+      final data = await query.order('nama_lengkap').range(0, _customerPerPage - 1);
+
+      if (mounted) {
+        setState(() {
+          _allCustomers = List<Map<String, dynamic>>.from(data);
+          _filteredCustomers = _allCustomers; 
+          if (_allCustomers.length < _customerPerPage) _hasMoreCustomers = false;
+          
+          _isFetchingCustomers = false;
+          _isSearchingCustomer = false; 
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isFetchingCustomers = false;
+          _isSearchingCustomer = false;
+        });
+      }
     }
   }
 
-  void _searchCustomerLokal(String query) {
-    setState(() {
-      if (query.isEmpty) {
-        _filteredCustomers = _allCustomers;
-      } else {
-        _filteredCustomers = _allCustomers.where((c) {
-          final n = (c['nama_lengkap'] ?? '').toString().toLowerCase();
-          final hp = (c['nomor_hp'] ?? '').toString().toLowerCase();
-          final q = query.toLowerCase();
-          return n.contains(q) || hp.contains(q);
-        }).toList();
+  // [UPDATE UX]: Paginasi Load More Customers
+  Future<void> _loadMoreCustomers() async {
+    if (_isLoadingMoreCustomers || !_hasMoreCustomers) return;
+    setState(() => _isLoadingMoreCustomers = true);
+
+    try {
+      _customerPage++;
+      final start = _customerPage * _customerPerPage;
+      final end = start + _customerPerPage - 1;
+
+      var query = _supabase
+          .from('profiles')
+          .select('id, nama_lengkap, nomor_hp')
+          .eq('role', 'customer')
+          .eq('is_active', true);
+
+      if (_searchCtrl.text.isNotEmpty) {
+        final q = _searchCtrl.text;
+        query = query.or('nama_lengkap.ilike.%$q%,nomor_hp.ilike.%$q%');
       }
-    });
+
+      final newData = await query.order('nama_lengkap').range(start, end);
+      final newCustomers = List<Map<String, dynamic>>.from(newData);
+
+      if (mounted) {
+        setState(() {
+          if (newCustomers.length < _customerPerPage) _hasMoreCustomers = false;
+          _allCustomers.addAll(newCustomers);
+          _filteredCustomers = _allCustomers;
+          _isLoadingMoreCustomers = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingMoreCustomers = false);
+    }
   }
 
   // =========================================================
@@ -261,13 +332,15 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   void _tambahKeKeranjang(Map<String, dynamic> service, [int qty = 1]) {
     // [UPDATE]: LOGIKA VALIDASI STOK
     if (service['tipe'] == 'produk' && service['inventory'] != null) {
-      final int stokTersedia = (service['inventory']['stok_saat_ini'] as num).toInt();
+      final int stokTersedia = (service['inventory']['stok_saat_ini'] as num)
+          .toInt();
       final int currentQty = _qtyDiKeranjang(service['id']);
-      
+
       if (currentQty + qty > stokTersedia) {
         _showCustomDialog(
           title: 'Stok Tidak Cukup',
-          message: 'Stok ${service['nama']} hanya tersisa $stokTersedia ${service['satuan']}.',
+          message:
+              'Stok ${service['nama']} hanya tersisa $stokTersedia ${service['satuan']}.',
           isSuccess: false,
         );
         return; // Hentikan proses, jangan tambah ke keranjang
@@ -317,11 +390,13 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
     // [UPDATE]: LOGIKA VALIDASI STOK UNTUK INPUT MANUAL
     if (service['tipe'] == 'produk' && service['inventory'] != null) {
-      final int stokTersedia = (service['inventory']['stok_saat_ini'] as num).toInt();
+      final int stokTersedia = (service['inventory']['stok_saat_ini'] as num)
+          .toInt();
       if (newQty > stokTersedia) {
         _showCustomDialog(
           title: 'Stok Tidak Cukup',
-          message: 'Stok ${service['nama']} hanya tersisa $stokTersedia ${service['satuan']}.',
+          message:
+              'Stok ${service['nama']} hanya tersisa $stokTersedia ${service['satuan']}.',
           isSuccess: false,
         );
         return; // Hentikan proses
@@ -338,8 +413,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         _cart.add({
           'service': service,
           'qty': newQty,
-          'subtotal':
-              newQty * (service['harga_per_satuan'] as num).toDouble(),
+          'subtotal': newQty * (service['harga_per_satuan'] as num).toDouble(),
         });
       }
     });
@@ -859,7 +933,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
       if (voucher == null)
         throw 'Voucher tidak valid atau milik pelanggan lain.';
-      // SESUDAH DIPERBAIKI:
+      
       if (DateTime.now().toUtc().isAfter(DateTime.parse(voucher['berlaku_sampai']).toUtc()))  
         throw 'Voucher ini sudah expired.';
 
@@ -934,7 +1008,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       final now = DateTime.now();
       final prefix =
           'ORD-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-      
+
       // ==========================================================
       // [UPDATE LOGIKA PERBAIKAN]: ANTI-DUPLIKAT NOMOR NOTA
       // ==========================================================
@@ -950,7 +1024,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       if (lastOrderResponse != null) {
         // Jika sudah ada nota hari ini, potong string untuk ambil 4 digit terakhir
         final lastNomor = lastOrderResponse['nomor_order'] as String;
-        final lastUrutanStr = lastNomor.split('-').last; 
+        final lastUrutanStr = lastNomor.split('-').last;
         final lastUrutanInt = int.tryParse(lastUrutanStr) ?? 0;
         urutanBaru = lastUrutanInt + 1; // Lanjutkan hitungan
       }
@@ -1141,8 +1215,11 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               // ===============================================
               // PERBAIKAN: Gunakan UTC agar jam tidak meleset
               // ===============================================
-              'dipakai_at': now.toUtc().toIso8601String(), 
-              'berlaku_sampai': now.add(const Duration(days: 30)).toUtc().toIso8601String(), 
+              'dipakai_at': now.toUtc().toIso8601String(),
+              'berlaku_sampai': now
+                  .add(const Duration(days: 30))
+                  .toUtc()
+                  .toIso8601String(),
               // ===============================================
               'poin_digunakan': poinReq,
               'dipakai_oleh': kasirId,
@@ -1307,6 +1384,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                     onPressed: isSubmitting
                         ? null
                         : () async {
+                            // GEMBOK SINKRON
+                            if (isSubmitting) return; 
+
                             if (!formKey.currentState!.validate()) return;
                             setModalState(() => isSubmitting = true);
                             try {
@@ -1348,12 +1428,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                           },
                     child: isSubmitting
                         ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2.5,
-                            ),
+                            width: 54, // [FIX UX]: Diperlebar agar tidak meluber
+                            height: 20,
+                            child: Center(child: _ModernLoadingDots(color: Colors.white, size: 8)),
                           )
                         : const Text(
                             'Daftarkan & Pilih',
@@ -1405,18 +1482,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
   String _formatDateTime(DateTime d) {
     const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'Mei',
-      'Jun',
-      'Jul',
-      'Ags',
-      'Sep',
-      'Okt',
-      'Nov',
-      'Des',
+      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des',
     ];
     final jam = d.hour.toString().padLeft(2, '0');
     final mnt = d.minute.toString().padLeft(2, '0');
@@ -1431,7 +1498,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   }
 
   // =========================================================
-  // BUILD METHOD (MENYATUKAN SEMUA UX)
+  // BUILD METHOD
   // =========================================================
   @override
   Widget build(BuildContext context) {
@@ -1442,7 +1509,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         _handleBackAttempt();
       },
       child: Scaffold(
-        // [UPDATE UX] Background Scaffold dijadikan Navy agar saat Pull-to-Refresh tidak ada warna putih putus-putus
         backgroundColor: _DS.navy,
         appBar: AppBar(
           backgroundColor: _DS.navy,
@@ -1467,7 +1533,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         ),
         body: Stack(
           children: [
-            // Konten Utama diberi background putih/ground agar yang Navy hanya muncul saat ditarik ke bawah (Overscroll)
             Container(
               color: _DS.ground,
               child: Center(
@@ -1485,13 +1550,13 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               ),
             ),
 
-            // [UPDATE UX] Scene Loading Modern (Glassmorphism Blur)
+            // [UPDATE UX] Scene Loading Modern (Glassmorphism Blur & Bouncing Dots)
             if (_isLoading)
               Positioned.fill(
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
                   child: Container(
-                    color: _DS.navy.withOpacity(0.2), // Lapisan gelap estetik
+                    color: _DS.navy.withOpacity(0.3), 
                     child: Center(
                       child: Container(
                         padding: const EdgeInsets.symmetric(
@@ -1503,21 +1568,18 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                           borderRadius: BorderRadius.circular(24),
                           boxShadow: [
                             BoxShadow(
-                              color: _DS.navy.withOpacity(0.15),
+                              color: _DS.navy.withOpacity(0.2),
                               blurRadius: 30,
                               offset: const Offset(0, 10),
                             ),
                           ],
                         ),
-                        child: Column(
+                        child: const Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const CircularProgressIndicator(
-                              color: _DS.blue,
-                              strokeWidth: 3.5,
-                            ),
-                            const SizedBox(height: 20),
-                            const Text(
+                            _ModernLoadingDots(color: _DS.blue, size: 14),
+                            SizedBox(height: 20),
+                            Text(
                               'Memproses...',
                               style: TextStyle(
                                 fontWeight: FontWeight.w800,
@@ -1586,17 +1648,26 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                       horizontal: 16,
                       vertical: 14,
                     ),
-                    suffixIcon: _searchCtrl.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, color: _DS.textHint),
-                            onPressed: () {
-                              _searchCtrl.clear();
-                              _searchCustomerLokal('');
-                            },
+                    // [UPDATE UX]: Indikator Gaib di sudut kanan kotak pencarian
+                    suffixIcon: _isSearchingCustomer
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox(
+                              width: 16, height: 16,
+                              child: CircularProgressIndicator(color: _DS.blue, strokeWidth: 2),
+                            ),
                           )
-                        : null,
+                        : _searchCtrl.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, color: _DS.textHint),
+                                onPressed: () {
+                                  _searchCtrl.clear();
+                                  _onSearchCustomerChanged('');
+                                },
+                              )
+                            : null,
                   ),
-                  onChanged: _searchCustomerLokal,
+                  onChanged: _onSearchCustomerChanged,
                 ),
               ),
               const SizedBox(height: 16),
@@ -1678,162 +1749,189 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         ),
 
         Expanded(
-          // [UPDATE UX] Tambah fitur tarik refresh agar list pelanggan up-to-date
-          child: RefreshIndicator(
-            onRefresh: _loadCustomers,
-            color: _DS.blue,
-            backgroundColor: _DS.surface,
-            child: _filteredCustomers.isEmpty
-                ? Center(
-                    child: ListView(
-                      shrinkWrap: true,
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      children: [
-                        Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(20),
-                              decoration: const BoxDecoration(
-                                color: _DS.sky,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.person_search_rounded,
-                                size: 40,
-                                color: _DS.blue,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'Pelanggan tidak ditemukan',
-                              style: TextStyle(
-                                color: _DS.textPrimary,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            ElevatedButton.icon(
-                              icon: const Icon(Icons.person_add_rounded),
-                              label: const Text(
-                                'Daftarkan Baru',
-                                style: TextStyle(fontWeight: FontWeight.w700),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: _DS.blue,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                  vertical: 12,
-                                ),
-                                elevation: 0,
-                              ),
-                              onPressed: () => _showFormDaftarPelanggan(
-                                nomorHpAwal: _searchCtrl.text,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    physics: const AlwaysScrollableScrollPhysics(
-                      parent: BouncingScrollPhysics(),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    itemCount: _filteredCustomers.length,
-                    itemBuilder: (context, i) {
-                      final c = _filteredCustomers[i];
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: _DS.surface,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: _DS.border, width: 1.5),
-                          boxShadow: _DS.cardShadow,
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          borderRadius: BorderRadius.circular(16),
-                          child: InkWell(
-                            onTap: () => setState(() {
-                              _selectedCustomer = c;
-                              _step = 2;
-                            }),
-                            borderRadius: BorderRadius.circular(16),
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Row(
+          // [UPDATE UX]: Gunakan NotificationListener untuk Scroll Mentok Bawah (Paginasi)
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (ScrollNotification scrollInfo) {
+              if (!_isLoadingMoreCustomers &&
+                  _hasMoreCustomers &&
+                  scrollInfo.metrics.pixels >=
+                      scrollInfo.metrics.maxScrollExtent - 100) {
+                _loadMoreCustomers();
+              }
+              return false;
+            },
+            child: RefreshIndicator(
+              onRefresh: () => _loadCustomers(showFullLoading: false),
+              color: _DS.blue,
+              backgroundColor: _DS.surface,
+              child: _isFetchingCustomers
+                  // JIKA SEDANG LOADING AWAL
+                  ? const Center(child: _ModernLoadingDots(color: _DS.blue, size: 14))
+                  // JIKA KOSONG
+                  : _filteredCustomers.isEmpty
+                      ? Center(
+                          child: ListView(
+                            shrinkWrap: true,
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            children: [
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Container(
-                                    width: 44,
-                                    height: 44,
-                                    decoration: BoxDecoration(
+                                    padding: const EdgeInsets.all(20),
+                                    decoration: const BoxDecoration(
                                       color: _DS.sky,
-                                      borderRadius: BorderRadius.circular(12),
+                                      shape: BoxShape.circle,
                                     ),
-                                    child: Center(
-                                      child: Text(
-                                        c['nama_lengkap']?[0]?.toUpperCase() ??
-                                            '?',
-                                        style: const TextStyle(
-                                          color: _DS.blue,
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 16,
-                                        ),
-                                      ),
+                                    child: const Icon(
+                                      Icons.person_search_rounded,
+                                      size: 40,
+                                      color: _DS.blue,
                                     ),
                                   ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                  const SizedBox(height: 16),
+                                  const Text(
+                                    'Pelanggan tidak ditemukan',
+                                    style: TextStyle(
+                                      color: _DS.textPrimary,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton.icon(
+                                    icon: const Icon(Icons.person_add_rounded),
+                                    label: const Text(
+                                      'Daftarkan Baru',
+                                      style: TextStyle(fontWeight: FontWeight.w700),
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: _DS.blue,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 24,
+                                        vertical: 12,
+                                      ),
+                                      elevation: 0,
+                                    ),
+                                    onPressed: () => _showFormDaftarPelanggan(
+                                      nomorHpAwal: _searchCtrl.text,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        )
+                      // JIKA ADA DATA
+                      : ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(
+                            parent: BouncingScrollPhysics(),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          itemCount: _filteredCustomers.length + (_hasMoreCustomers ? 1 : 0),
+                          itemBuilder: (context, i) {
+                            if (i == _filteredCustomers.length) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 20),
+                                child: Center(
+                                  child: _isLoadingMoreCustomers
+                                      ? const _ModernLoadingDots(color: _DS.blue, size: 10)
+                                      : const SizedBox(),
+                                ),
+                              );
+                            }
+                            
+                            final c = _filteredCustomers[i];
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              decoration: BoxDecoration(
+                                color: _DS.surface,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: _DS.border, width: 1.5),
+                                boxShadow: _DS.cardShadow,
+                              ),
+                              child: Material(
+                                color: Colors.transparent,
+                                borderRadius: BorderRadius.circular(16),
+                                child: InkWell(
+                                  onTap: () => setState(() {
+                                    _selectedCustomer = c;
+                                    _step = 2;
+                                  }),
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Row(
                                       children: [
-                                        Text(
-                                          c['nama_lengkap'] ?? '-',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w800,
-                                            fontSize: 14,
-                                            color: _DS.textPrimary,
+                                        Container(
+                                          width: 44,
+                                          height: 44,
+                                          decoration: BoxDecoration(
+                                            color: _DS.sky,
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              c['nama_lengkap']?[0]?.toUpperCase() ??
+                                                  '?',
+                                              style: const TextStyle(
+                                                color: _DS.blue,
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 16,
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          c['nomor_hp'] ?? '-',
-                                          style: const TextStyle(
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                c['nama_lengkap'] ?? '-',
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w800,
+                                                  fontSize: 14,
+                                                  color: _DS.textPrimary,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                c['nomor_hp'] ?? '-',
+                                                style: const TextStyle(
+                                                  color: _DS.textSecondary,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: const BoxDecoration(
+                                            color: _DS.ground,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(
+                                            Icons.chevron_right_rounded,
                                             color: _DS.textSecondary,
-                                            fontSize: 12,
+                                            size: 20,
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                  Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: const BoxDecoration(
-                                      color: _DS.ground,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                      Icons.chevron_right_rounded,
-                                      color: _DS.textSecondary,
-                                      size: 20,
-                                    ),
-                                  ),
-                                ],
+                                ),
                               ),
-                            ),
-                          ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
+            ),
           ),
         ),
       ],
@@ -2528,15 +2626,12 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  // ==========================================================
-                  // [UPDATE UI]: CEGAH HARGA PATAH KE BARIS BARU (MELAR)
-                  // ==========================================================
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
                     child: Text(
                       _formatRupiah(_subtotal),
-                      maxLines: 1, // Kunci agar selalu satu baris
+                      maxLines: 1, 
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
                         color: _DS.blue,
@@ -2568,7 +2663,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               ),
             ),
 
-          const SizedBox(width: 8), // Sedikit digeser agar lega
+          const SizedBox(width: 8), 
           SizedBox(
             height: 52,
             child: ElevatedButton(
@@ -2588,12 +2683,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                   : (_isLoading ? null : _simpanOrder),
               child: _isLoading
                   ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2.5,
-                      ),
+                      width: 54, // [FIX UX]: Diperlebar agar tidak meluber
+                      height: 20,
+                      child: Center(child: _ModernLoadingDots(color: Colors.white, size: 8)),
                     )
                   : Text(
                       _step == 2 ? 'Lanjut Bayar →' : 'Buat Pesanan',
@@ -2609,6 +2701,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 
+  // ============================================================
+  // FUNGSI INI WAJIB BERADA DI DALAM _CreateOrderScreenState
+  // ============================================================
   String _formatRupiah(double amount) {
     final str = amount.toStringAsFixed(0);
     final buffer = StringBuffer();
@@ -2687,8 +2782,11 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       },
     );
   }
-}
+} // AKHIR DARI KELAS _CreateOrderScreenState
 
+// ============================================================
+// KOMPONEN UI EKSTERNAL
+// ============================================================
 class _ServiceTile extends StatelessWidget {
   final Map<String, dynamic> service;
   final int qty;
@@ -2907,6 +3005,78 @@ class _PayOption extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ============================================================
+// WIDGET: MODERN 3-DOTS LOADING
+// ============================================================
+class _ModernLoadingDots extends StatefulWidget {
+  final Color color;
+  final double size;
+  const _ModernLoadingDots({
+    this.color = const Color(0xFF1565C0),
+    this.size = 12.0,
+  });
+
+  @override
+  State<_ModernLoadingDots> createState() => _ModernLoadingDotsState();
+}
+
+class _ModernLoadingDotsState extends State<_ModernLoadingDots>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(3, (index) {
+        return AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            final delay = index * 0.2;
+            var val = (_controller.value - delay) % 1.0;
+            if (val < 0) val += 1.0;
+
+            final offset = math.sin(val * math.pi * 2) * (widget.size / 2.5);
+            final opacity = (math.cos(val * math.pi * 2) + 1) / 2 * 0.5 + 0.5;
+
+            return Transform.translate(
+              offset: Offset(0, offset < 0 ? offset : 0),
+              child: Opacity(
+                opacity: opacity,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  width: widget.size,
+                  height: widget.size,
+                  decoration: BoxDecoration(
+                    color: widget.color,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      }),
     );
   }
 }
