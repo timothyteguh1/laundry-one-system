@@ -242,7 +242,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
   // [UPDATE UX]: Fungsi Debounce Pencarian Gaib Pelanggan (AJAX)
   void _onSearchCustomerChanged(String val) {
-    if (_searchCustomerDebounce?.isActive ?? false) _searchCustomerDebounce!.cancel();
+    if (_searchCustomerDebounce?.isActive ?? false)
+      _searchCustomerDebounce!.cancel();
     setState(() => _isSearchingCustomer = true);
     _searchCustomerDebounce = Timer(const Duration(milliseconds: 500), () {
       _loadCustomers(showFullLoading: false);
@@ -267,16 +268,19 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         query = query.or('nama_lengkap.ilike.%$q%,nomor_hp.ilike.%$q%');
       }
 
-      final data = await query.order('nama_lengkap').range(0, _customerPerPage - 1);
+      final data = await query
+          .order('nama_lengkap')
+          .range(0, _customerPerPage - 1);
 
       if (mounted) {
         setState(() {
           _allCustomers = List<Map<String, dynamic>>.from(data);
-          _filteredCustomers = _allCustomers; 
-          if (_allCustomers.length < _customerPerPage) _hasMoreCustomers = false;
-          
+          _filteredCustomers = _allCustomers;
+          if (_allCustomers.length < _customerPerPage)
+            _hasMoreCustomers = false;
+
           _isFetchingCustomers = false;
-          _isSearchingCustomer = false; 
+          _isSearchingCustomer = false;
         });
       }
     } catch (e) {
@@ -933,8 +937,10 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
       if (voucher == null)
         throw 'Voucher tidak valid atau milik pelanggan lain.';
-      
-      if (DateTime.now().toUtc().isAfter(DateTime.parse(voucher['berlaku_sampai']).toUtc()))  
+
+      if (DateTime.now().toUtc().isAfter(
+        DateTime.parse(voucher['berlaku_sampai']).toUtc(),
+      ))
         throw 'Voucher ini sudah expired.';
 
       double diskon = _hitungDiskon(voucher['rewards_catalog']);
@@ -1385,7 +1391,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                         ? null
                         : () async {
                             // GEMBOK SINKRON
-                            if (isSubmitting) return; 
+                            if (isSubmitting) return;
 
                             if (!formKey.currentState!.validate()) return;
                             setModalState(() => isSubmitting = true);
@@ -1416,21 +1422,40 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                               }
                             } catch (e) {
                               setModalState(() => isSubmitting = false);
-                              _showCustomDialog(
-                                title: 'Gagal Mendaftar',
-                                message: e.toString().replaceAll(
-                                  'Exception: ',
-                                  '',
-                                ),
-                                isSuccess: false,
+
+                              // PENCEGAT ERROR: Terjemahkan pesan Supabase agar kasir paham
+                              String pesanError = e.toString().replaceAll(
+                                'Exception: ',
+                                '',
                               );
+                              if (pesanError.contains(
+                                    'already been registered',
+                                  ) ||
+                                  pesanError.contains('already exists')) {
+                                // [UPDATE UX]: Ubah pesan menjadi lebih solutif sesuai permintaan
+                               pesanError = 'Nomor WhatsApp sudah terdaftar.\n\nSilakan cari di daftar pelanggan atau tarik layar ke bawah untuk refresh.';
+                              }
+
+                              if (mounted) {
+                                _showCustomDialog(
+                                  title: 'Gagal Mendaftar',
+                                  message: pesanError,
+                                  isSuccess: false,
+                                );
+                              }
                             }
                           },
                     child: isSubmitting
                         ? const SizedBox(
-                            width: 54, // [FIX UX]: Diperlebar agar tidak meluber
+                            width:
+                                54, // [FIX UX]: Diperlebar agar tidak meluber
                             height: 20,
-                            child: Center(child: _ModernLoadingDots(color: Colors.white, size: 8)),
+                            child: Center(
+                              child: _ModernLoadingDots(
+                                color: Colors.white,
+                                size: 8,
+                              ),
+                            ),
                           )
                         : const Text(
                             'Daftarkan & Pilih',
@@ -1482,8 +1507,18 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
   String _formatDateTime(DateTime d) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-      'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Ags',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des',
     ];
     final jam = d.hour.toString().padLeft(2, '0');
     final mnt = d.minute.toString().padLeft(2, '0');
@@ -1556,7 +1591,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
                   child: Container(
-                    color: _DS.navy.withOpacity(0.3), 
+                    color: _DS.navy.withOpacity(0.3),
                     child: Center(
                       child: Container(
                         padding: const EdgeInsets.symmetric(
@@ -1653,19 +1688,23 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                         ? const Padding(
                             padding: EdgeInsets.all(12),
                             child: SizedBox(
-                              width: 16, height: 16,
-                              child: CircularProgressIndicator(color: _DS.blue, strokeWidth: 2),
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                color: _DS.blue,
+                                strokeWidth: 2,
+                              ),
                             ),
                           )
                         : _searchCtrl.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear, color: _DS.textHint),
-                                onPressed: () {
-                                  _searchCtrl.clear();
-                                  _onSearchCustomerChanged('');
-                                },
-                              )
-                            : null,
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, color: _DS.textHint),
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              _onSearchCustomerChanged('');
+                            },
+                          )
+                        : null,
                   ),
                   onChanged: _onSearchCustomerChanged,
                 ),
@@ -1766,171 +1805,179 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               backgroundColor: _DS.surface,
               child: _isFetchingCustomers
                   // JIKA SEDANG LOADING AWAL
-                  ? const Center(child: _ModernLoadingDots(color: _DS.blue, size: 14))
+                  ? const Center(
+                      child: _ModernLoadingDots(color: _DS.blue, size: 14),
+                    )
                   // JIKA KOSONG
                   : _filteredCustomers.isEmpty
-                      ? Center(
-                          child: ListView(
-                            shrinkWrap: true,
-                            physics: const AlwaysScrollableScrollPhysics(),
+                  ? Center(
+                      child: ListView(
+                        shrinkWrap: true,
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(20),
-                                    decoration: const BoxDecoration(
-                                      color: _DS.sky,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                      Icons.person_search_rounded,
-                                      size: 40,
-                                      color: _DS.blue,
-                                    ),
+                              Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: const BoxDecoration(
+                                  color: _DS.sky,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.person_search_rounded,
+                                  size: 40,
+                                  color: _DS.blue,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'Pelanggan tidak ditemukan',
+                                style: TextStyle(
+                                  color: _DS.textPrimary,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton.icon(
+                                icon: const Icon(Icons.person_add_rounded),
+                                label: const Text(
+                                  'Daftarkan Baru',
+                                  style: TextStyle(fontWeight: FontWeight.w700),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _DS.blue,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
                                   ),
-                                  const SizedBox(height: 16),
-                                  const Text(
-                                    'Pelanggan tidak ditemukan',
-                                    style: TextStyle(
-                                      color: _DS.textPrimary,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 15,
-                                    ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 12,
                                   ),
-                                  const SizedBox(height: 16),
-                                  ElevatedButton.icon(
-                                    icon: const Icon(Icons.person_add_rounded),
-                                    label: const Text(
-                                      'Daftarkan Baru',
-                                      style: TextStyle(fontWeight: FontWeight.w700),
-                                    ),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: _DS.blue,
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 24,
-                                        vertical: 12,
-                                      ),
-                                      elevation: 0,
-                                    ),
-                                    onPressed: () => _showFormDaftarPelanggan(
-                                      nomorHpAwal: _searchCtrl.text,
-                                    ),
-                                  ),
-                                ],
+                                  elevation: 0,
+                                ),
+                                onPressed: () => _showFormDaftarPelanggan(
+                                  nomorHpAwal: _searchCtrl.text,
+                                ),
                               ),
                             ],
                           ),
-                        )
-                      // JIKA ADA DATA
-                      : ListView.builder(
-                          physics: const AlwaysScrollableScrollPhysics(
-                            parent: BouncingScrollPhysics(),
+                        ],
+                      ),
+                    )
+                  // JIKA ADA DATA
+                  : ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(
+                        parent: BouncingScrollPhysics(),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      itemCount:
+                          _filteredCustomers.length +
+                          (_hasMoreCustomers ? 1 : 0),
+                      itemBuilder: (context, i) {
+                        if (i == _filteredCustomers.length) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            child: Center(
+                              child: _isLoadingMoreCustomers
+                                  ? const _ModernLoadingDots(
+                                      color: _DS.blue,
+                                      size: 10,
+                                    )
+                                  : const SizedBox(),
+                            ),
+                          );
+                        }
+
+                        final c = _filteredCustomers[i];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: _DS.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: _DS.border, width: 1.5),
+                            boxShadow: _DS.cardShadow,
                           ),
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          itemCount: _filteredCustomers.length + (_hasMoreCustomers ? 1 : 0),
-                          itemBuilder: (context, i) {
-                            if (i == _filteredCustomers.length) {
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 20),
-                                child: Center(
-                                  child: _isLoadingMoreCustomers
-                                      ? const _ModernLoadingDots(color: _DS.blue, size: 10)
-                                      : const SizedBox(),
-                                ),
-                              );
-                            }
-                            
-                            final c = _filteredCustomers[i];
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              decoration: BoxDecoration(
-                                color: _DS.surface,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: _DS.border, width: 1.5),
-                                boxShadow: _DS.cardShadow,
-                              ),
-                              child: Material(
-                                color: Colors.transparent,
-                                borderRadius: BorderRadius.circular(16),
-                                child: InkWell(
-                                  onTap: () => setState(() {
-                                    _selectedCustomer = c;
-                                    _step = 2;
-                                  }),
-                                  borderRadius: BorderRadius.circular(16),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(12),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 44,
-                                          height: 44,
-                                          decoration: BoxDecoration(
-                                            color: _DS.sky,
-                                            borderRadius: BorderRadius.circular(12),
+                          child: Material(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(16),
+                            child: InkWell(
+                              onTap: () => setState(() {
+                                _selectedCustomer = c;
+                                _step = 2;
+                              }),
+                              borderRadius: BorderRadius.circular(16),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 44,
+                                      height: 44,
+                                      decoration: BoxDecoration(
+                                        color: _DS.sky,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          c['nama_lengkap']?[0]
+                                                  ?.toUpperCase() ??
+                                              '?',
+                                          style: const TextStyle(
+                                            color: _DS.blue,
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 16,
                                           ),
-                                          child: Center(
-                                            child: Text(
-                                              c['nama_lengkap']?[0]?.toUpperCase() ??
-                                                  '?',
-                                              style: const TextStyle(
-                                                color: _DS.blue,
-                                                fontWeight: FontWeight.w800,
-                                                fontSize: 16,
-                                              ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            c['nama_lengkap'] ?? '-',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 14,
+                                              color: _DS.textPrimary,
                                             ),
                                           ),
-                                        ),
-                                        const SizedBox(width: 16),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                c['nama_lengkap'] ?? '-',
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.w800,
-                                                  fontSize: 14,
-                                                  color: _DS.textPrimary,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                c['nomor_hp'] ?? '-',
-                                                style: const TextStyle(
-                                                  color: _DS.textSecondary,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ],
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            c['nomor_hp'] ?? '-',
+                                            style: const TextStyle(
+                                              color: _DS.textSecondary,
+                                              fontSize: 12,
+                                            ),
                                           ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.all(6),
-                                          decoration: const BoxDecoration(
-                                            color: _DS.ground,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: const Icon(
-                                            Icons.chevron_right_rounded,
-                                            color: _DS.textSecondary,
-                                            size: 20,
-                                          ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
-                                  ),
+                                    Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: const BoxDecoration(
+                                        color: _DS.ground,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.chevron_right_rounded,
+                                        color: _DS.textSecondary,
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            );
-                          },
-                        ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
             ),
           ),
         ),
@@ -2631,7 +2678,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       _formatRupiah(_subtotal),
-                      maxLines: 1, 
+                      maxLines: 1,
                       style: const TextStyle(
                         fontWeight: FontWeight.w800,
                         color: _DS.blue,
@@ -2663,7 +2710,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               ),
             ),
 
-          const SizedBox(width: 8), 
+          const SizedBox(width: 8),
           SizedBox(
             height: 52,
             child: ElevatedButton(
@@ -2685,7 +2732,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                   ? const SizedBox(
                       width: 54, // [FIX UX]: Diperlebar agar tidak meluber
                       height: 20,
-                      child: Center(child: _ModernLoadingDots(color: Colors.white, size: 8)),
+                      child: Center(
+                        child: _ModernLoadingDots(color: Colors.white, size: 8),
+                      ),
                     )
                   : Text(
                       _step == 2 ? 'Lanjut Bayar →' : 'Buat Pesanan',

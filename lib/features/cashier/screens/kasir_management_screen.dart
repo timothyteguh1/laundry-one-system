@@ -25,6 +25,15 @@ class _DS {
     ),
   ];
 
+  // Tambahkan baris ini 👇
+  static List<BoxShadow> softShadow = [
+    BoxShadow(
+      color: const Color(0xFF0F2557).withOpacity(0.06),
+      blurRadius: 10,
+      offset: const Offset(0, 3),
+    ),
+  ];
+
   static List<BoxShadow> fabShadow = [
     BoxShadow(
       color: const Color(0xFF1565C0).withOpacity(0.4),
@@ -351,6 +360,22 @@ class _KasirManagementScreenState extends State<KasirManagementScreen> {
     }
   }
 
+  // =========================================================
+  // FITUR BARU: RIWAYAT PENJUALAN KASIR (30 HARI)
+  // =========================================================
+  void _showRiwayatKasirBottomSheet(String kasirId, String namaKasir) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _RiwayatKasirSheet(
+        kasirId: kasirId,
+        namaKasir: namaKasir,
+        supabase: _supabase,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -439,108 +464,117 @@ class _KasirManagementScreenState extends State<KasirManagementScreen> {
                                 border: Border.all(color: _DS.border, width: 1.5),
                                 boxShadow: _DS.cardShadow,
                               ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  children: [
-                                    Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(16),
+                                  onTap: status == 'approved' 
+                                      ? () => _showRiwayatKasirBottomSheet(k['profile_id'], nama)
+                                      : null, // Hanya kasir aktif yang bisa dilihat riwayatnya
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
                                       children: [
-                                        Container(
-                                          width: 44,
-                                          height: 44,
-                                          decoration: BoxDecoration(color: _DS.sky, borderRadius: BorderRadius.circular(12)),
-                                          child: Center(
-                                            child: Text(
-                                              nama[0].toUpperCase(),
-                                              style: const TextStyle(color: _DS.blue, fontWeight: FontWeight.w800, fontSize: 16),
+                                        Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Container(
+                                              width: 44,
+                                              height: 44,
+                                              decoration: BoxDecoration(color: _DS.sky, borderRadius: BorderRadius.circular(12)),
+                                              child: Center(
+                                                child: Text(
+                                                  nama[0].toUpperCase(),
+                                                  style: const TextStyle(color: _DS.blue, fontWeight: FontWeight.w800, fontSize: 16),
+                                                ),
+                                              ),
                                             ),
-                                          ),
+                                            const SizedBox(width: 14),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(nama, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _DS.textPrimary)),
+                                                  const SizedBox(height: 4),
+                                                  Text(hp, style: const TextStyle(color: _DS.textSecondary, fontSize: 12)),
+                                                ],
+                                              ),
+                                            ),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                              decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(8)),
+                                              child: Text(
+                                                badgeText,
+                                                style: TextStyle(color: badgeColor, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                        const SizedBox(width: 14),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                        
+                                        const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(color: _DS.border, height: 1)),
+                                        
+                                        // TOMBOL AKSI BERDASARKAN STATUS
+                                        if (status == 'pending') ...[
+                                          Row(
                                             children: [
-                                              Text(nama, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _DS.textPrimary)),
-                                              const SizedBox(height: 4),
-                                              Text(hp, style: const TextStyle(color: _DS.textSecondary, fontSize: 12)),
+                                              Expanded(
+                                                child: ElevatedButton.icon(
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: Colors.green.shade50, foregroundColor: Colors.green.shade700, elevation: 0,
+                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                  ),
+                                                  onPressed: () => _ubahStatusKasir(k['id'], 'approved', nama),
+                                                  icon: const Icon(Icons.check_circle_rounded, size: 16),
+                                                  label: const Text('Setujui', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: ElevatedButton.icon(
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: Colors.red.shade50, foregroundColor: Colors.red.shade700, elevation: 0,
+                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                  ),
+                                                  onPressed: () => _ubahStatusKasir(k['id'], 'rejected', nama),
+                                                  icon: const Icon(Icons.cancel_rounded, size: 16),
+                                                  label: const Text('Tolak', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                                ),
+                                              ),
                                             ],
                                           ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                          decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(8)),
-                                          child: Text(
-                                            badgeText,
-                                            style: TextStyle(color: badgeColor, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                                        ] else ...[
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.end,
+                                            children: [
+                                              if (status == 'approved')
+                                                TextButton.icon(
+                                                  onPressed: () => _ubahStatusKasir(k['id'], 'rejected', nama),
+                                                  icon: const Icon(Icons.block_rounded, size: 16, color: Colors.orange),
+                                                  label: const Text('Cabut Akses', style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold)),
+                                                ),
+                                              if (status == 'rejected')
+                                                TextButton.icon(
+                                                  onPressed: () => _ubahStatusKasir(k['id'], 'approved', nama),
+                                                  icon: const Icon(Icons.check_circle_rounded, size: 16, color: Colors.green),
+                                                  label: const Text('Pulihkan', style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
+                                                ),
+                                              const Spacer(),
+                                              IconButton(
+                                                tooltip: 'Reset Sandi',
+                                                icon: const Icon(Icons.lock_reset_rounded, color: _DS.blue),
+                                                onPressed: () => _resetPassword(k['profile_id'], nama),
+                                              ),
+                                              IconButton(
+                                                tooltip: 'Hapus Kasir',
+                                                icon: const Icon(Icons.delete_forever_rounded, color: Colors.red),
+                                                onPressed: () => _hapusKasir(k['profile_id'], nama),
+                                              ),
+                                            ],
                                           ),
-                                        ),
+                                        ],
                                       ],
                                     ),
-                                    
-                                    const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(color: _DS.border, height: 1)),
-                                    
-                                    // TOMBOL AKSI BERDASARKAN STATUS
-                                    if (status == 'pending') ...[
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: ElevatedButton.icon(
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: Colors.green.shade50, foregroundColor: Colors.green.shade700, elevation: 0,
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                              ),
-                                              onPressed: () => _ubahStatusKasir(k['id'], 'approved', nama),
-                                              icon: const Icon(Icons.check_circle_rounded, size: 16),
-                                              label: const Text('Setujui', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: ElevatedButton.icon(
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: Colors.red.shade50, foregroundColor: Colors.red.shade700, elevation: 0,
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                              ),
-                                              onPressed: () => _ubahStatusKasir(k['id'], 'rejected', nama),
-                                              icon: const Icon(Icons.cancel_rounded, size: 16),
-                                              label: const Text('Tolak', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ] else ...[
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.end,
-                                        children: [
-                                          if (status == 'approved')
-                                            TextButton.icon(
-                                              onPressed: () => _ubahStatusKasir(k['id'], 'rejected', nama),
-                                              icon: const Icon(Icons.block_rounded, size: 16, color: Colors.orange),
-                                              label: const Text('Cabut Akses', style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold)),
-                                            ),
-                                          if (status == 'rejected')
-                                            TextButton.icon(
-                                              onPressed: () => _ubahStatusKasir(k['id'], 'approved', nama),
-                                              icon: const Icon(Icons.check_circle_rounded, size: 16, color: Colors.green),
-                                              label: const Text('Pulihkan', style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
-                                            ),
-                                          const Spacer(),
-                                          IconButton(
-                                            tooltip: 'Reset Sandi',
-                                            icon: const Icon(Icons.lock_reset_rounded, color: _DS.blue),
-                                            onPressed: () => _resetPassword(k['profile_id'], nama),
-                                          ),
-                                          IconButton(
-                                            tooltip: 'Hapus Kasir',
-                                            icon: const Icon(Icons.delete_forever_rounded, color: Colors.red),
-                                            onPressed: () => _hapusKasir(k['profile_id'], nama),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ],
+                                  ),
                                 ),
                               ),
                             );
@@ -669,6 +703,260 @@ class _KasirManagementScreenState extends State<KasirManagementScreen> {
           icon: const Icon(Icons.person_add_rounded, color: Colors.white, size: 22),
           label: const Text('Tambah Kasir', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
         ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// KOMPONEN BOTTOM SHEET: RIWAYAT 30 HARI KASIR
+// ============================================================
+class _RiwayatKasirSheet extends StatefulWidget {
+  final String kasirId;
+  final String namaKasir;
+  final SupabaseClient supabase;
+
+  const _RiwayatKasirSheet({
+    required this.kasirId,
+    required this.namaKasir,
+    required this.supabase,
+  });
+
+  @override
+  State<_RiwayatKasirSheet> createState() => _RiwayatKasirSheetState();
+}
+
+class _RiwayatKasirSheetState extends State<_RiwayatKasirSheet> {
+  bool _isLoading = true;
+  
+  // Format data: { '21 Jul 2026': { 'cash': 500000, 'non_cash': 200000, 'total': 700000 } }
+  final Map<String, Map<String, double>> _dailyData = {};
+  final List<String> _sortedDates = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetch30DaysHistory();
+  }
+
+  Future<void> _fetch30DaysHistory() async {
+    try {
+      final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30)).toUtc().toIso8601String();
+
+      // Menarik data murni dari order_payments berdasarkan kasir yang menerima
+      final payments = await widget.supabase
+          .from('order_payments')
+          .select('jumlah, metode, created_at')
+          .eq('diterima_oleh', widget.kasirId)
+          .gte('created_at', thirtyDaysAgo)
+          .order('created_at', ascending: false);
+
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
+
+      for (var p in payments) {
+        final date = DateTime.parse(p['created_at']).toLocal();
+        final dateStr = '${date.day.toString().padLeft(2, '0')} ${months[date.month - 1]} ${date.year}';
+
+        if (!_dailyData.containsKey(dateStr)) {
+          _dailyData[dateStr] = {'cash': 0, 'non_cash': 0, 'total': 0};
+          _sortedDates.add(dateStr);
+        }
+
+        final amount = (p['jumlah'] as num).toDouble();
+        _dailyData[dateStr]!['total'] = _dailyData[dateStr]!['total']! + amount;
+
+        if (p['metode'] == 'cash') {
+          _dailyData[dateStr]!['cash'] = _dailyData[dateStr]!['cash']! + amount;
+        } else {
+          // Gabungan TF dan QRIS
+          _dailyData[dateStr]!['non_cash'] = _dailyData[dateStr]!['non_cash']! + amount;
+        }
+      }
+
+      if (mounted) setState(() => _isLoading = false);
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  String _formatRupiah(double amount) {
+    final str = amount.toStringAsFixed(0);
+    final buffer = StringBuffer();
+    for (int i = 0; i < str.length; i++) {
+      if (i > 0 && (str.length - i) % 3 == 0) buffer.write('.');
+      buffer.write(str[i]);
+    }
+    return 'Rp ${buffer.toString()}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.85,
+      decoration: const BoxDecoration(
+        color: _DS.ground,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+            decoration: BoxDecoration(
+              color: _DS.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              boxShadow: _DS.softShadow,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Riwayat Kasir (30 Hari)',
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _DS.textPrimary),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            widget.namaKasir,
+                            style: const TextStyle(color: _DS.blue, fontSize: 14, fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: _DS.sky, borderRadius: BorderRadius.circular(12)),
+                      child: const Icon(Icons.analytics_rounded, color: _DS.blue),
+                    )
+                  ],
+                ),
+              ],
+            ),
+          ),
+          
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: _DS.blue))
+                : _sortedDates.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'Belum ada transaksi dalam 30 hari terakhir.',
+                          style: TextStyle(color: _DS.textHint),
+                        ),
+                      )
+                    : ListView.builder(
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.all(20),
+                        itemCount: _sortedDates.length,
+                        itemBuilder: (ctx, i) {
+                          final dateStr = _sortedDates[i];
+                          final data = _dailyData[dateStr]!;
+                          
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: _DS.surface,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: _DS.border),
+                              boxShadow: _DS.cardShadow,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      dateStr,
+                                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _DS.textPrimary),
+                                    ),
+                                    Text(
+                                      _formatRupiah(data['total']!),
+                                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: _DS.blue),
+                                    ),
+                                  ],
+                                ),
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                  child: Divider(color: _DS.border, height: 1),
+                                ),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _StatPill(
+                                        title: 'Setoran Tunai (Cash)',
+                                        amount: _formatRupiah(data['cash']!),
+                                        icon: Icons.payments_rounded,
+                                        color: Colors.green,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _StatPill(
+                                        title: 'Non-Tunai (TF/QRIS)',
+                                        amount: _formatRupiah(data['non_cash']!),
+                                        icon: Icons.qr_code_scanner_rounded,
+                                        color: Colors.purple,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatPill extends StatelessWidget {
+  final String title;
+  final String amount;
+  final IconData icon;
+  final MaterialColor color;
+
+  const _StatPill({required this.title, required this.amount, required this.icon, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.shade100),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color.shade700, size: 18),
+          const SizedBox(height: 8),
+          Text(title, style: TextStyle(color: color.shade800, fontSize: 10, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          Text(amount, style: TextStyle(color: color.shade900, fontSize: 14, fontWeight: FontWeight.w800)),
+        ],
       ),
     );
   }
