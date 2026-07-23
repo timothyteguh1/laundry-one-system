@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:laundry_one/features/cashier/screens/kasir_management_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; // [TAMBAHAN] Import Supabase
 import 'package:laundry_one/features/cashier/screens/inventory_screen.dart';
+import 'package:laundry_one/features/cashier/screens/purchase_screen.dart'; // [TAMBAHAN BARU] Import Layar Pembelian
 import 'package:laundry_one/features/cashier/screens/services_management_screen.dart';
 import 'package:laundry_one/features/cashier/screens/reports/report_product_sales_screen.dart';
 import 'package:laundry_one/features/cashier/screens/reports/report_cash_flow_screen.dart';
@@ -163,22 +164,22 @@ class _ReportTabState extends State<ReportTab> {
                               ),
 
                               _buildMenuCard(
-                              context,
-                              icon: Icons.manage_accounts_rounded,
-                              iconColor: Colors.indigo.shade600,
-                              bgColor: Colors.indigo.shade50,
-                              title: 'Kelola Kasir',
-                              subtitle:
-                                  'Persetujuan, reset sandi, & hapus akun kasir',
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const KasirManagementScreen(),
-                                  ),
-                                );
-                              },
-                            ),
+                                context,
+                                icon: Icons.manage_accounts_rounded,
+                                iconColor: Colors.indigo.shade600,
+                                bgColor: Colors.indigo.shade50,
+                                title: 'Kelola Kasir',
+                                subtitle:
+                                    'Persetujuan, reset sandi, & hapus akun kasir',
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const KasirManagementScreen(),
+                                    ),
+                                  );
+                                },
+                              ),
                               const SizedBox(height: 32),
                             ],
 
@@ -207,6 +208,23 @@ class _ReportTabState extends State<ReportTab> {
                                 context,
                                 MaterialPageRoute(
                                   builder: (_) => const InventoryScreen(),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+
+                            // [TAMBAHAN BARU]: MENU PEMBELIAN & RESTOCK MASAL
+                            _buildMenuCard(
+                              context,
+                              icon: Icons.add_shopping_cart_rounded,
+                              iconColor: Colors.green.shade600,
+                              bgColor: Colors.green.shade50,
+                              title: 'Pembelian & Restock',
+                              subtitle: 'Catat nota belanja grosir 1 pintu',
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const PurchaseScreen(),
                                 ),
                               ),
                             ),

@@ -413,10 +413,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
   void _showAddBarangDialog() {
     final namaCtrl = TextEditingController();
     final stokCtrl = TextEditingController();
-    final modalCtrl = TextEditingController();
+    final hargaBeliCtrl = TextEditingController(); // Menggantikan modalCtrl
     final hargaJualCtrl = TextEditingController();
 
-    bool isDijual = false;
+    bool isDijual =
+        true; // [UPDATE] Default centang Jual di Kasir bernilai TRUE
 
     showDialog(
       context: context,
@@ -459,17 +460,17 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: modalCtrl,
+                  controller: hargaBeliCtrl,
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   decoration: _modernInputDecoration(
-                    'Total Modal / Harga Beli (Rp)',
+                    'Harga Beli per Pcs (Rp)',
                     icon: Icons.payments_outlined,
                   ),
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  '*Modal akan tercatat otomatis di Pengeluaran Kasir',
+                  '*Modal otomatis dihitung dari Qty x Harga Beli untuk Pengeluaran',
                   style: TextStyle(
                     fontSize: 11,
                     color: Colors.orange,
@@ -558,7 +559,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
               onPressed: () async {
                 if (namaCtrl.text.isEmpty ||
                     stokCtrl.text.isEmpty ||
-                    modalCtrl.text.isEmpty)
+                    hargaBeliCtrl.text.isEmpty)
                   return;
                 if (isDijual && hargaJualCtrl.text.isEmpty) return;
 
@@ -569,8 +570,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
                 try {
                   final qty = int.parse(stokCtrl.text.trim());
-                  final totalModal = int.parse(modalCtrl.text.trim());
-                  final hargaBeliPerSatuan = qty > 0 ? (totalModal / qty) : 0;
+                  final hargaBeliPerSatuan = int.parse(
+                    hargaBeliCtrl.text.trim(),
+                  );
+                  final totalModal =
+                      hargaBeliPerSatuan * qty; // [UPDATE] Auto kalkulasi
                   final kasirId = _supabase.auth.currentUser!.id;
 
                   // 1. Simpan ke Inventory
@@ -1272,7 +1276,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
 // ============================================================================
 // KOMPONEN BOTTOM SHEET RIWAYAT & UPDATE STOK
-// (TIDAK ADA PERUBAHAN LOGIKA DI BAWAH INI)
 // ============================================================================
 class _StockHistorySheet extends StatefulWidget {
   final Map<String, dynamic> item;
@@ -1367,7 +1370,6 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
   void _showUpdateStokDialog() {
     final qtyCtrl = TextEditingController();
     final ketCtrl = TextEditingController();
-    final modalCtrl = TextEditingController();
 
     String tipe = 'masuk';
     bool isSubmitting = false;
@@ -1448,28 +1450,6 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
                   controller: ketCtrl,
                   decoration: _modernInputDecoration('Keterangan (Wajib)'),
                 ),
-                if (tipe == 'masuk') ...[
-                  const SizedBox(height: 16),
-                  const Divider(color: _DS.border),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: modalCtrl,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: _modernInputDecoration(
-                      'Total Biaya Beli (Opsional)',
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    '*Jika diisi, akan otomatis masuk ke tabel Pengeluaran.',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.orange,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
@@ -1524,8 +1504,11 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
                           'created_by': kasirId,
                         });
 
-                        if (tipe == 'masuk' && modalCtrl.text.isNotEmpty) {
-                          final totalBeli = int.parse(modalCtrl.text.trim());
+                        // [UPDATE] Auto kalkulasi pengeluaran tanpa input manual
+                        if (tipe == 'masuk') {
+                          final hargaBeli =
+                              (widget.item['harga_beli'] as num?)?.toInt() ?? 0;
+                          final totalBeli = hargaBeli * qty;
                           if (totalBeli > 0) {
                             await _supabase.from('expenses').insert({
                               'cashier_id': kasirId,
@@ -1721,13 +1704,29 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
                             ),
                             child: Icon(icon, color: color, size: 20),
                           ),
-                          title: Text(
-                            log['keterangan'] ?? 'Tanpa Keterangan',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color: _DS.textPrimary,
-                            ),
+                          title: Builder(
+                            builder: (context) {
+                              String rawKet = log['keterangan'] ?? 'Tanpa Keterangan';
+                              String cleanKet = rawKet;
+
+                              // Penerjemah Tag Database agar Rapi di UI
+                              if (rawKet.contains('[ID: BLJ-')) {
+                                cleanKet = rawKet.split(' [ID:')[0].trim();
+                                cleanKet = 'Restock: $cleanKet';
+                              } else if (rawKet.contains('[BATAL: BLJ-')) {
+                                cleanKet = rawKet.split(' [BATAL:')[0].trim();
+                                cleanKet = 'Nota Dibatalkan: $cleanKet';
+                              }
+
+                              return Text(
+                                cleanKet,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: _DS.textPrimary,
+                                ),
+                              );
+                            }
                           ),
                           subtitle: Text(
                             _formatDateTime(log['created_at']),
