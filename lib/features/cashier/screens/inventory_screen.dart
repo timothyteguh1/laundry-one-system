@@ -68,8 +68,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
   bool _isLoading = true;
   bool _isAdmin = false;
 
-  // Menyimpan hubungan inventory_id -> data services (id, status pin, harga, dsb)
-  // agar kita tahu barang mana yang punya entri aktif di layar kasir.
   Map<String, Map<String, dynamic>> _serviceLinks = {};
 
   @override
@@ -84,10 +82,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
     super.dispose();
   }
 
-  // =========================================================
-  // [UPDATE UX] CUSTOM DIALOG (sama seperti Services Management)
-  // Menggantikan Snackbar agar pesan tidak tertumpuk
-  // =========================================================
   void _showCustomDialog({
     required String title,
     required String message,
@@ -200,14 +194,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
           .order('nama_item');
       final inventoryList = List<Map<String, dynamic>>.from(data);
 
-      // Ambil data services terkait (untuk tahu status Pin, harga jual & apakah dijual di kasir)
       Map<String, Map<String, dynamic>> links = {};
       if (inventoryList.isNotEmpty) {
         final ids = inventoryList.map((e) => e['id']).toList();
         final svcData = await _supabase
             .from('services')
             .select(
-              'id, inventory_id, is_pinned, nama, harga_per_satuan, satuan, is_active',
+              // [UPDATE HARGA GROSIR]: Menambahkan min_qty_grosir & harga_grosir
+              'id, inventory_id, is_pinned, nama, harga_per_satuan, min_qty_grosir, harga_grosir, satuan, is_active',
             )
             .inFilter('inventory_id', ids)
             .eq('is_active', true);
@@ -238,9 +232,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
     }
   }
 
-  // =========================================================
-  // [BARU] SEARCH & SORT (sama seperti Services Management)
-  // =========================================================
   void _onSearchChanged(String query) {
     _applyFilterAndSort();
   }
@@ -276,7 +267,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
     });
   }
 
-  // Toggle status Pin barang di layar Kasir
   Future<void> _togglePin(String serviceId, bool current) async {
     HapticFeedback.lightImpact();
     setState(() => _isLoading = true);
@@ -328,9 +318,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
-  // ====================================================================
-  // FITUR HAPUS BARANG (KHUSUS ADMIN)
-  // ====================================================================
   Future<void> _hapusBarang(String id, String nama) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -376,13 +363,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
       HapticFeedback.heavyImpact();
       setState(() => _isLoading = true);
       try {
-        // 1. Soft-Delete dari Gudang (Inventory)
         await _supabase
             .from('inventory')
             .update({'is_active': false})
             .eq('id', id);
-
-        // 2. OTOMATIS Soft-Delete dari Etalase Kasir (Services) agar tak bisa dijual lagi
         await _supabase
             .from('services')
             .update({'is_active': false, 'is_pinned': false})
@@ -409,15 +393,18 @@ class _InventoryScreenState extends State<InventoryScreen> {
     }
   }
 
-  // FITUR TAMBAH BARANG (DENGAN LOGIKA EXPENSES)
   void _showAddBarangDialog() {
     final namaCtrl = TextEditingController();
     final stokCtrl = TextEditingController();
-    final hargaBeliCtrl = TextEditingController(); // Menggantikan modalCtrl
+    final hargaBeliCtrl = TextEditingController(); 
     final hargaJualCtrl = TextEditingController();
+    
+    // [UPDATE HARGA GROSIR]: Controller Tambah Barang
+    final minGrosirCtrl = TextEditingController();
+    final hargaGrosirCtrl = TextEditingController();
+    bool isGrosir = false;
 
-    bool isDijual =
-        true; // [UPDATE] Default centang Jual di Kasir bernilai TRUE
+    bool isDijual = true; 
 
     showDialog(
       context: context,
@@ -528,6 +515,29 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       icon: Icons.sell_outlined,
                     ),
                   ),
+                  const SizedBox(height: 14),
+                  // [UPDATE HARGA GROSIR]: UI Checkbox Grosir
+                  Container(
+                    decoration: BoxDecoration(color: isGrosir ? _DS.sky : _DS.ground, borderRadius: BorderRadius.circular(12), border: Border.all(color: isGrosir ? _DS.blue : Colors.transparent)),
+                    child: CheckboxListTile(
+                      title: Text('Aktifkan Harga Grosir', style: TextStyle(fontWeight: FontWeight.w700, color: isGrosir ? _DS.blue : _DS.textSecondary, fontSize: 13)),
+                      subtitle: Text('Berikan harga lebih murah jika beli banyak', style: TextStyle(fontSize: 10, color: isGrosir ? _DS.blue.withOpacity(0.7) : _DS.textHint)),
+                      value: isGrosir, activeColor: _DS.blue, checkColor: Colors.white,
+                      onChanged: (val) => setModalState(() => isGrosir = val ?? false),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                    ),
+                  ),
+                  if (isGrosir) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(child: TextField(controller: minGrosirCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Min. Qty'))),
+                        const SizedBox(width: 12),
+                        Expanded(flex: 2, child: TextField(controller: hargaGrosirCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Harga Grosir/Satuan'))),
+                      ],
+                    ),
+                  ],
                 ],
               ],
             ),
@@ -562,22 +572,21 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     hargaBeliCtrl.text.isEmpty)
                   return;
                 if (isDijual && hargaJualCtrl.text.isEmpty) return;
+                if (isDijual && isGrosir && (minGrosirCtrl.text.isEmpty || hargaGrosirCtrl.text.isEmpty)) return; // Validasi Grosir
 
-                Navigator.pop(ctx); // Tutup dialog input
+                Navigator.pop(ctx); 
                 setState(
                   () => _isLoading = true,
-                ); // Munculkan Loading Kaca Buram
+                ); 
 
                 try {
                   final qty = int.parse(stokCtrl.text.trim());
                   final hargaBeliPerSatuan = int.parse(
                     hargaBeliCtrl.text.trim(),
                   );
-                  final totalModal =
-                      hargaBeliPerSatuan * qty; // [UPDATE] Auto kalkulasi
+                  final totalModal = hargaBeliPerSatuan * qty; 
                   final kasirId = _supabase.auth.currentUser!.id;
 
-                  // 1. Simpan ke Inventory
                   final invRes = await _supabase
                       .from('inventory')
                       .insert({
@@ -590,11 +599,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       .select()
                       .single();
 
-                  // 2. Jika dijual, simpan ke Services
                   if (isDijual) {
                     await _supabase.from('services').insert({
                       'nama': namaCtrl.text.trim(),
                       'harga_per_satuan': int.parse(hargaJualCtrl.text.trim()),
+                      // [UPDATE HARGA GROSIR]: Payload
+                      'min_qty_grosir': isGrosir ? int.parse(minGrosirCtrl.text.trim()) : null,
+                      'harga_grosir': isGrosir ? int.parse(hargaGrosirCtrl.text.trim()) : null,
                       'satuan': 'pcs',
                       'tipe': 'produk',
                       'inventory_id': invRes['id'],
@@ -603,7 +614,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     });
                   }
 
-                  // 3. Catat Riwayat Masuk
                   await _supabase.from('inventory_log').insert({
                     'inventory_id': invRes['id'],
                     'tipe': 'masuk',
@@ -614,7 +624,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     'created_by': kasirId,
                   });
 
-                  // 4. Catat Pengeluaran
                   if (totalModal > 0) {
                     await _supabase.from('expenses').insert({
                       'cashier_id': kasirId,
@@ -657,12 +666,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
-  // ====================================================================
-  // [BARU] FITUR EDIT BARANG (KHUSUS ADMIN)
-  // Semua field bisa diedit, termasuk toggle Jual di Kasir on/off.
-  // ====================================================================
   void _showEditBarangDialog(Map<String, dynamic> item) {
-    if (!_isAdmin) return; // Guard, hanya admin
+    if (!_isAdmin) return; 
 
     final existingLink = _serviceLinks[item['id'].toString()];
 
@@ -680,6 +685,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
           ? (existingLink['harga_per_satuan'] as num).toInt().toString()
           : '',
     );
+    
+    // [UPDATE HARGA GROSIR]: Edit Controller
+    final minGrosirCtrl = TextEditingController(text: existingLink != null && existingLink['min_qty_grosir'] != null ? existingLink['min_qty_grosir'].toString() : '');
+    final hargaGrosirCtrl = TextEditingController(text: existingLink != null && existingLink['harga_grosir'] != null ? existingLink['harga_grosir'].toString() : '');
+    bool isGrosir = existingLink != null && existingLink['min_qty_grosir'] != null;
 
     bool isDijual = existingLink != null;
 
@@ -781,6 +791,29 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       icon: Icons.sell_outlined,
                     ),
                   ),
+                  const SizedBox(height: 14),
+                  // [UPDATE HARGA GROSIR]: UI Edit Grosir
+                  Container(
+                    decoration: BoxDecoration(color: isGrosir ? _DS.sky : _DS.ground, borderRadius: BorderRadius.circular(12), border: Border.all(color: isGrosir ? _DS.blue : Colors.transparent)),
+                    child: CheckboxListTile(
+                      title: Text('Aktifkan Harga Grosir', style: TextStyle(fontWeight: FontWeight.w700, color: isGrosir ? _DS.blue : _DS.textSecondary, fontSize: 13)),
+                      subtitle: Text('Berikan harga lebih murah jika beli banyak', style: TextStyle(fontSize: 10, color: isGrosir ? _DS.blue.withOpacity(0.7) : _DS.textHint)),
+                      value: isGrosir, activeColor: _DS.blue, checkColor: Colors.white,
+                      onChanged: (val) => setModalState(() => isGrosir = val ?? false),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                    ),
+                  ),
+                  if (isGrosir) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(child: TextField(controller: minGrosirCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Min. Qty'))),
+                        const SizedBox(width: 12),
+                        Expanded(flex: 2, child: TextField(controller: hargaGrosirCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Harga Grosir/Satuan'))),
+                      ],
+                    ),
+                  ],
                 ],
               ],
             ),
@@ -812,6 +845,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
               onPressed: () async {
                 if (namaCtrl.text.isEmpty || stokCtrl.text.isEmpty) return;
                 if (isDijual && hargaJualCtrl.text.isEmpty) return;
+                if (isDijual && isGrosir && (minGrosirCtrl.text.isEmpty || hargaGrosirCtrl.text.isEmpty)) return; // Validasi
 
                 Navigator.pop(ctx);
                 setState(() => _isLoading = true);
@@ -821,7 +855,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   final stokBaru = int.parse(stokCtrl.text.trim());
                   final hargaBeliBaru = int.parse(hargaBeliCtrl.text.trim());
 
-                  // 1. Update data Inventory
                   await _supabase
                       .from('inventory')
                       .update({
@@ -831,7 +864,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       })
                       .eq('id', item['id']);
 
-                  // 2. Cek apakah sudah ada baris services untuk barang ini (aktif ataupun tidak)
                   final svcRows = await _supabase
                       .from('services')
                       .select('id')
@@ -843,21 +875,27 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
                   if (isDijual) {
                     final hargaJualBaru = int.parse(hargaJualCtrl.text.trim());
+                    // [UPDATE HARGA GROSIR]: Payload update
+                    final mg = isGrosir ? int.parse(minGrosirCtrl.text.trim()) : null;
+                    final hg = isGrosir ? int.parse(hargaGrosirCtrl.text.trim()) : null;
+
                     if (existingServiceId != null) {
-                      // Sudah ada baris services -> update & aktifkan kembali
                       await _supabase
                           .from('services')
                           .update({
                             'nama': namaBaru,
                             'harga_per_satuan': hargaJualBaru,
+                            'min_qty_grosir': mg,
+                            'harga_grosir': hg,
                             'is_active': true,
                           })
                           .eq('id', existingServiceId);
                     } else {
-                      // Belum pernah dijual sebelumnya -> buat baru
                       await _supabase.from('services').insert({
                         'nama': namaBaru,
                         'harga_per_satuan': hargaJualBaru,
+                        'min_qty_grosir': mg,
+                        'harga_grosir': hg,
                         'satuan': 'pcs',
                         'tipe': 'produk',
                         'inventory_id': item['id'],
@@ -866,7 +904,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       });
                     }
                   } else {
-                    // Toggle Jual di Kasir dimatikan -> nonaktifkan baris services agar hilang dari layar Kasir
                     if (existingServiceId != null) {
                       await _supabase
                           .from('services')
@@ -926,7 +963,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // [UPDATE UX] KUNCI ANTI-BOLONG: Background dasar Scaffold diset ke Navy!
       backgroundColor: _DS.navy,
       appBar: AppBar(
         title: const Text(
@@ -1194,7 +1230,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
             ],
           ),
 
-          // [UPDATE UX] SCENE LOADING MODERN (Glassmorphism Blur) - sama seperti Services Management
           if (_isLoading)
             Positioned.fill(
               child: BackdropFilter(
@@ -1277,6 +1312,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
 // ============================================================================
 // KOMPONEN BOTTOM SHEET RIWAYAT & UPDATE STOK
 // ============================================================================
+// (Kode _StockHistorySheet dan seterusnya tidak ada yang diubah sama sekali)
 class _StockHistorySheet extends StatefulWidget {
   final Map<String, dynamic> item;
   final bool isAdmin;
@@ -1328,18 +1364,7 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
     try {
       final d = DateTime.parse(isoString).toLocal();
       const months = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'Mei',
-        'Jun',
-        'Jul',
-        'Ags',
-        'Sep',
-        'Okt',
-        'Nov',
-        'Des',
+        'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des',
       ];
       final jam = d.hour.toString().padLeft(2, '0');
       final mnt = d.minute.toString().padLeft(2, '0');
@@ -1709,7 +1734,6 @@ class _StockHistorySheetState extends State<_StockHistorySheet> {
                               String rawKet = log['keterangan'] ?? 'Tanpa Keterangan';
                               String cleanKet = rawKet;
 
-                              // Penerjemah Tag Database agar Rapi di UI
                               if (rawKet.contains('[ID: BLJ-')) {
                                 cleanKet = rawKet.split(' [ID:')[0].trim();
                                 cleanKet = 'Restock: $cleanKet';

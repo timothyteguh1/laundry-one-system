@@ -120,10 +120,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     super.dispose();
   }
 
-  // =========================================================
-  // [UPDATE UX] CUSTOM DIALOG (21st Century Dev Style)
-  // Menggantikan Snackbar yang sering tertumpuk keyboard
-  // =========================================================
   void _showCustomDialog({
     required String title,
     required String message,
@@ -231,8 +227,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     final data = await _supabase
         .from('services')
         .select(
-          // [UPDATE]: Menambahkan join ke tabel inventory untuk mengambil stok
-          'id, nama, harga_per_satuan, satuan, tipe, is_active, inventory_id, qty_per_unit, is_pinned, inventory:inventory_id(stok_saat_ini)',
+          // [UPDATE HARGA GROSIR]: Menambahkan kolom min_qty_grosir & harga_grosir pada Query 1 Kali Tarik
+          'id, nama, harga_per_satuan, min_qty_grosir, harga_grosir, satuan, tipe, is_active, inventory_id, qty_per_unit, is_pinned, inventory:inventory_id(stok_saat_ini)',
         )
         .eq('is_active', true)
         .order('nama');
@@ -240,7 +236,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       setState(() => _services = List<Map<String, dynamic>>.from(data));
   }
 
-  // [UPDATE UX]: Fungsi Debounce Pencarian Gaib Pelanggan (AJAX)
   void _onSearchCustomerChanged(String val) {
     if (_searchCustomerDebounce?.isActive ?? false)
       _searchCustomerDebounce!.cancel();
@@ -250,7 +245,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     });
   }
 
-  // [UPDATE UX]: Paginasi Load Customers
   Future<void> _loadCustomers({bool showFullLoading = true}) async {
     if (showFullLoading) setState(() => _isFetchingCustomers = true);
     _customerPage = 0;
@@ -293,7 +287,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     }
   }
 
-  // [UPDATE UX]: Paginasi Load More Customers
   Future<void> _loadMoreCustomers() async {
     if (_isLoadingMoreCustomers || !_hasMoreCustomers) return;
     setState(() => _isLoadingMoreCustomers = true);
@@ -331,10 +324,24 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   }
 
   // =========================================================
+  // [UPDATE HARGA GROSIR]: LOGIKA MENGHITUNG HARGA
+  // =========================================================
+  int _getHargaAktif(Map<String, dynamic> service, int qty) {
+    int hargaNormal = (service['harga_per_satuan'] as num).toInt();
+    int? minGrosir = service['min_qty_grosir'] != null ? (service['min_qty_grosir'] as num).toInt() : null;
+    int? hargaGrosir = service['harga_grosir'] != null ? (service['harga_grosir'] as num).toInt() : null;
+
+    // Jika qty memenuhi batas minimum grosir, gunakan harga grosir
+    if (minGrosir != null && hargaGrosir != null && qty >= minGrosir) {
+      return hargaGrosir;
+    }
+    return hargaNormal;
+  }
+
+  // =========================================================
   // LOGIKA KERANJANG
   // =========================================================
   void _tambahKeKeranjang(Map<String, dynamic> service, [int qty = 1]) {
-    // [UPDATE]: LOGIKA VALIDASI STOK
     if (service['tipe'] == 'produk' && service['inventory'] != null) {
       final int stokTersedia = (service['inventory']['stok_saat_ini'] as num)
           .toInt();
@@ -347,7 +354,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               'Stok ${service['nama']} hanya tersisa $stokTersedia ${service['satuan']}.',
           isSuccess: false,
         );
-        return; // Hentikan proses, jangan tambah ke keranjang
+        return; 
       }
     }
 
@@ -355,13 +362,14 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     setState(() {
       if (idx >= 0) {
         _cart[idx]['qty'] += qty;
-        _cart[idx]['subtotal'] =
-            _cart[idx]['qty'] * (service['harga_per_satuan'] as num).toDouble();
+        // [UPDATE HARGA GROSIR]: Gunakan _getHargaAktif untuk Subtotal
+        _cart[idx]['subtotal'] = _cart[idx]['qty'] * _getHargaAktif(service, _cart[idx]['qty']).toDouble();
       } else {
         _cart.add({
           'service': service,
           'qty': qty,
-          'subtotal': qty * (service['harga_per_satuan'] as num).toDouble(),
+          // [UPDATE HARGA GROSIR]: Gunakan _getHargaAktif untuk Subtotal
+          'subtotal': qty * _getHargaAktif(service, qty).toDouble(),
         });
       }
     });
@@ -376,8 +384,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         _cart.removeAt(idx);
       } else {
         _cart[idx]['qty']--;
-        _cart[idx]['subtotal'] =
-            _cart[idx]['qty'] * (service['harga_per_satuan'] as num).toDouble();
+        // [UPDATE HARGA GROSIR]: Gunakan _getHargaAktif untuk Subtotal
+        _cart[idx]['subtotal'] = _cart[idx]['qty'] * _getHargaAktif(service, _cart[idx]['qty']).toDouble();
       }
     });
     _revalidateVoucher();
@@ -392,7 +400,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       return;
     }
 
-    // [UPDATE]: LOGIKA VALIDASI STOK UNTUK INPUT MANUAL
     if (service['tipe'] == 'produk' && service['inventory'] != null) {
       final int stokTersedia = (service['inventory']['stok_saat_ini'] as num)
           .toInt();
@@ -403,7 +410,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               'Stok ${service['nama']} hanya tersisa $stokTersedia ${service['satuan']}.',
           isSuccess: false,
         );
-        return; // Hentikan proses
+        return; 
       }
     }
 
@@ -411,13 +418,14 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     setState(() {
       if (idx >= 0) {
         _cart[idx]['qty'] = newQty;
-        _cart[idx]['subtotal'] =
-            newQty * (service['harga_per_satuan'] as num).toDouble();
+        // [UPDATE HARGA GROSIR]: Gunakan _getHargaAktif untuk Subtotal
+        _cart[idx]['subtotal'] = newQty * _getHargaAktif(service, newQty).toDouble();
       } else {
         _cart.add({
           'service': service,
           'qty': newQty,
-          'subtotal': newQty * (service['harga_per_satuan'] as num).toDouble(),
+          // [UPDATE HARGA GROSIR]: Gunakan _getHargaAktif untuk Subtotal
+          'subtotal': newQty * _getHargaAktif(service, newQty).toDouble(),
         });
       }
     });
@@ -1015,9 +1023,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       final prefix =
           'ORD-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
 
-      // ==========================================================
-      // [UPDATE LOGIKA PERBAIKAN]: ANTI-DUPLIKAT NOMOR NOTA
-      // ==========================================================
       final lastOrderResponse = await _supabase
           .from('orders')
           .select('nomor_order')
@@ -1028,7 +1033,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
       int urutanBaru = 1;
       if (lastOrderResponse != null) {
-        // Jika sudah ada nota hari ini, potong string untuk ambil 4 digit terakhir
         final lastNomor = lastOrderResponse['nomor_order'] as String;
         final lastUrutanStr = lastNomor.split('-').last;
         final lastUrutanInt = int.tryParse(lastUrutanStr) ?? 0;
@@ -1036,7 +1040,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       }
 
       final nomorOrder = '$prefix-${urutanBaru.toString().padLeft(4, '0')}';
-      // ==========================================================
 
       final int totalDibayar = _tipeBayar == 'piutang' ? 0 : _total.toInt();
       final String metodeBayarFinal = _tipeBayar == 'piutang'
@@ -1083,24 +1086,18 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       }
 
       final List<Map<String, dynamic>> itemsPayload = [];
-
-      // [FIX] Gabungkan qty per inventory_id dulu, biar kalau ada 2 baris
-      // keranjang untuk produk yang sama, potong stoknya cuma sekali (akurat)
-      // dan gak boros round-trip ke database satu-satu per baris.
       final Map<String, double> qtyKurangPerInventory = {};
 
       for (final item in _cart) {
-        // Masukkan data ke keranjang sementara, jangan langsung tembak ke DB
         itemsPayload.add({
           'order_id': order['id'],
           'service_id': item['service']['id'],
           'jumlah': item['qty'],
-          'harga_satuan': (item['service']['harga_per_satuan'] as num).toInt(),
+          // [UPDATE HARGA GROSIR]: Harga Satuan direkam berdasarkan harga yang berlaku di keranjang (agar sinkron di database)
+          'harga_satuan': (item['subtotal'] / item['qty']).toInt(), 
           'subtotal': (item['subtotal'] as double).toInt(),
         });
 
-        // Logika potong stok asli Anda TETAP BERJALAN seperti biasa,
-        // hanya saja sekarang cuma dihitung dulu (belum tembak ke DB)
         if (item['service']['tipe'] == 'produk' &&
             item['service']['inventory_id'] != null) {
           final invId = item['service']['inventory_id'] as String;
@@ -1177,7 +1174,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             .update({
               'status': 'dipakai',
               'dipakai_di_order': order['id'],
-              // SESUDAH DIPERBAIKI:
               'dipakai_at': now.toUtc().toIso8601String(),
             })
             .eq('id', _voucherData!['id']);
@@ -1218,15 +1214,11 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                   'POS-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}',
               'status': 'dipakai',
               'dipakai_di_order': order['id'],
-              // ===============================================
-              // PERBAIKAN: Gunakan UTC agar jam tidak meleset
-              // ===============================================
               'dipakai_at': now.toUtc().toIso8601String(),
               'berlaku_sampai': now
                   .add(const Duration(days: 30))
                   .toUtc()
                   .toIso8601String(),
-              // ===============================================
               'poin_digunakan': poinReq,
               'dipakai_oleh': kasirId,
               'eksekutor': eksekutorName,
@@ -1390,7 +1382,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                     onPressed: isSubmitting
                         ? null
                         : () async {
-                            // GEMBOK SINKRON
                             if (isSubmitting) return;
 
                             if (!formKey.currentState!.validate()) return;
@@ -1423,7 +1414,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                             } catch (e) {
                               setModalState(() => isSubmitting = false);
 
-                              // PENCEGAT ERROR: Terjemahkan pesan Supabase agar kasir paham
                               String pesanError = e.toString().replaceAll(
                                 'Exception: ',
                                 '',
@@ -1432,7 +1422,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                                     'already been registered',
                                   ) ||
                                   pesanError.contains('already exists')) {
-                                // [UPDATE UX]: Ubah pesan menjadi lebih solutif sesuai permintaan
                                pesanError = 'Nomor WhatsApp sudah terdaftar.\n\nSilakan cari di daftar pelanggan atau tarik layar ke bawah untuk refresh.';
                               }
 
@@ -1447,8 +1436,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                           },
                     child: isSubmitting
                         ? const SizedBox(
-                            width:
-                                54, // [FIX UX]: Diperlebar agar tidak meluber
+                            width: 54, 
                             height: 20,
                             child: Center(
                               child: _ModernLoadingDots(
@@ -1585,7 +1573,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               ),
             ),
 
-            // [UPDATE UX] Scene Loading Modern (Glassmorphism Blur & Bouncing Dots)
             if (_isLoading)
               Positioned.fill(
                 child: BackdropFilter(
@@ -1651,9 +1638,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 
-  // =========================================================
-  // SUB-WIDGETS STEPS (STEP 1, STEP 2, STEP 3)
-  // =========================================================
   Widget _buildStep1Pelanggan() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1683,7 +1667,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                       horizontal: 16,
                       vertical: 14,
                     ),
-                    // [UPDATE UX]: Indikator Gaib di sudut kanan kotak pencarian
                     suffixIcon: _isSearchingCustomer
                         ? const Padding(
                             padding: EdgeInsets.all(12),
@@ -1788,7 +1771,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         ),
 
         Expanded(
-          // [UPDATE UX]: Gunakan NotificationListener untuk Scroll Mentok Bawah (Paginasi)
           child: NotificationListener<ScrollNotification>(
             onNotification: (ScrollNotification scrollInfo) {
               if (!_isLoadingMoreCustomers &&
@@ -1804,11 +1786,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               color: _DS.blue,
               backgroundColor: _DS.surface,
               child: _isFetchingCustomers
-                  // JIKA SEDANG LOADING AWAL
                   ? const Center(
                       child: _ModernLoadingDots(color: _DS.blue, size: 14),
                     )
-                  // JIKA KOSONG
                   : _filteredCustomers.isEmpty
                   ? Center(
                       child: ListView(
@@ -1867,7 +1847,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                         ],
                       ),
                     )
-                  // JIKA ADA DATA
                   : ListView.builder(
                       physics: const AlwaysScrollableScrollPhysics(
                         parent: BouncingScrollPhysics(),
@@ -1995,7 +1974,6 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     final lainnya = filtered.where((s) => s['is_pinned'] != true).toList();
 
     return RefreshIndicator(
-      // [UPDATE UX] Pull-to-refresh List Jasa/Layanan
       onRefresh: _loadServices,
       color: _DS.blue,
       backgroundColor: _DS.surface,
@@ -2092,6 +2070,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 ],
               ),
               const SizedBox(height: 12),
+              // [UPDATE HARGA GROSIR]: Memanggil _buildServiceTile yang sudah dimodifikasi
               ...pinned.map((s) => _buildServiceTile(s, showPin: true)),
               const SizedBox(height: 24),
             ],
@@ -2106,6 +2085,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 ),
               ),
               const SizedBox(height: 12),
+              // [UPDATE HARGA GROSIR]: Memanggil _buildServiceTile yang sudah dimodifikasi
               ...lainnya.map((s) => _buildServiceTile(s, showPin: false)),
             ] else if (pinned.isEmpty) ...[
               const Center(
@@ -2730,7 +2710,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                   : (_isLoading ? null : _simpanOrder),
               child: _isLoading
                   ? const SizedBox(
-                      width: 54, // [FIX UX]: Diperlebar agar tidak meluber
+                      width: 54, 
                       height: 20,
                       child: Center(
                         child: _ModernLoadingDots(color: Colors.white, size: 8),
@@ -2763,12 +2743,15 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     return 'Rp ${buffer.toString()}';
   }
 
+  // [UPDATE HARGA GROSIR]: Meneruskan fungsi hitung lokal ke Tile
   Widget _buildServiceTile(Map<String, dynamic> s, {bool showPin = false}) {
     final qty = _qtyDiKeranjang(s['id']);
     return _ServiceTile(
       service: s,
       qty: qty,
       showPin: showPin,
+      // Pass the locally calculated active price
+      hargaAktif: _getHargaAktif(s, qty > 0 ? qty : 1).toDouble(),
       onTambah: () => _tambahKeKeranjang(s),
       onKurangi: () => _kurangiDariKeranjang(s),
       onEditQty: () {
@@ -2839,6 +2822,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 class _ServiceTile extends StatelessWidget {
   final Map<String, dynamic> service;
   final int qty;
+  final double hargaAktif; // [UPDATE HARGA GROSIR]: Added property
   final VoidCallback onTambah;
   final VoidCallback onKurangi;
   final VoidCallback onEditQty;
@@ -2847,6 +2831,7 @@ class _ServiceTile extends StatelessWidget {
   const _ServiceTile({
     required this.service,
     required this.qty,
+    required this.hargaAktif, // [UPDATE HARGA GROSIR]: Added property
     required this.onTambah,
     required this.onKurangi,
     required this.onEditQty,
@@ -2855,9 +2840,12 @@ class _ServiceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final harga = (service['harga_per_satuan'] as num).toDouble();
-    final satuan = service['satuan'] ?? 'pcs';
-    final isSelected = qty > 0;
+    final int hargaNormal = (service['harga_per_satuan'] as num).toInt();
+    final String satuan = service['satuan'] ?? 'pcs';
+    final bool isSelected = qty > 0;
+    
+    // [UPDATE HARGA GROSIR]: Deteksi Grosir Aktif untuk UI
+    final bool isGrosirActive = isSelected && hargaAktif < hargaNormal;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -2901,14 +2889,21 @@ class _ServiceTile extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  '${_formatRupiah(harga)} / $satuan',
-                  style: const TextStyle(
-                    color: _DS.textSecondary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                // [UPDATE HARGA GROSIR]: UI Conditional
+                if (isGrosirActive) ...[
+                  Row(
+                    children: [
+                      Text('${_formatRupiah(hargaNormal.toDouble())} / $satuan', style: const TextStyle(color: _DS.textHint, fontSize: 11, decoration: TextDecoration.lineThrough)),
+                      const SizedBox(width: 6),
+                      Text('${_formatRupiah(hargaAktif)} / $satuan', style: const TextStyle(color: Colors.green, fontSize: 13, fontWeight: FontWeight.w800)),
+                    ]
                   ),
-                ),
+                  const Text('✅ Grosir Aktif!', style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.w700)),
+                ] else ...[
+                  Text('${_formatRupiah(hargaNormal.toDouble())} / $satuan', style: const TextStyle(color: _DS.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
+                  if (service['min_qty_grosir'] != null)
+                    Text('Grosir min. ${service['min_qty_grosir']}', style: const TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.w600)),
+                ]
               ],
             ),
           ),

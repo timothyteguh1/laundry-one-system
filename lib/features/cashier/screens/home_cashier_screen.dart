@@ -14,6 +14,7 @@ import 'package:laundry_one/features/cashier/screens/tabs/report_tab.dart';
 import 'package:laundry_one/features/cashier/screens/tabs/pelanggan_tab.dart';
 import 'package:laundry_one/features/cashier/screens/invoice_screen.dart';
 import 'package:laundry_one/features/auth/screens/register_screen.dart';
+import 'package:laundry_one/features/cashier/screens/rekap_kasir_screen.dart';
 
 // ============================================================
 // DESIGN SYSTEM — Laundry One POS
@@ -35,6 +36,7 @@ class _DS {
   static const statusDiproses = Color(0xFFE65100);
   static const statusSelesai = Color(0xFF00897B);
   static const statusLunas = Color(0xFF757575);
+  
 
   static List<BoxShadow> cardShadow = [
     BoxShadow(
@@ -339,6 +341,29 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                   onTap: () {
                     Navigator.pop(context);
                     _showRedeemVoucherDialog();
+                  },
+                ),
+
+                ListTile(
+                  leading: const Icon(
+                    Icons.analytics_outlined, // Icon chart atau rekap
+                    color: _DS.textPrimary,
+                  ),
+                  title: const Text(
+                    'Rekap Kasir (30 Hari)',
+                    style: TextStyle(
+                      color: _DS.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context); // Tutup drawer
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const RekapPendapatanScreen(),
+                      ),
+                    );
                   },
                 ),
                 if (isAdmin) ...[

@@ -60,10 +60,6 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
     super.dispose();
   }
 
-  // =========================================================
-  // [UPDATE UX] CUSTOM DIALOG
-  // Menggantikan Snackbar agar pesan tidak tertumpuk
-  // =========================================================
   void _showCustomDialog({required String title, required String message, required bool isSuccess}) {
     showDialog(
       context: context,
@@ -256,10 +252,14 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
     final namaCtrl = TextEditingController(text: isEdit ? service['nama'] : '');
     final hargaCtrl = TextEditingController(text: isEdit ? service['harga_per_satuan']?.toString() : '');
     
+    // [UPDATE HARGA GROSIR]: Controller Harga Grosir
+    final minGrosirCtrl = TextEditingController(text: isEdit && service['min_qty_grosir'] != null ? service['min_qty_grosir'].toString() : '');
+    final hargaGrosirCtrl = TextEditingController(text: isEdit && service['harga_grosir'] != null ? service['harga_grosir'].toString() : '');
+    
     String satuanSelected = isEdit ? (service['satuan'] ?? 'kg') : 'kg';
     bool isPinned = isEdit ? (service['is_pinned'] == true) : false;
+    bool isGrosir = isEdit ? (service['min_qty_grosir'] != null) : false;
     
-    // Hilangkan loading di dalam dialog, kita pakai loading utama dengan BackdropFilter
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -302,6 +302,31 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
+
+                // [UPDATE HARGA GROSIR]: UI Checkbox Grosir
+                Container(
+                  decoration: BoxDecoration(color: isGrosir ? _DS.sky : _DS.ground, borderRadius: BorderRadius.circular(12), border: Border.all(color: isGrosir ? _DS.blue : Colors.transparent)),
+                  child: CheckboxListTile(
+                    title: Text('Aktifkan Harga Grosir', style: TextStyle(fontWeight: FontWeight.w700, color: isGrosir ? _DS.blue : _DS.textSecondary, fontSize: 13)),
+                    subtitle: Text('Berikan harga lebih murah jika beli banyak', style: TextStyle(fontSize: 10, color: isGrosir ? _DS.blue.withOpacity(0.7) : _DS.textHint)),
+                    value: isGrosir, activeColor: _DS.blue, checkColor: Colors.white,
+                    onChanged: (val) => setModalState(() => isGrosir = val ?? false),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  ),
+                ),
+
+                if (isGrosir) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(child: TextField(controller: minGrosirCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Min. Qty'))),
+                      const SizedBox(width: 12),
+                      Expanded(flex: 2, child: TextField(controller: hargaGrosirCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: _modernInputDecoration('Harga Grosir/Satuan'))),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 16),
                 
                 Container(
                   decoration: BoxDecoration(color: isPinned ? Colors.amber.shade50 : _DS.ground, borderRadius: BorderRadius.circular(12), border: Border.all(color: isPinned ? Colors.amber : Colors.transparent)),
@@ -324,8 +349,10 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
               style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), elevation: 0),
               onPressed: () async {
                 if (namaCtrl.text.isEmpty || hargaCtrl.text.isEmpty) return;
-                Navigator.pop(ctx); // Tutup dialog input
-                setState(() => _isLoading = true); // Munculkan Loading Kaca Buram
+                if (isGrosir && (minGrosirCtrl.text.isEmpty || hargaGrosirCtrl.text.isEmpty)) return;
+                
+                Navigator.pop(ctx);
+                setState(() => _isLoading = true); 
                 
                 final payload = {
                   'nama': namaCtrl.text.trim(),
@@ -334,6 +361,9 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
                   'tipe': 'jasa',
                   'is_active': true,
                   'is_pinned': isPinned,
+                  // [UPDATE HARGA GROSIR]: Inject Payload
+                  'min_qty_grosir': isGrosir ? int.parse(minGrosirCtrl.text.trim()) : null,
+                  'harga_grosir': isGrosir ? int.parse(hargaGrosirCtrl.text.trim()) : null,
                 };
 
                 try {
@@ -368,12 +398,10 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // [UPDATE UX] KUNCI ANTI-BOLONG: Background dasar Scaffold diset ke Navy!
       backgroundColor: _DS.navy,
       appBar: AppBar(title: const Text('Master Data Jasa', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)), backgroundColor: _DS.navy, foregroundColor: Colors.white, elevation: 0),
       body: Stack(
         children: [
-          // Latar belakang utama (Ground) untuk konten
           Positioned.fill(child: Container(color: _DS.ground)),
           
           Column(
@@ -396,7 +424,6 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
               ),
               
               Expanded(
-                // [UPDATE UX] RefreshIndicator membungkus ListView
                 child: RefreshIndicator(
                   color: _DS.blue,
                   backgroundColor: _DS.surface,
@@ -420,6 +447,8 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
                           itemBuilder: (ctx, i) {
                             final s = _filteredServices[i];
                             final isPinned = s['is_pinned'] == true;
+                            // [UPDATE HARGA GROSIR]: Indikator UI
+                            final bool hasGrosir = s['min_qty_grosir'] != null;
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 14),
@@ -441,7 +470,17 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
                                   ),
                                   subtitle: Padding(
                                     padding: const EdgeInsets.only(top: 6),
-                                    child: Text('${_formatRupiah((s['harga_per_satuan'] as num).toInt())} / ${s['satuan']}', style: const TextStyle(color: _DS.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('${_formatRupiah((s['harga_per_satuan'] as num).toInt())} / ${s['satuan']}', style: const TextStyle(color: _DS.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
+                                        if (hasGrosir)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 4),
+                                            child: Text('Grosir: ${_formatRupiah((s['harga_grosir'] as num).toInt())} (Min. ${s['min_qty_grosir']})', style: const TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.w700)),
+                                          )
+                                      ],
+                                    ),
                                   ),
                                   trailing: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -474,7 +513,6 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
             ],
           ),
 
-          // [UPDATE UX] SCENE LOADING MODERN (Glassmorphism Blur)
           if (_isLoading)
             Positioned.fill(
               child: BackdropFilter(
@@ -489,12 +527,12 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [BoxShadow(color: _DS.navy.withOpacity(0.15), blurRadius: 30, offset: const Offset(0, 10))],
                       ),
-                      child: Column(
+                      child: const Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const CircularProgressIndicator(color: _DS.blue, strokeWidth: 3.5),
-                          const SizedBox(height: 20),
-                          const Text('Memuat Data...', style: TextStyle(fontWeight: FontWeight.w800, color: _DS.textPrimary, fontSize: 15)),
+                          CircularProgressIndicator(color: _DS.blue, strokeWidth: 3.5),
+                          SizedBox(height: 20),
+                          Text('Memuat Data...', style: TextStyle(fontWeight: FontWeight.w800, color: _DS.textPrimary, fontSize: 15)),
                         ],
                       ),
                     ),

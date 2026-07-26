@@ -99,9 +99,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   }
 
   // ============================================================
-  // [UPDATE REVISI CASE 4]: LOGIKA HAPUS NOTA & RESET COOLDOWN 90 HARI
-  // ============================================================
-  // ============================================================
   // [UPDATE REVISI FINAL]: LOGIKA HAPUS NOTA SUPER DETEKTIF + NOTIFIKASI
   // ============================================================
   Future<void> _hapusNota() async {
@@ -207,7 +204,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
             });
           }
 
-          // [AMUNISI BARU]: Hapus Notifikasi yang menempel ke voucher ini DULU agar tidak error!
           try {
              await _supabase.from('notifications').delete().eq('redemption_id', red['id']);
           } catch (_) {}
@@ -314,11 +310,18 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     sb.writeln('-----------------------------------');
 
     for (var item in widget.items) {
-      final nama = item['service']?['nama'] ?? 'Item';
-      final qty = item['qty'] ?? 0;
-      final sub = item['subtotal'] ?? 0;
+      // [UPDATE HARGA GROSIR]: Share Text Logika
+      String nama = item['service']?['nama'] ?? 'Item';
+      final int qty = item['qty'] ?? 0;
+      final double sub = (item['subtotal'] as num).toDouble();
+      final int hargaNormal = item['service']?['harga_per_satuan'] ?? 0;
+      
+      if (sub < (hargaNormal * qty)) {
+        nama = "$nama (Grosir)";
+      }
+
       sb.writeln('$qty x $nama');
-      sb.writeln('   ${_formatRupiah(sub.toDouble())}');
+      sb.writeln('   ${_formatRupiah(sub)}');
     }
 
     sb.writeln('-----------------------------------');
@@ -378,11 +381,18 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       bluetooth.printCustom("--------------------------------", 1, 1);
 
       for (var item in widget.items) {
-        final nama = item['service']?['nama'] ?? 'Item';
-        final qty = item['qty'] ?? 0;
-        final sub = item['subtotal'] ?? 0;
+        // [UPDATE HARGA GROSIR]: Bluetooth Thermal Logika
+        String nama = item['service']?['nama'] ?? 'Item';
+        final int qty = item['qty'] ?? 0;
+        final double sub = (item['subtotal'] as num).toDouble();
+        final int hargaNormal = item['service']?['harga_per_satuan'] ?? 0;
+        
+        if (sub < (hargaNormal * qty)) {
+          nama = "$nama (Grosir)";
+        }
+
         bluetooth.printCustom("$qty x $nama", 1, 0); 
-        bluetooth.printLeftRight("", _formatRupiah(sub.toDouble()), 1);
+        bluetooth.printLeftRight("", _formatRupiah(sub), 1);
       }
 
       bluetooth.printCustom("--------------------------------", 1, 1);
@@ -622,39 +632,51 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                               ),
                               const SizedBox(height: 12),
                               ...widget.items.map(
-                                (item) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '${item['qty']}x ',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 13,
-                                          color: _DS.textPrimary,
-                                        ),
-                                      ),
-                                      Expanded(
-                                        child: Text(
-                                          '${item['service']['nama']}',
+                                (item) {
+                                  // [UPDATE HARGA GROSIR]: UI pada Detail Layanan di Nota Layar HP
+                                  String itemName = item['service']['nama'] ?? 'Item';
+                                  final int qty = item['qty'] ?? 0;
+                                  final double sub = (item['subtotal'] as num).toDouble();
+                                  final int hargaNormal = item['service']['harga_per_satuan'] ?? 0;
+                                  
+                                  if (sub < (hargaNormal * qty)) {
+                                    itemName = "$itemName (Grosir)";
+                                  }
+
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${item['qty']}x ',
                                           style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
                                             fontSize: 13,
                                             color: _DS.textPrimary,
                                           ),
                                         ),
-                                      ),
-                                      Text(
-                                        _formatRupiah(item['subtotal']),
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 13,
-                                          color: _DS.textPrimary,
+                                        Expanded(
+                                          child: Text(
+                                            itemName,
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              color: _DS.textPrimary,
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                                        Text(
+                                          _formatRupiah(item['subtotal']),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 13,
+                                            color: _DS.textPrimary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }
                               ),
 
                               const SizedBox(height: 16),
