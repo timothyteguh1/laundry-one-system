@@ -16,62 +16,8 @@ import 'package:laundry_one/features/cashier/screens/invoice_screen.dart';
 import 'package:laundry_one/features/auth/screens/register_screen.dart';
 import 'package:laundry_one/features/cashier/screens/rekap_kasir_screen.dart';
 
-// ============================================================
-// DESIGN SYSTEM — Laundry One POS
-// ============================================================
-
-class _DS {
-  static const navy = Color(0xFF0F2557);
-  static const blue = Color(0xFF1565C0);
-  static const sky = Color(0xFFE8F0FE);
-  static const surface = Colors.white;
-
-  static const ground = Color(0xFFEAF0F6);
-  static const border = Color(0xFFD2DCE8);
-
-  static const textPrimary = Color(0xFF0F2557);
-  static const textSecondary = Color(0xFF6B7A99);
-  static const textHint = Color(0xFFB0BAD1);
-
-  static const statusDiproses = Color(0xFFE65100);
-  static const statusSelesai = Color(0xFF00897B);
-  static const statusLunas = Color(0xFF757575);
-  
-
-  static List<BoxShadow> cardShadow = [
-    BoxShadow(
-      color: const Color(0xFF0F2557).withOpacity(0.09),
-      blurRadius: 16,
-      offset: const Offset(0, 4),
-    ),
-    BoxShadow(
-      color: const Color(0xFF0F2557).withOpacity(0.05),
-      blurRadius: 6,
-      offset: const Offset(0, 2),
-    ),
-  ];
-
-  static List<BoxShadow> softShadow = [
-    BoxShadow(
-      color: const Color(0xFF0F2557).withOpacity(0.06),
-      blurRadius: 10,
-      offset: const Offset(0, 3),
-    ),
-  ];
-
-  static List<BoxShadow> fabShadow = [
-    BoxShadow(
-      color: const Color(0xFF1565C0).withOpacity(0.4),
-      blurRadius: 20,
-      offset: const Offset(0, 8),
-    ),
-    BoxShadow(
-      color: const Color(0xFF1565C0).withOpacity(0.25),
-      blurRadius: 6,
-      offset: const Offset(0, 2),
-    ),
-  ];
-}
+// [UPDATE]: Mengimpor AppTokens terpusat, pastikan path ini sesuai proyek Anda
+import 'package:laundry_one/core/tokens/app_tokens.dart'; 
 
 class HomeCashierScreen extends StatefulWidget {
   const HomeCashierScreen({super.key});
@@ -105,7 +51,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   bool _hasMoreOrders = true;
   bool _isLoadingMore = false;
 
-  bool _isSearching = false; // <-- [UPDATE UX]: Indikator loading mini
+  bool _isSearching = false; 
   String _searchQuery = '';
   final _searchCtrl = TextEditingController();
   Timer? _searchDebounce;
@@ -149,12 +95,10 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     if (_searchDebounce?.isActive ?? false) _searchDebounce!.cancel();
     setState(
       () => _isSearching = true,
-    ); // Munculkan indikator mini tanpa mengosongkan layar
-    _searchDebounce = Timer(const Duration(milliseconds: 500), () {
+    ); 
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
       setState(() => _searchQuery = val);
-      _loadData(
-        showFullLoading: false,
-      ); // Tarik data tanpa memunculkan skeleton
+      _loadData(showFullLoading: false); 
     });
   }
 
@@ -192,14 +136,14 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
-                  color: _DS.textPrimary,
+                  color: AppTokens.textPrimary,
                 ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
                 message,
-                style: const TextStyle(color: _DS.textSecondary, fontSize: 13),
+                style: const TextStyle(color: AppTokens.textSecondary, fontSize: 13),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
@@ -208,7 +152,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                 height: 48,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _DS.blue,
+                    backgroundColor: AppTokens.blue,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -248,14 +192,14 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     final nama = _userProfile?['nama_lengkap'] ?? _kasirNama ?? 'Memuat...';
 
     return Drawer(
-      backgroundColor: _DS.surface,
+      backgroundColor: AppTokens.surface,
       child: Column(
         children: [
           UserAccountsDrawerHeader(
-            decoration: const BoxDecoration(color: _DS.navy),
+            decoration: const BoxDecoration(color: AppTokens.navy),
             currentAccountPicture: const CircleAvatar(
               backgroundColor: Colors.white,
-              child: Icon(Icons.person, color: _DS.navy, size: 40),
+              child: Icon(Icons.person, color: AppTokens.navy, size: 40),
             ),
             accountName: Text(
               nama,
@@ -264,7 +208,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
             accountEmail: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: isAdmin ? Colors.orange : _DS.blue,
+                color: isAdmin ? Colors.orange : AppTokens.blue,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -286,7 +230,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                   child: Text(
                     'MENU KASIR',
                     style: TextStyle(
-                      color: _DS.textSecondary,
+                      color: AppTokens.textSecondary,
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
                     ),
@@ -295,12 +239,12 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                 ListTile(
                   leading: const Icon(
                     Icons.home_outlined,
-                    color: _DS.textPrimary,
+                    color: AppTokens.textPrimary,
                   ),
                   title: const Text(
                     'Beranda',
                     style: TextStyle(
-                      color: _DS.textPrimary,
+                      color: AppTokens.textPrimary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -312,12 +256,12 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                 ListTile(
                   leading: const Icon(
                     Icons.receipt_long_outlined,
-                    color: _DS.textPrimary,
+                    color: AppTokens.textPrimary,
                   ),
                   title: const Text(
                     'Riwayat Transaksi',
                     style: TextStyle(
-                      color: _DS.textPrimary,
+                      color: AppTokens.textPrimary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -346,18 +290,18 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
 
                 ListTile(
                   leading: const Icon(
-                    Icons.analytics_outlined, // Icon chart atau rekap
-                    color: _DS.textPrimary,
+                    Icons.analytics_outlined, 
+                    color: AppTokens.textPrimary,
                   ),
                   title: const Text(
                     'Rekap Kasir (30 Hari)',
                     style: TextStyle(
-                      color: _DS.textPrimary,
+                      color: AppTokens.textPrimary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   onTap: () {
-                    Navigator.pop(context); // Tutup drawer
+                    Navigator.pop(context); 
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -447,7 +391,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                   child: Text(
                     'SISTEM',
                     style: TextStyle(
-                      color: _DS.textSecondary,
+                      color: AppTokens.textSecondary,
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
                     ),
@@ -539,10 +483,10 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: const ColorScheme.light(
-            primary: _DS.blue,
+            primary: AppTokens.blue,
             onPrimary: Colors.white,
-            surface: _DS.surface,
-            onSurface: _DS.textPrimary,
+            surface: AppTokens.surface,
+            onSurface: AppTokens.textPrimary,
           ),
         ),
         child: child!,
@@ -728,7 +672,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     }
   }
 
-  // [UPDATE UX]: Tambah parameter showFullLoading agar layar tidak berkedip putih saat AJAX
   Future<void> _loadData({bool showFullLoading = true}) async {
     if (showFullLoading) setState(() => _isLoading = true);
     _orderPage = 0;
@@ -855,7 +798,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
             (sum, o) => sum + (o['total_harga'] ?? 0).toDouble(),
           );
           _isLoading = false;
-          _isSearching = false; // Matikan indikator mini AJAX
+          _isSearching = false; 
         });
       }
     } catch (e) {
@@ -1028,13 +971,13 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
-                  color: _DS.textPrimary,
+                  color: AppTokens.textPrimary,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 'Order: ${order['nomor_order']} • $namaPelanggan',
-                style: const TextStyle(color: _DS.textSecondary, fontSize: 13),
+                style: const TextStyle(color: AppTokens.textSecondary, fontSize: 13),
               ),
               const SizedBox(height: 24),
               Container(
@@ -1057,7 +1000,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _formatRupiah(total),
+                      AppTokens.formatRupiah(total),
                       style: TextStyle(
                         color: Colors.orange.shade800,
                         fontWeight: FontWeight.w800,
@@ -1234,7 +1177,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _DS.navy,
+      backgroundColor: AppTokens.navy,
       drawer: _buildDrawer(),
       body: Stack(
         children: [
@@ -1242,7 +1185,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
             children: [
               Expanded(
                 child: Container(
-                  color: _DS.ground,
+                  color: AppTokens.ground,
                   child: IndexedStack(
                     index: _currentTab,
                     children: [
@@ -1253,7 +1196,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                         isLoadingMore: _isLoadingMore,
                         hasMore: _hasMoreOrders,
                         isSearching:
-                            _isSearching, // <--- Oper indikator gaib ke Tab
+                            _isSearching, 
                         onLoadMore: _loadMoreOrders,
                         onRefresh: _loadData,
                         onUpdate: _handleUpdateStatus,
@@ -1278,7 +1221,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
                 child: Container(
-                  color: _DS.navy.withOpacity(0.3),
+                  color: AppTokens.navy.withOpacity(0.3),
                   child: Center(
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -1286,11 +1229,11 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                         vertical: 32,
                       ),
                       decoration: BoxDecoration(
-                        color: _DS.surface,
+                        color: AppTokens.surface,
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
-                            color: _DS.navy.withOpacity(0.2),
+                            color: AppTokens.navy.withOpacity(0.2),
                             blurRadius: 30,
                             offset: const Offset(0, 10),
                           ),
@@ -1299,13 +1242,13 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                       child: const Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _ModernLoadingDots(color: _DS.blue, size: 14),
+                          _ModernLoadingDots(color: AppTokens.blue, size: 14),
                           SizedBox(height: 20),
                           Text(
                             'Memproses...',
                             style: TextStyle(
                               fontWeight: FontWeight.w800,
-                              color: _DS.textPrimary,
+                              color: AppTokens.textPrimary,
                               fontSize: 15,
                             ),
                           ),
@@ -1329,7 +1272,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                 margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(18),
-                  boxShadow: _DS.fabShadow,
+                  boxShadow: AppTokens.fabShadow,
                 ),
                 child: FloatingActionButton.extended(
                   onPressed: () async {
@@ -1342,7 +1285,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                     );
                     if (r == true) _loadData(showFullLoading: false);
                   },
-                  backgroundColor: _DS.blue,
+                  backgroundColor: AppTokens.blue,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   icon: const Icon(Icons.add_rounded, size: 22),
@@ -1370,13 +1313,13 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
         .toList();
 
     return Container(
-      color: _DS.navy,
+      color: AppTokens.navy,
       child: SafeArea(
         bottom: false,
         child: RefreshIndicator(
           onRefresh: () => _loadData(showFullLoading: false),
-          color: _DS.blue,
-          backgroundColor: _DS.surface,
+          color: AppTokens.blue,
+          backgroundColor: AppTokens.surface,
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics(),
@@ -1385,7 +1328,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
               SliverToBoxAdapter(child: _buildHeader()),
               SliverToBoxAdapter(
                 child: Container(
-                  decoration: const BoxDecoration(color: _DS.ground),
+                  decoration: const BoxDecoration(color: AppTokens.ground),
                   child: Column(
                     children: [
                       Container(
@@ -1395,15 +1338,15 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                           vertical: 12,
                         ),
                         decoration: BoxDecoration(
-                          color: _DS.sky,
+                          color: AppTokens.sky,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: _DS.blue.withOpacity(0.15)),
+                          border: Border.all(color: AppTokens.blue.withOpacity(0.15)),
                         ),
                         child: Row(
                           children: [
                             const Icon(
                               Icons.info_outline_rounded,
-                              color: _DS.blue,
+                              color: AppTokens.blue,
                               size: 20,
                             ),
                             const SizedBox(width: 10),
@@ -1411,7 +1354,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                               child: Text(
                                 'Menampilkan ringkasan transaksi khusus Hari Ini (${_formatDateStr(DateTime.now())}).',
                                 style: const TextStyle(
-                                  color: _DS.blue,
+                                  color: AppTokens.blue,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   height: 1.3,
@@ -1425,9 +1368,21 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                         child: Row(
                           children: [
-                            Expanded(child: _buildPenjualanCard()),
+                            // [UPDATE ANIMASI MICRO-INTERACTION]
+                            Expanded(
+                              child: _AnimatedPenjualanCard(
+                                totalPenjualan: _totalPenjualanHariIni,
+                                onTap: _showPenjualanDetail,
+                              ),
+                            ),
                             const SizedBox(width: 12),
-                            Expanded(child: _buildPiutangCard()),
+                            // [UPDATE ANIMASI MICRO-INTERACTION]
+                            Expanded(
+                              child: _AnimatedPiutangCard(
+                                totalPiutang: _totalPiutangAllTime,
+                                onTap: _showPiutangList,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -1435,18 +1390,13 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                         _buildSectionHeader(
                           '✅  Pesanan Selesai',
                           count: siap.length,
-                          countColor: _DS.statusSelesai,
+                          countColor: AppTokens.statusSelesai,
                           topPad: 24,
                         ),
                         ...siap
                             .map(
                               (o) => Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  0,
-                                  16,
-                                  10,
-                                ),
+                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                                 child: _PremiumOrderCard(
                                   order: o,
                                   onUpdate: _handleUpdateStatus,
@@ -1459,7 +1409,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                       _buildSectionHeader(
                         'Sedang Diproses',
                         count: _todayAktif,
-                        countColor: _DS.statusDiproses,
+                        countColor: AppTokens.statusDiproses,
                         topPad: siap.isNotEmpty ? 8 : 24,
                         action: _todayAktif > 5
                             ? () => setState(() => _currentTab = 1)
@@ -1490,12 +1440,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                         ...aktif
                             .map(
                               (o) => Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  0,
-                                  16,
-                                  10,
-                                ),
+                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                                 child: _PremiumOrderCard(
                                   order: o,
                                   onUpdate: _handleUpdateStatus,
@@ -1681,137 +1626,12 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                     value: '$_todaySelesai',
                     label: 'Selesai',
                     icon: Icons.check_circle_outline_rounded,
-                    color: _DS.statusSelesai,
+                    color: AppTokens.statusSelesai,
                     highlight: _todaySelesai > 0,
                   ),
                 ],
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPenjualanCard() {
-    return Material(
-      color: Colors.transparent,
-      child: Ink(
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF1565C0), Color(0xFF0D47A1)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: _DS.cardShadow,
-        ),
-        child: InkWell(
-          onTap: () {
-            HapticFeedback.lightImpact();
-            _showPenjualanDetail();
-          },
-          borderRadius: BorderRadius.circular(20),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.payments_rounded,
-                    color: Colors.white,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Penjualan Hari Ini',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _formatRupiah(_totalPenjualanHariIni),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPiutangCard() {
-    return Material(
-      color: Colors.transparent,
-      child: Ink(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: _DS.border, width: 1.5),
-          boxShadow: _DS.cardShadow,
-        ),
-        child: InkWell(
-          onTap: () {
-            HapticFeedback.lightImpact();
-            _showPiutangList();
-          },
-          borderRadius: BorderRadius.circular(20),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    Icons.account_balance_wallet_rounded,
-                    color: Colors.orange.shade700,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Piutang All-time',
-                  style: TextStyle(
-                    color: _DS.textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _formatRupiah(_totalPiutangAllTime),
-                  style: TextStyle(
-                    color: Colors.orange.shade800,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ),
@@ -1829,7 +1649,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
           maxHeight: MediaQuery.of(context).size.height * 0.85,
         ),
         decoration: const BoxDecoration(
-          color: _DS.ground,
+          color: AppTokens.ground,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: SingleChildScrollView(
@@ -1861,7 +1681,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
-                        color: _DS.textPrimary,
+                        color: AppTokens.textPrimary,
                       ),
                     ),
                     Container(
@@ -1870,17 +1690,17 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: _DS.sky,
+                        color: AppTokens.sky,
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Row(
                         children: [
-                          Icon(Icons.today_rounded, color: _DS.blue, size: 14),
+                          Icon(Icons.today_rounded, color: AppTokens.blue, size: 14),
                           SizedBox(width: 6),
                           Text(
                             'HARI INI',
                             style: TextStyle(
-                              color: _DS.blue,
+                              color: AppTokens.blue,
                               fontSize: 12,
                               fontWeight: FontWeight.w800,
                             ),
@@ -1898,7 +1718,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: _DS.navy,
+                    color: AppTokens.navy,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
@@ -1917,7 +1737,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            _formatRupiah(totalPembayaranDiterima),
+                            AppTokens.formatRupiah(totalPembayaranDiterima),
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.w800,
@@ -2045,7 +1865,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   Widget _buildSectionHeader(
     String title, {
     int count = 0,
-    Color countColor = _DS.blue,
+    Color countColor = AppTokens.blue,
     double topPad = 20,
     VoidCallback? action,
     String? actionLabel,
@@ -2066,7 +1886,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
           Text(
             title,
             style: const TextStyle(
-              color: _DS.textPrimary,
+              color: AppTokens.textPrimary,
               fontWeight: FontWeight.w800,
               fontSize: 15,
             ),
@@ -2096,7 +1916,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
               child: Text(
                 actionLabel ?? 'Lihat Semua',
                 style: const TextStyle(
-                  color: _DS.blue,
+                  color: AppTokens.blue,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
@@ -2119,8 +1939,8 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _DS.border),
-          boxShadow: _DS.softShadow,
+          border: Border.all(color: AppTokens.border),
+          boxShadow: AppTokens.softShadow,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2130,16 +1950,16 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
             Text(
               title,
               style: const TextStyle(
-                color: _DS.textSecondary,
+                color: AppTokens.textSecondary,
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
               ),
             ),
             const SizedBox(height: 4),
             Text(
-              _formatRupiah(amount),
+              AppTokens.formatRupiah(amount),
               style: const TextStyle(
-                color: _DS.textPrimary,
+                color: AppTokens.textPrimary,
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
               ),
@@ -2174,113 +1994,55 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
               height: 60,
               child: Row(
                 children: [
-                  _buildNavItem(
-                    0,
-                    Icons.home_rounded,
-                    Icons.home_outlined,
-                    'Beranda',
+                  _AnimatedNavItem(
+                    idx: 0,
+                    currentTab: _currentTab,
+                    activeIcon: Icons.home_rounded,
+                    inactiveIcon: Icons.home_outlined,
+                    label: 'Beranda',
+                    onTap: (idx) {
+                      HapticFeedback.selectionClick();
+                      setState(() => _currentTab = idx);
+                    },
                   ),
-                  _buildNavItem(
-                    1,
-                    Icons.receipt_long_rounded,
-                    Icons.receipt_long_outlined,
-                    'Pesanan',
+                  _AnimatedNavItem(
+                    idx: 1,
+                    currentTab: _currentTab,
+                    activeIcon: Icons.receipt_long_rounded,
+                    inactiveIcon: Icons.receipt_long_outlined,
+                    label: 'Pesanan',
                     badge: _todayAktif > 0 ? '$_todayAktif' : null,
+                    onTap: (idx) {
+                      HapticFeedback.selectionClick();
+                      setState(() => _currentTab = idx);
+                    },
                   ),
-                  _buildNavItem(
-                    2,
-                    Icons.people_alt_rounded,
-                    Icons.people_alt_outlined,
-                    'Pelanggan',
+                  _AnimatedNavItem(
+                    idx: 2,
+                    currentTab: _currentTab,
+                    activeIcon: Icons.people_alt_rounded,
+                    inactiveIcon: Icons.people_alt_outlined,
+                    label: 'Pelanggan',
+                    onTap: (idx) {
+                      HapticFeedback.selectionClick();
+                      setState(() => _currentTab = idx);
+                    },
                   ),
-                  _buildNavItem(
-                    3,
-                    Icons.bar_chart_rounded,
-                    Icons.bar_chart_outlined,
-                    'Kelola',
+                  _AnimatedNavItem(
+                    idx: 3,
+                    currentTab: _currentTab,
+                    activeIcon: Icons.bar_chart_rounded,
+                    inactiveIcon: Icons.bar_chart_outlined,
+                    label: 'Kelola',
+                    onTap: (idx) {
+                      HapticFeedback.selectionClick();
+                      setState(() => _currentTab = idx);
+                    },
                   ),
                 ],
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(
-    int idx,
-    IconData activeIcon,
-    IconData inactiveIcon,
-    String label, {
-    String? badge,
-  }) {
-    final active = _currentTab == idx;
-    return Expanded(
-      flex: 2,
-      child: GestureDetector(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          setState(() => _currentTab = idx);
-        },
-        behavior: HitTestBehavior.opaque,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: active ? _DS.sky : Colors.transparent,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Icon(
-                    active ? activeIcon : inactiveIcon,
-                    color: active ? _DS.blue : _DS.textHint,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-                    color: active ? _DS.blue : _DS.textHint,
-                  ),
-                ),
-              ],
-            ),
-            if (badge != null)
-              Positioned(
-                top: 4,
-                right: 14,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 5,
-                    vertical: 1,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade500,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    badge,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ),
-          ],
         ),
       ),
     );
@@ -2305,21 +2067,527 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     if (hour < 18) return '🌅';
     return '🌙';
   }
-
-  String _formatRupiah(double amount) {
-    final str = amount.toStringAsFixed(0);
-    final buffer = StringBuffer();
-    for (int i = 0; i < str.length; i++) {
-      if (i > 0 && (str.length - i) % 3 == 0) buffer.write('.');
-      buffer.write(str[i]);
-    }
-    return 'Rp ${buffer.toString()}';
-  }
 }
 
 // ============================================================
-// WIDGET HELPER UI
+// WIDGET HELPER UI & MICRO-INTERACTIONS
 // ============================================================
+
+class _AnimatedNavItem extends StatefulWidget {
+  final int idx;
+  final int currentTab;
+  final IconData activeIcon;
+  final IconData inactiveIcon;
+  final String label;
+  final String? badge;
+  final ValueChanged<int> onTap;
+
+  const _AnimatedNavItem({
+    required this.idx,
+    required this.currentTab,
+    required this.activeIcon,
+    required this.inactiveIcon,
+    required this.label,
+    required this.onTap,
+    this.badge,
+  });
+
+  @override
+  State<_AnimatedNavItem> createState() => _AnimatedNavItemState();
+}
+
+class _AnimatedNavItemState extends State<_AnimatedNavItem> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = widget.currentTab == widget.idx;
+    return Expanded(
+      flex: 2,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => setState(() => _isPressed = true),
+        onTapUp: (_) {
+          setState(() => _isPressed = false);
+          widget.onTap(widget.idx);
+        },
+        onTapCancel: () => setState(() => _isPressed = false),
+        child: AnimatedScale(
+          scale: _isPressed ? 0.90 : 1.0,
+          duration: const Duration(milliseconds: 100),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: active ? AppTokens.sky : Colors.transparent,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Icon(
+                      active ? widget.activeIcon : widget.inactiveIcon,
+                      color: active ? AppTokens.blue : AppTokens.textHint,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    widget.label,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                      color: active ? AppTokens.blue : AppTokens.textHint,
+                    ),
+                  ),
+                ],
+              ),
+              if (widget.badge != null)
+                Positioned(
+                  top: 4,
+                  right: 14,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 1,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade500,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      widget.badge!,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnimatedPenjualanCard extends StatefulWidget {
+  final double totalPenjualan;
+  final VoidCallback onTap;
+
+  const _AnimatedPenjualanCard({
+    required this.totalPenjualan,
+    required this.onTap,
+  });
+
+  @override
+  State<_AnimatedPenjualanCard> createState() => _AnimatedPenjualanCardState();
+}
+
+class _AnimatedPenjualanCardState extends State<_AnimatedPenjualanCard> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedScale(
+        scale: _isPressed ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutCubic,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1565C0), Color(0xFF0D47A1)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: AppTokens.cardShadow,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.payments_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Penjualan Hari Ini',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  AppTokens.formatRupiah(widget.totalPenjualan),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnimatedPiutangCard extends StatefulWidget {
+  final double totalPiutang;
+  final VoidCallback onTap;
+
+  const _AnimatedPiutangCard({
+    required this.totalPiutang,
+    required this.onTap,
+  });
+
+  @override
+  State<_AnimatedPiutangCard> createState() => _AnimatedPiutangCardState();
+}
+
+class _AnimatedPiutangCardState extends State<_AnimatedPiutangCard> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedScale(
+        scale: _isPressed ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutCubic,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppTokens.border, width: 1.5),
+            boxShadow: AppTokens.cardShadow,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.account_balance_wallet_rounded,
+                    color: Colors.orange.shade700,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Piutang All-time',
+                  style: TextStyle(
+                    color: AppTokens.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  AppTokens.formatRupiah(widget.totalPiutang),
+                  style: TextStyle(
+                    color: Colors.orange.shade800,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PremiumOrderCard extends StatefulWidget {
+  final Map<String, dynamic> order;
+  final Function(Map<String, dynamic>, String) onUpdate;
+  final VoidCallback onTap;
+
+  const _PremiumOrderCard({
+    required this.order,
+    required this.onUpdate,
+    required this.onTap,
+  });
+
+  @override
+  State<_PremiumOrderCard> createState() => _PremiumOrderCardState();
+}
+
+class _PremiumOrderCardState extends State<_PremiumOrderCard> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = widget.order['status'] ?? 'diproses';
+    final nama = widget.order['customers']?['profiles']?['nama_lengkap'] ?? 'Umum';
+    final isPiutang = widget.order['is_piutang'] == true;
+    final cfg = _cfg(status, isPiutang);
+    final nextSt = _next(status, isPiutang);
+
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedScale(
+        scale: _isPressed ? 0.93 : 1.0,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutCubic,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTokens.border),
+            boxShadow: AppTokens.softShadow,
+          ),
+          child: IntrinsicHeight(
+            child: Row(
+              children: [
+                Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    color: cfg['color'],
+                    borderRadius: const BorderRadius.horizontal(
+                      left: Radius.circular(16),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: (cfg['color'] as Color).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  nama.toString().trim().isNotEmpty
+                                      ? nama.toString().trim()[0].toUpperCase()
+                                      : '?',
+                                  style: TextStyle(
+                                    color: cfg['color'],
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    nama,
+                                    style: const TextStyle(
+                                      color: AppTokens.textPrimary,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    widget.order['nomor_order'],
+                                    style: const TextStyle(
+                                      color: AppTokens.textSecondary,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: (cfg['color'] as Color).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                cfg['label'],
+                                style: TextStyle(
+                                  color: cfg['color'],
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Text(
+                              _fmt((widget.order['total_harga'] ?? 0).toDouble()),
+                              style: const TextStyle(
+                                color: AppTokens.textPrimary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 16,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                            if (isPiutang) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.shade50,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.red.shade200),
+                                ),
+                                child: Text(
+                                  'PIUTANG',
+                                  style: TextStyle(
+                                    color: Colors.red.shade600,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            const Spacer(),
+                            if (nextSt != null)
+                              GestureDetector(
+                                onTap: () {
+                                  HapticFeedback.selectionClick();
+                                  widget.onUpdate(widget.order, nextSt);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: cfg['color'],
+                                    borderRadius: BorderRadius.circular(10),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: (cfg['color'] as Color)
+                                            .withOpacity(0.3),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Text(
+                                    _nextLabel(status, isPiutang),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Map<String, dynamic> _cfg(String s, bool p) {
+    if (s == 'diproses')
+      return {'label': 'Diproses', 'color': AppTokens.statusDiproses};
+    if (s == 'selesai')
+      return {
+        'label': p ? 'Belum Lunas' : 'Selesai',
+        'color': p ? Colors.orange : AppTokens.statusSelesai,
+      };
+    if (s == 'dibayar_lunas')
+      return {'label': 'Lunas', 'color': AppTokens.statusSelesai};
+    return {'label': s, 'color': AppTokens.statusLunas};
+  }
+
+  String? _next(String s, bool p) {
+    if (s == 'diproses') return 'selesai';
+    if (s == 'selesai' && p) return 'dibayar_lunas';
+    return null;
+  }
+
+  String _nextLabel(String s, bool p) {
+    if (s == 'diproses') return 'Tandai Selesai';
+    if (s == 'selesai' && p) return 'Lunasi Piutang';
+    return '';
+  }
+
+  String _fmt(double a) {
+    return AppTokens.formatRupiah(a);
+  }
+}
 
 class _PayOption extends StatelessWidget {
   final String label;
@@ -2342,20 +2610,20 @@ class _PayOption extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected ? Colors.blue.withOpacity(0.05) : Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: selected ? Colors.blue : _DS.border),
+            border: Border.all(color: selected ? Colors.blue : AppTokens.border),
           ),
           child: Column(
             children: [
               Icon(
                 icon,
-                color: selected ? Colors.blue : _DS.textHint,
+                color: selected ? Colors.blue : AppTokens.textHint,
                 size: 22,
               ),
               const SizedBox(height: 4),
               Text(
                 label,
                 style: TextStyle(
-                  color: selected ? Colors.blue : _DS.textSecondary,
+                  color: selected ? Colors.blue : AppTokens.textSecondary,
                   fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                   fontSize: 13,
                 ),
@@ -2453,15 +2721,15 @@ class _StatusPill extends StatelessWidget {
 
   Map<String, dynamic> _cfg() {
     if (status == 'diproses')
-      return {'label': 'Diproses', 'color': _DS.statusDiproses};
+      return {'label': 'Diproses', 'color': AppTokens.statusDiproses};
     if (status == 'selesai')
       return {
         'label': isPiutang ? 'Belum Lunas' : 'Selesai',
-        'color': isPiutang ? Colors.orange : _DS.statusSelesai,
+        'color': isPiutang ? Colors.orange : AppTokens.statusSelesai,
       };
     if (status == 'dibayar_lunas')
-      return {'label': 'Lunas', 'color': _DS.statusSelesai};
-    return {'label': status, 'color': _DS.statusLunas};
+      return {'label': 'Lunas', 'color': AppTokens.statusSelesai};
+    return {'label': status, 'color': AppTokens.statusLunas};
   }
 }
 
@@ -2479,16 +2747,16 @@ class _EmptyState extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: const BoxDecoration(
-              color: _DS.sky,
+              color: AppTokens.sky,
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, size: 36, color: _DS.blue),
+            child: Icon(icon, size: 36, color: AppTokens.blue),
           ),
           const SizedBox(height: 16),
           Text(
             message,
             style: const TextStyle(
-              color: _DS.textPrimary,
+              color: AppTokens.textPrimary,
               fontWeight: FontWeight.w700,
               fontSize: 14,
             ),
@@ -2497,7 +2765,7 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               sub!,
-              style: const TextStyle(color: _DS.textSecondary, fontSize: 12),
+              style: const TextStyle(color: AppTokens.textSecondary, fontSize: 12),
               textAlign: TextAlign.center,
             ),
           ],
@@ -2506,10 +2774,6 @@ class _EmptyState extends StatelessWidget {
     );
   }
 }
-
-// ============================================================
-// KOMPONEN: PIUTANG BOTTOM SHEET
-// ============================================================
 
 class _PiutangBottomSheet extends StatefulWidget {
   final List<Map<String, dynamic>> allPiutangOrders;
@@ -2529,16 +2793,6 @@ class _PiutangBottomSheetState extends State<_PiutangBottomSheet> {
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
-  }
-
-  String _formatRupiah(double amount) {
-    final str = amount.toStringAsFixed(0);
-    final buffer = StringBuffer();
-    for (int i = 0; i < str.length; i++) {
-      if (i > 0 && (str.length - i) % 3 == 0) buffer.write('.');
-      buffer.write(str[i]);
-    }
-    return 'Rp ${buffer.toString()}';
   }
 
   @override
@@ -2564,7 +2818,7 @@ class _PiutangBottomSheetState extends State<_PiutangBottomSheet> {
     return Container(
       height: MediaQuery.of(context).size.height * 0.9,
       decoration: const BoxDecoration(
-        color: _DS.ground,
+        color: AppTokens.ground,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
@@ -2591,7 +2845,7 @@ class _PiutangBottomSheetState extends State<_PiutangBottomSheet> {
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
-                    color: _DS.textPrimary,
+                    color: AppTokens.textPrimary,
                   ),
                 ),
                 Container(
@@ -2633,16 +2887,16 @@ class _PiutangBottomSheetState extends State<_PiutangBottomSheet> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _DS.border),
+                border: Border.all(color: AppTokens.border),
               ),
               child: TextField(
                 controller: _searchCtrl,
                 decoration: const InputDecoration(
                   hintText: 'Cari nama pelanggan...',
-                  hintStyle: TextStyle(color: _DS.textHint, fontSize: 14),
+                  hintStyle: TextStyle(color: AppTokens.textHint, fontSize: 14),
                   prefixIcon: Icon(
                     Icons.search_rounded,
-                    color: _DS.textHint,
+                    color: AppTokens.textHint,
                     size: 20,
                   ),
                   border: InputBorder.none,
@@ -2661,8 +2915,8 @@ class _PiutangBottomSheetState extends State<_PiutangBottomSheet> {
             decoration: const BoxDecoration(
               color: Colors.white,
               border: Border(
-                top: BorderSide(color: _DS.border),
-                bottom: BorderSide(color: _DS.border),
+                top: BorderSide(color: AppTokens.border),
+                bottom: BorderSide(color: AppTokens.border),
               ),
             ),
             child: Row(
@@ -2674,14 +2928,14 @@ class _PiutangBottomSheetState extends State<_PiutangBottomSheet> {
                     const Text(
                       'Total Hutang (Pencarian)',
                       style: TextStyle(
-                        color: _DS.textSecondary,
+                        color: AppTokens.textSecondary,
                         fontWeight: FontWeight.w600,
                         fontSize: 12,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      _formatRupiah(totalUtangTertampil.toDouble()),
+                      AppTokens.formatRupiah(totalUtangTertampil.toDouble()),
                       style: const TextStyle(
                         color: Colors.orange,
                         fontWeight: FontWeight.w800,
@@ -2716,7 +2970,7 @@ class _PiutangBottomSheetState extends State<_PiutangBottomSheet> {
                 ? const Center(
                     child: Text(
                       'Tidak ada pelanggan berhutang',
-                      style: TextStyle(color: _DS.textHint),
+                      style: TextStyle(color: AppTokens.textHint),
                     ),
                   )
                 : ListView.builder(
@@ -2743,8 +2997,8 @@ class _PiutangBottomSheetState extends State<_PiutangBottomSheet> {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: _DS.border),
-                          boxShadow: _DS.softShadow,
+                          border: Border.all(color: AppTokens.border),
+                          boxShadow: AppTokens.softShadow,
                         ),
                         child: Theme(
                           data: Theme.of(
@@ -2778,11 +3032,11 @@ class _PiutangBottomSheetState extends State<_PiutangBottomSheet> {
                               style: const TextStyle(
                                 fontWeight: FontWeight.w800,
                                 fontSize: 15,
-                                color: _DS.textPrimary,
+                                color: AppTokens.textPrimary,
                               ),
                             ),
                             subtitle: Text(
-                              '${orders.length} Nota Belum Lunas • ${_formatRupiah(totalUtangCustomer.toDouble())}',
+                              '${orders.length} Nota Belum Lunas • ${AppTokens.formatRupiah(totalUtangCustomer.toDouble())}',
                               style: TextStyle(
                                 color: Colors.orange.shade600,
                                 fontSize: 12,
@@ -2808,9 +3062,9 @@ class _PiutangBottomSheetState extends State<_PiutangBottomSheet> {
                                   margin: const EdgeInsets.only(top: 8),
                                   padding: const EdgeInsets.all(14),
                                   decoration: BoxDecoration(
-                                    color: _DS.ground,
+                                    color: AppTokens.ground,
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: _DS.border),
+                                    border: Border.all(color: AppTokens.border),
                                   ),
                                   child: Row(
                                     children: [
@@ -2825,12 +3079,12 @@ class _PiutangBottomSheetState extends State<_PiutangBottomSheet> {
                                               style: const TextStyle(
                                                 fontWeight: FontWeight.w700,
                                                 fontSize: 14,
-                                                color: _DS.textPrimary,
+                                                color: AppTokens.textPrimary,
                                               ),
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              _formatRupiah(total),
+                                              AppTokens.formatRupiah(total),
                                               style: TextStyle(
                                                 color: Colors.orange.shade700,
                                                 fontWeight: FontWeight.w800,
@@ -2882,16 +3136,12 @@ class _PiutangBottomSheetState extends State<_PiutangBottomSheet> {
   }
 }
 
-// ============================================================
-// TAB: PESANAN
-// ============================================================
-
 class _PesananTab extends StatefulWidget {
   final List<Map<String, dynamic>> orders;
   final bool isLoading;
   final bool isLoadingMore;
   final bool hasMore;
-  final bool isSearching; // <-- [UPDATE UX]: Menangkap status gaib
+  final bool isSearching;
   final VoidCallback onLoadMore;
   final Future<void> Function({bool showFullLoading}) onRefresh;
   final Function(Map<String, dynamic>, String) onUpdate;
@@ -2968,13 +3218,13 @@ class _PesananTabState extends State<_PesananTab>
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: _DS.navy,
+      color: AppTokens.navy,
       child: SafeArea(
         bottom: false,
         child: Column(
           children: [
             Container(
-              decoration: const BoxDecoration(color: _DS.navy),
+              decoration: const BoxDecoration(color: AppTokens.navy),
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -3067,7 +3317,6 @@ class _PesananTabState extends State<_PesananTab>
                           vertical: 12,
                         ),
                         isDense: true,
-                        // [UPDATE UX]: Indikator Gaib di sudut kanan kotak pencarian
                         suffixIcon: widget.isSearching
                             ? const Padding(
                                 padding: EdgeInsets.all(12),
@@ -3160,7 +3409,7 @@ class _PesananTabState extends State<_PesananTab>
             ),
             Expanded(
               child: Container(
-                color: _DS.ground,
+                color: AppTokens.ground,
                 child: NotificationListener<ScrollNotification>(
                   onNotification: (ScrollNotification scrollInfo) {
                     if (!widget.isLoadingMore &&
@@ -3198,8 +3447,8 @@ class _PesananTabState extends State<_PesananTab>
                       return RefreshIndicator(
                         onRefresh: () =>
                             widget.onRefresh(showFullLoading: false),
-                        color: _DS.blue,
-                        backgroundColor: _DS.surface,
+                        color: AppTokens.blue,
+                        backgroundColor: AppTokens.surface,
                         child: ListView.builder(
                           physics: const AlwaysScrollableScrollPhysics(
                             parent: BouncingScrollPhysics(),
@@ -3215,7 +3464,7 @@ class _PesananTabState extends State<_PesananTab>
                                 child: Center(
                                   child: widget.isLoadingMore
                                       ? const _ModernLoadingDots(
-                                          color: _DS.blue,
+                                          color: AppTokens.blue,
                                           size: 10,
                                         )
                                       : const SizedBox(),
@@ -3245,241 +3494,6 @@ class _PesananTabState extends State<_PesananTab>
   }
 }
 
-class _PremiumOrderCard extends StatelessWidget {
-  final Map<String, dynamic> order;
-  final Function(Map<String, dynamic>, String) onUpdate;
-  final VoidCallback onTap;
-
-  const _PremiumOrderCard({
-    required this.order,
-    required this.onUpdate,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final status = order['status'] ?? 'diproses';
-    final nama = order['customers']?['profiles']?['nama_lengkap'] ?? 'Umum';
-    final isPiutang = order['is_piutang'] == true;
-    final cfg = _cfg(status, isPiutang);
-    final nextSt = _next(status, isPiutang);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _DS.border),
-          boxShadow: _DS.softShadow,
-        ),
-        child: IntrinsicHeight(
-          child: Row(
-            children: [
-              Container(
-                width: 4,
-                decoration: BoxDecoration(
-                  color: cfg['color'],
-                  borderRadius: const BorderRadius.horizontal(
-                    left: Radius.circular(16),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 38,
-                            height: 38,
-                            decoration: BoxDecoration(
-                              color: (cfg['color'] as Color).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Center(
-                              child: Text(
-                                nama.toString().trim().isNotEmpty
-                                    ? nama.toString().trim()[0].toUpperCase()
-                                    : '?',
-                                style: TextStyle(
-                                  color: cfg['color'],
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  nama,
-                                  style: const TextStyle(
-                                    color: _DS.textPrimary,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  order['nomor_order'],
-                                  style: const TextStyle(
-                                    color: _DS.textSecondary,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: (cfg['color'] as Color).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              cfg['label'],
-                              style: TextStyle(
-                                color: cfg['color'],
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Text(
-                            _fmt((order['total_harga'] ?? 0).toDouble()),
-                            style: const TextStyle(
-                              color: _DS.textPrimary,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 16,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          if (isPiutang) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.red.shade50,
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: Colors.red.shade200),
-                              ),
-                              child: Text(
-                                'PIUTANG',
-                                style: TextStyle(
-                                  color: Colors.red.shade600,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                          ],
-                          const Spacer(),
-                          if (nextSt != null)
-                            GestureDetector(
-                              onTap: () {
-                                HapticFeedback.selectionClick();
-                                onUpdate(order, nextSt);
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: cfg['color'],
-                                  borderRadius: BorderRadius.circular(10),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: (cfg['color'] as Color)
-                                          .withOpacity(0.3),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 3),
-                                    ),
-                                  ],
-                                ),
-                                child: Text(
-                                  _nextLabel(status, isPiutang),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Map<String, dynamic> _cfg(String s, bool p) {
-    if (s == 'diproses')
-      return {'label': 'Diproses', 'color': _DS.statusDiproses};
-    if (s == 'selesai')
-      return {
-        'label': p ? 'Belum Lunas' : 'Selesai',
-        'color': p ? Colors.orange : _DS.statusSelesai,
-      };
-    if (s == 'dibayar_lunas')
-      return {'label': 'Lunas', 'color': _DS.statusSelesai};
-    return {'label': s, 'color': _DS.statusLunas};
-  }
-
-  String? _next(String s, bool p) {
-    if (s == 'diproses') return 'selesai';
-    if (s == 'selesai' && p) return 'dibayar_lunas';
-    return null;
-  }
-
-  String _nextLabel(String s, bool p) {
-    if (s == 'diproses') return 'Tandai Selesai';
-    if (s == 'selesai' && p) return 'Lunasi Piutang';
-    return '';
-  }
-
-  String _fmt(double a) {
-    final str = a.toStringAsFixed(0);
-    final b = StringBuffer();
-    for (int i = 0; i < str.length; i++) {
-      if (i > 0 && (str.length - i) % 3 == 0) b.write('.');
-      b.write(str[i]);
-    }
-    return 'Rp ${b.toString()}';
-  }
-}
-
-// ============================================================
-// WIDGET: SKELETON SHIMMER (LOADING AWAL KARTU)
-// ============================================================
 class _SkeletonOrderCard extends StatefulWidget {
   const _SkeletonOrderCard();
   @override
@@ -3512,8 +3526,8 @@ class _SkeletonOrderCardState extends State<_SkeletonOrderCard>
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _DS.border),
-          boxShadow: _DS.softShadow,
+          border: Border.all(color: AppTokens.border),
+          boxShadow: AppTokens.softShadow,
         ),
         child: IntrinsicHeight(
           child: Row(
@@ -3521,7 +3535,7 @@ class _SkeletonOrderCardState extends State<_SkeletonOrderCard>
               Container(
                 width: 4,
                 decoration: const BoxDecoration(
-                  color: _DS.ground,
+                  color: AppTokens.ground,
                   borderRadius: BorderRadius.horizontal(
                     left: Radius.circular(16),
                   ),
@@ -3539,7 +3553,7 @@ class _SkeletonOrderCardState extends State<_SkeletonOrderCard>
                             width: 38,
                             height: 38,
                             decoration: BoxDecoration(
-                              color: _DS.ground,
+                              color: AppTokens.ground,
                               borderRadius: BorderRadius.circular(10),
                             ),
                           ),
@@ -3551,13 +3565,13 @@ class _SkeletonOrderCardState extends State<_SkeletonOrderCard>
                                 Container(
                                   height: 14,
                                   width: double.infinity,
-                                  color: _DS.ground,
+                                  color: AppTokens.ground,
                                 ),
                                 const SizedBox(height: 4),
                                 Container(
                                   height: 10,
                                   width: 100,
-                                  color: _DS.ground,
+                                  color: AppTokens.ground,
                                 ),
                               ],
                             ),
@@ -3565,7 +3579,7 @@ class _SkeletonOrderCardState extends State<_SkeletonOrderCard>
                         ],
                       ),
                       const SizedBox(height: 16),
-                      Container(height: 18, width: 120, color: _DS.ground),
+                      Container(height: 18, width: 120, color: AppTokens.ground),
                     ],
                   ),
                 ),
@@ -3578,15 +3592,12 @@ class _SkeletonOrderCardState extends State<_SkeletonOrderCard>
   }
 }
 
-// ============================================================
-// WIDGET: MODERN 3-DOTS LOADING (PENGGANTI SPINNER BULAT)
-// ============================================================
 class _ModernLoadingDots extends StatefulWidget {
   final Color color;
   final double size;
   const _ModernLoadingDots({
-    this.color = const Color(0xFF1565C0),
-    this.size = 12.0,
+    required this.color,
+    required this.size,
   });
 
   @override

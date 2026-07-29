@@ -1,5 +1,5 @@
-import 'dart:ui';
 import 'dart:math' as math;
+import 'dart:ui';
 import 'dart:async'; // Untuk Timer AJAX (Debounce)
 
 import 'package:flutter/material.dart';
@@ -7,40 +7,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 
-// ============================================================
-// DESIGN SYSTEM - KONSISTEN
-// ============================================================
-class _DS {
-  static const navy = Color(0xFF0F2557);
-  static const blue = Color(0xFF1565C0);
-  static const sky = Color(0xFFE8F0FE);
-  static const ground = Color(0xFFEAF0F6);
-  static const surface = Colors.white;
-  static const border = Color(0xFFD2DCE8);
-  static const textPrimary = Color(0xFF0F2557);
-  static const textSecondary = Color(0xFF6B7A99);
-  static const textHint = Color(0xFFB0BAD1);
-
-  static List<BoxShadow> cardShadow = [
-    BoxShadow(
-      color: const Color(0xFF0F2557).withOpacity(0.09),
-      blurRadius: 16,
-      offset: const Offset(0, 4),
-    ),
-    BoxShadow(
-      color: const Color(0xFF0F2557).withOpacity(0.05),
-      blurRadius: 6,
-      offset: const Offset(0, 2),
-    ),
-  ];
-  static List<BoxShadow> softShadow = [
-    BoxShadow(
-      color: const Color(0xFF0F2557).withOpacity(0.06),
-      blurRadius: 6,
-      offset: const Offset(0, 2),
-    ),
-  ];
-}
+// [UPDATE]: Hapus class _DS dan gunakan AppTokens terpusat
+// Ganti path ini sesuai dengan lokasi AppTokens di project Anda
+import 'package:laundry_one/core/tokens/app_tokens.dart';
 
 class PelangganTab extends StatefulWidget {
   const PelangganTab({super.key});
@@ -80,6 +49,7 @@ class _PelangganTabState extends State<PelangganTab> {
     super.dispose();
   }
 
+  // [LOGIKA ASLI DIPERTAHANKAN]: Tetap 500ms sesuai instruksi Anda
   void _onSearchChanged(String val) {
     if (_searchDebounce?.isActive ?? false) _searchDebounce!.cancel();
     setState(() => _isSearching = true);
@@ -98,14 +68,19 @@ class _PelangganTabState extends State<PelangganTab> {
       barrierDismissible: false,
       builder: (ctx) => Dialog(
         backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTokens.radius20),
+        ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppTokens.space24,
+            vertical: AppTokens.space32,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(AppTokens.space16),
                 decoration: BoxDecoration(
                   color: isSuccess ? Colors.green.shade50 : Colors.red.shade50,
                   shape: BoxShape.circle,
@@ -116,32 +91,35 @@ class _PelangganTabState extends State<PelangganTab> {
                   size: 48,
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppTokens.space24),
               Text(
                 title,
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
-                  color: _DS.textPrimary,
+                  color: AppTokens.textPrimary,
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppTokens.space8),
               Text(
                 message,
-                style: const TextStyle(color: _DS.textSecondary, fontSize: 13),
+                style: const TextStyle(
+                  color: AppTokens.textSecondary,
+                  fontSize: 13,
+                ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: AppTokens.space32),
               SizedBox(
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _DS.blue,
+                    backgroundColor: AppTokens.blue,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppTokens.radius12),
                     ),
                     elevation: 0,
                   ),
@@ -181,14 +159,16 @@ class _PelangganTabState extends State<PelangganTab> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: _DS.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: AppTokens.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTokens.radius20),
+        ),
         title: const Text(
           'Edit Nama Pelanggan',
           style: TextStyle(
             fontWeight: FontWeight.w800,
             fontSize: 18,
-            color: _DS.textPrimary,
+            color: AppTokens.textPrimary,
           ),
         ),
         content: Form(
@@ -202,26 +182,29 @@ class _PelangganTabState extends State<PelangganTab> {
                 decoration: InputDecoration(
                   labelText: 'Nama Lengkap',
                   labelStyle: const TextStyle(
-                    color: _DS.textHint,
+                    color: AppTokens.textHint,
                     fontSize: 13,
                   ),
                   filled: true,
-                  fillColor: _DS.ground,
+                  fillColor: AppTokens.ground,
                   prefixIcon: const Icon(
                     Icons.badge_outlined,
-                    color: _DS.textHint,
+                    color: AppTokens.textHint,
                     size: 20,
                   ),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppTokens.radius12),
                     borderSide: BorderSide.none,
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: _DS.blue, width: 1.5),
+                    borderRadius: BorderRadius.circular(AppTokens.radius12),
+                    borderSide: const BorderSide(
+                      color: AppTokens.blue,
+                      width: 1.5,
+                    ),
                   ),
                   contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
+                    horizontal: AppTokens.space16,
                     vertical: 14,
                   ),
                 ),
@@ -237,12 +220,12 @@ class _PelangganTabState extends State<PelangganTab> {
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text(
               'Batal',
-              style: TextStyle(color: _DS.textSecondary),
+              style: TextStyle(color: AppTokens.textSecondary),
             ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: _DS.blue,
+              backgroundColor: AppTokens.blue,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
@@ -390,7 +373,7 @@ class _PelangganTabState extends State<PelangganTab> {
         customerId: customerId,
         namaLengkap: namaLengkap,
         poinSaldoAwal: poinSaldo,
-        isAdmin: _isAdmin, // DILEMPAR AGAR TOMBOL BATAL BISA BACA ROLE
+        isAdmin: _isAdmin,
         onPoinBerubah: () => _loadCustomers(showFullLoading: false),
       ),
     );
@@ -401,14 +384,16 @@ class _PelangganTabState extends State<PelangganTab> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: _DS.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: AppTokens.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTokens.radius20),
+        ),
         title: const Text(
           'Reset Sandi Pelanggan',
           style: TextStyle(
             fontWeight: FontWeight.w800,
             fontSize: 18,
-            color: _DS.textPrimary,
+            color: AppTokens.textPrimary,
           ),
         ),
         content: Column(
@@ -416,32 +401,41 @@ class _PelangganTabState extends State<PelangganTab> {
           children: [
             Text(
               'Masukkan kata sandi baru untuk $namaPelanggan (minimal 6 karakter).',
-              style: const TextStyle(color: _DS.textSecondary, fontSize: 13),
+              style: const TextStyle(
+                color: AppTokens.textSecondary,
+                fontSize: 13,
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppTokens.space16),
             TextField(
               controller: pwdCtrl,
               obscureText: true,
               decoration: InputDecoration(
                 labelText: 'Sandi Baru',
-                labelStyle: const TextStyle(color: _DS.textHint, fontSize: 13),
+                labelStyle: const TextStyle(
+                  color: AppTokens.textHint,
+                  fontSize: 13,
+                ),
                 filled: true,
-                fillColor: _DS.ground,
+                fillColor: AppTokens.ground,
                 prefixIcon: const Icon(
                   Icons.lock_reset_rounded,
-                  color: _DS.textHint,
+                  color: AppTokens.textHint,
                   size: 20,
                 ),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppTokens.radius12),
                   borderSide: BorderSide.none,
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: _DS.blue, width: 1.5),
+                  borderRadius: BorderRadius.circular(AppTokens.radius12),
+                  borderSide: const BorderSide(
+                    color: AppTokens.blue,
+                    width: 1.5,
+                  ),
                 ),
                 contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
+                  horizontal: AppTokens.space16,
                   vertical: 14,
                 ),
               ),
@@ -453,12 +447,12 @@ class _PelangganTabState extends State<PelangganTab> {
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text(
               'Batal',
-              style: TextStyle(color: _DS.textSecondary),
+              style: TextStyle(color: AppTokens.textSecondary),
             ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: _DS.blue,
+              backgroundColor: AppTokens.blue,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
@@ -508,7 +502,9 @@ class _PelangganTabState extends State<PelangganTab> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTokens.radius16),
+        ),
         title: const Row(
           children: [
             Icon(Icons.warning_amber_rounded, color: Colors.red),
@@ -577,7 +573,9 @@ class _PelangganTabState extends State<PelangganTab> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTokens.radius16),
+        ),
         title: const Row(
           children: [
             Icon(Icons.check_circle_outline_rounded, color: Colors.green),
@@ -655,14 +653,16 @@ class _PelangganTabState extends State<PelangganTab> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => Container(
           padding: EdgeInsets.fromLTRB(
-            24,
-            16,
-            24,
-            MediaQuery.of(ctx).viewInsets.bottom + 32,
+            AppTokens.space24,
+            AppTokens.space16,
+            AppTokens.space24,
+            MediaQuery.of(ctx).viewInsets.bottom + AppTokens.space32,
           ),
           decoration: const BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(AppTokens.radius28),
+            ),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -684,15 +684,18 @@ class _PelangganTabState extends State<PelangganTab> {
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
-                  color: _DS.textPrimary,
+                  color: AppTokens.textPrimary,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 'Poin pelanggan saat ini: $currentPoin',
-                style: const TextStyle(color: _DS.textSecondary, fontSize: 14),
+                style: const TextStyle(
+                  color: AppTokens.textSecondary,
+                  fontSize: 14,
+                ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppTokens.space24),
               Row(
                 children: [
                   Expanded(
@@ -708,7 +711,9 @@ class _PelangganTabState extends State<PelangganTab> {
                               ? Colors.green.shade50
                               : Colors.white,
                           border: Border.all(
-                            color: tipeAdjust == 1 ? Colors.green : _DS.border,
+                            color: tipeAdjust == 1
+                                ? Colors.green
+                                : AppTokens.border,
                           ),
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -718,7 +723,7 @@ class _PelangganTabState extends State<PelangganTab> {
                             style: TextStyle(
                               color: tipeAdjust == 1
                                   ? Colors.green.shade700
-                                  : _DS.textSecondary,
+                                  : AppTokens.textSecondary,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -726,7 +731,7 @@ class _PelangganTabState extends State<PelangganTab> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: AppTokens.space12),
                   Expanded(
                     child: GestureDetector(
                       onTap: () {
@@ -740,7 +745,9 @@ class _PelangganTabState extends State<PelangganTab> {
                               ? Colors.red.shade50
                               : Colors.white,
                           border: Border.all(
-                            color: tipeAdjust == -1 ? Colors.red : _DS.border,
+                            color: tipeAdjust == -1
+                                ? Colors.red
+                                : AppTokens.border,
                           ),
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -750,7 +757,7 @@ class _PelangganTabState extends State<PelangganTab> {
                             style: TextStyle(
                               color: tipeAdjust == -1
                                   ? Colors.red.shade700
-                                  : _DS.textSecondary,
+                                  : AppTokens.textSecondary,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -760,7 +767,7 @@ class _PelangganTabState extends State<PelangganTab> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppTokens.space16),
               TextField(
                 controller: amtCtrl,
                 keyboardType: TextInputType.number,
@@ -772,7 +779,7 @@ class _PelangganTabState extends State<PelangganTab> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppTokens.space16),
               TextField(
                 controller: noteCtrl,
                 decoration: InputDecoration(
@@ -783,13 +790,13 @@ class _PelangganTabState extends State<PelangganTab> {
                   ),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: AppTokens.space32),
               SizedBox(
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _DS.blue,
+                    backgroundColor: AppTokens.blue,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
@@ -887,13 +894,13 @@ class _PelangganTabState extends State<PelangganTab> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _DS.navy,
+      backgroundColor: AppTokens.navy,
       appBar: AppBar(
         title: const Text(
           'Data Pelanggan',
           style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
         ),
-        backgroundColor: _DS.navy,
+        backgroundColor: AppTokens.navy,
         foregroundColor: Colors.white,
         elevation: 0,
       ),
@@ -902,8 +909,13 @@ class _PelangganTabState extends State<PelangganTab> {
           Column(
             children: [
               Container(
-                decoration: const BoxDecoration(color: _DS.navy),
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                decoration: const BoxDecoration(color: AppTokens.navy),
+                padding: const EdgeInsets.fromLTRB(
+                  AppTokens.space20,
+                  AppTokens.space20,
+                  AppTokens.space20,
+                  AppTokens.space16,
+                ),
                 child: Container(
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.1),
@@ -925,7 +937,7 @@ class _PelangganTabState extends State<PelangganTab> {
                       ),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
+                        horizontal: AppTokens.space16,
                         vertical: 14,
                       ),
                       suffixIcon: _isSearching
@@ -960,7 +972,12 @@ class _PelangganTabState extends State<PelangganTab> {
 
               if (_isAdmin)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppTokens.space20,
+                    0,
+                    AppTokens.space20,
+                    AppTokens.space16,
+                  ),
                   child: Row(
                     children: [
                       Expanded(
@@ -975,7 +992,7 @@ class _PelangganTabState extends State<PelangganTab> {
                             padding: const EdgeInsets.symmetric(vertical: 10),
                             decoration: BoxDecoration(
                               color: !_showNonActive
-                                  ? Colors.white
+                                  ? AppTokens.surface
                                   : Colors.white.withOpacity(0.1),
                               borderRadius: const BorderRadius.horizontal(
                                 left: Radius.circular(10),
@@ -986,7 +1003,7 @@ class _PelangganTabState extends State<PelangganTab> {
                                 'Aktif',
                                 style: TextStyle(
                                   color: !_showNonActive
-                                      ? _DS.blue
+                                      ? AppTokens.blue
                                       : Colors.white.withOpacity(0.7),
                                   fontWeight: FontWeight.w700,
                                   fontSize: 13,
@@ -1008,7 +1025,7 @@ class _PelangganTabState extends State<PelangganTab> {
                             padding: const EdgeInsets.symmetric(vertical: 10),
                             decoration: BoxDecoration(
                               color: _showNonActive
-                                  ? Colors.white
+                                  ? AppTokens.surface
                                   : Colors.white.withOpacity(0.1),
                               borderRadius: const BorderRadius.horizontal(
                                 right: Radius.circular(10),
@@ -1019,7 +1036,7 @@ class _PelangganTabState extends State<PelangganTab> {
                                 'Nonaktif',
                                 style: TextStyle(
                                   color: _showNonActive
-                                      ? _DS.blue
+                                      ? AppTokens.blue
                                       : Colors.white.withOpacity(0.7),
                                   fontWeight: FontWeight.w700,
                                   fontSize: 13,
@@ -1035,11 +1052,10 @@ class _PelangganTabState extends State<PelangganTab> {
 
               Expanded(
                 child: Container(
-                  color: _DS.ground,
+                  color: AppTokens.ground,
+                  // [UPDATE DESAIN]: Menggunakan Skeleton Shimmer yang halus saat memuat data pertama kali
                   child: _isLoading
-                      ? const Center(
-                          child: _ModernLoadingDots(color: _DS.blue, size: 14),
-                        )
+                      ? const _CustomerSkeletonShimmer()
                       : NotificationListener<ScrollNotification>(
                           onNotification: (ScrollNotification scrollInfo) {
                             if (!_isLoadingMore &&
@@ -1053,338 +1069,118 @@ class _PelangganTabState extends State<PelangganTab> {
                           child: RefreshIndicator(
                             onRefresh: () =>
                                 _loadCustomers(showFullLoading: false),
-                            color: _DS.blue,
-                            backgroundColor: _DS.surface,
+                            color: AppTokens.blue,
+                            backgroundColor: AppTokens.surface,
                             child: _allCustomers.isEmpty
                                 ? ListView(
                                     physics:
                                         const AlwaysScrollableScrollPhysics(),
-                                    children: [
+                                    children: const [
                                       SizedBox(
                                         height: 300,
                                         child: Center(
                                           child: Text(
                                             'Pelanggan tidak ditemukan.',
                                             style: TextStyle(
-                                              color: _DS.textHint,
+                                              color: AppTokens.textHint,
                                             ),
                                           ),
                                         ),
                                       ),
                                     ],
                                   )
-                                : ListView.builder(
-                                    physics:
-                                        const AlwaysScrollableScrollPhysics(
-                                          parent: BouncingScrollPhysics(),
-                                        ),
-                                    padding: const EdgeInsets.fromLTRB(
-                                      20,
-                                      20,
-                                      20,
-                                      100,
-                                    ),
-                                    itemCount:
-                                        _allCustomers.length +
-                                        (_hasMore ? 1 : 0),
-                                    itemBuilder: (context, i) {
-                                      if (i == _allCustomers.length)
-                                        return Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            vertical: 20,
+                                : RepaintBoundary(
+                                    child: ListView.builder(
+                                      physics:
+                                          const AlwaysScrollableScrollPhysics(
+                                            parent: BouncingScrollPhysics(),
                                           ),
-                                          child: Center(
-                                            child: _isLoadingMore
-                                                ? const _ModernLoadingDots(
-                                                    color: _DS.blue,
-                                                    size: 10,
-                                                  )
-                                                : const SizedBox(),
-                                          ),
-                                        );
-
-                                      final c = _allCustomers[i];
-                                      final extracted = _extractCustData(
-                                        c['customers'],
-                                      );
-                                      final poin = extracted['poin'];
-                                      final custId = extracted['customerId'];
-
-                                      return Container(
-                                        margin: const EdgeInsets.only(
-                                          bottom: 12,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: _DS.surface,
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                          border: Border.all(
-                                            color: _DS.border,
-                                            width: 1.5,
-                                          ),
-                                          boxShadow: _DS.cardShadow,
-                                        ),
-                                        child: ListTile(
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                horizontal: 16,
-                                                vertical: 8,
-                                              ),
-                                          leading: Container(
-                                            width: 44,
-                                            height: 44,
-                                            decoration: BoxDecoration(
-                                              color: _DS.sky,
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
+                                      padding: const EdgeInsets.fromLTRB(
+                                        AppTokens.space20,
+                                        AppTokens.space20,
+                                        AppTokens.space20,
+                                        100,
+                                      ),
+                                      itemCount:
+                                          _allCustomers.length +
+                                          (_hasMore ? 1 : 0),
+                                      itemBuilder: (context, i) {
+                                        if (i == _allCustomers.length) {
+                                          return Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: AppTokens.space20,
                                             ),
                                             child: Center(
-                                              child: Text(
-                                                c['nama_lengkap']?[0]
-                                                        ?.toUpperCase() ??
-                                                    '?',
-                                                style: const TextStyle(
-                                                  color: _DS.blue,
-                                                  fontWeight: FontWeight.w800,
-                                                  fontSize: 16,
-                                                ),
-                                              ),
+                                              child: _isLoadingMore
+                                                  ? const _ModernLoadingDots(
+                                                      color: AppTokens.blue,
+                                                      size: 10,
+                                                    )
+                                                  : const SizedBox(),
                                             ),
-                                          ),
-                                          title: Text(
-                                            c['nama_lengkap'] ?? '-',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w800,
-                                              fontSize: 15,
-                                              color: _DS.textPrimary,
-                                            ),
-                                          ),
-                                          subtitle: Text(
-                                            c['nomor_hp'] ?? '-',
-                                            style: const TextStyle(
-                                              color: _DS.textSecondary,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                          trailing: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 10,
-                                                      vertical: 6,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.amber.shade50,
-                                                  borderRadius:
-                                                      BorderRadius.circular(10),
-                                                ),
-                                                child: Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    Icon(
-                                                      Icons.stars_rounded,
-                                                      color:
-                                                          Colors.amber.shade600,
-                                                      size: 16,
-                                                    ),
-                                                    const SizedBox(width: 4),
-                                                    Text(
-                                                      '$poin',
-                                                      style: TextStyle(
-                                                        color: Colors
-                                                            .amber
-                                                            .shade900,
-                                                        fontWeight:
-                                                            FontWeight.w800,
-                                                        fontSize: 14,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                              if (_isAdmin) ...[
-                                                const SizedBox(width: 4),
-                                                PopupMenuButton<String>(
-                                                  icon: const Icon(
-                                                    Icons.more_vert_rounded,
-                                                    color: _DS.textHint,
-                                                  ),
-                                                  onSelected: (val) {
-                                                    if (val == 'edit_nama') {
-                                                      _editNamaPelanggan(
-                                                        c['id'],
-                                                        c['nama_lengkap'] ??
-                                                            'Pelanggan',
-                                                      );
-                                                    } else if (val ==
-                                                        'edit_poin') {
-                                                      if (custId != null)
-                                                        _showAdjustPointsSheet(
-                                                          custId,
-                                                          c['nama_lengkap'] ??
-                                                              'Pelanggan',
-                                                          poin,
-                                                        );
-                                                      else
-                                                        _showCustomDialog(
-                                                          title: 'Gagal',
-                                                          message:
-                                                              'Data pelanggan belum lengkap (Dompet Poin kosong).',
-                                                          isSuccess: false,
-                                                        );
-                                                    } else if (val ==
-                                                        'reset_sandi') {
-                                                      _resetPassword(
-                                                        c['id'],
-                                                        c['nama_lengkap'] ??
-                                                            'Pelanggan',
-                                                      );
-                                                    } else if (val == 'hapus') {
-                                                      _hapusPelanggan(
-                                                        c['id'],
-                                                        c['nama_lengkap'] ??
-                                                            'Pelanggan',
-                                                      );
-                                                    } else if (val ==
-                                                        'aktifkan') {
-                                                      _aktifkanPelanggan(
-                                                        c['id'],
-                                                        c['nama_lengkap'] ??
-                                                            'Pelanggan',
-                                                      );
-                                                    }
-                                                  },
-                                                  itemBuilder: (context) =>
-                                                      _showNonActive
-                                                      ? [
-                                                          const PopupMenuItem(
-                                                            value: 'aktifkan',
-                                                            child: Row(
-                                                              children: [
-                                                                Icon(
-                                                                  Icons
-                                                                      .check_circle_outline_rounded,
-                                                                  color: Colors
-                                                                      .green,
-                                                                  size: 20,
-                                                                ),
-                                                                SizedBox(
-                                                                  width: 8,
-                                                                ),
-                                                                Text(
-                                                                  'Aktifkan Kembali',
-                                                                  style: TextStyle(
-                                                                    color: Colors
-                                                                        .green,
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                        ]
-                                                      : [
-                                                          const PopupMenuItem(
-                                                            value: 'edit_nama',
-                                                            child: Row(
-                                                              children: [
-                                                                Icon(
-                                                                  Icons
-                                                                      .edit_rounded,
-                                                                  color: _DS
-                                                                      .textPrimary,
-                                                                  size: 20,
-                                                                ),
-                                                                SizedBox(
-                                                                  width: 8,
-                                                                ),
-                                                                Text(
-                                                                  'Edit Nama Pelanggan',
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                          const PopupMenuItem(
-                                                            value: 'edit_poin',
-                                                            child: Row(
-                                                              children: [
-                                                                Icon(
-                                                                  Icons
-                                                                      .edit_note_rounded,
-                                                                  color:
-                                                                      _DS.blue,
-                                                                  size: 20,
-                                                                ),
-                                                                SizedBox(
-                                                                  width: 8,
-                                                                ),
-                                                                Text(
-                                                                  'Koreksi Poin',
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                          const PopupMenuItem(
-                                                            value:
-                                                                'reset_sandi',
-                                                            child: Row(
-                                                              children: [
-                                                                Icon(
-                                                                  Icons
-                                                                      .lock_reset_rounded,
-                                                                  color: Colors
-                                                                      .orange,
-                                                                  size: 20,
-                                                                ),
-                                                                SizedBox(
-                                                                  width: 8,
-                                                                ),
-                                                                Text(
-                                                                  'Reset Sandi',
-                                                                  style: TextStyle(
-                                                                    color: Colors
-                                                                        .orange,
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                          const PopupMenuItem(
-                                                            value: 'hapus',
-                                                            child: Row(
-                                                              children: [
-                                                                Icon(
-                                                                  Icons
-                                                                      .delete_outline_rounded,
-                                                                  color: Colors
-                                                                      .red,
-                                                                  size: 20,
-                                                                ),
-                                                                SizedBox(
-                                                                  width: 8,
-                                                                ),
-                                                                Text(
-                                                                  'Hapus Akun',
-                                                                  style: TextStyle(
-                                                                    color: Colors
-                                                                        .red,
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                        ],
-                                                ),
-                                              ],
-                                            ],
-                                          ),
+                                          );
+                                        }
+
+                                        final c = _allCustomers[i];
+                                        final extracted = _extractCustData(
+                                          c['customers'],
+                                        );
+
+                                        // [UPDATE DESAIN]: Menggunakan Kartu dengan Animasi Membal
+                                        return _AnimatedCustomerCard(
+                                          customer: c,
+                                          poin: extracted['poin'],
+                                          custId: extracted['customerId'],
+                                          isAdmin: _isAdmin,
+                                          showNonActive: _showNonActive,
                                           onTap: () => _showCustomerDetail(c),
-                                        ),
-                                      );
-                                    },
+                                          onAction: (val) {
+                                            if (val == 'edit_nama') {
+                                              _editNamaPelanggan(
+                                                c['id'],
+                                                c['nama_lengkap'] ??
+                                                    'Pelanggan',
+                                              );
+                                            } else if (val == 'edit_poin') {
+                                              if (extracted['customerId'] !=
+                                                  null) {
+                                                _showAdjustPointsSheet(
+                                                  extracted['customerId']!,
+                                                  c['nama_lengkap'] ??
+                                                      'Pelanggan',
+                                                  extracted['poin'],
+                                                );
+                                              } else {
+                                                _showCustomDialog(
+                                                  title: 'Gagal',
+                                                  message:
+                                                      'Data pelanggan belum lengkap (Dompet Poin kosong).',
+                                                  isSuccess: false,
+                                                );
+                                              }
+                                            } else if (val == 'reset_sandi') {
+                                              _resetPassword(
+                                                c['id'],
+                                                c['nama_lengkap'] ??
+                                                    'Pelanggan',
+                                              );
+                                            } else if (val == 'hapus') {
+                                              _hapusPelanggan(
+                                                c['id'],
+                                                c['nama_lengkap'] ??
+                                                    'Pelanggan',
+                                              );
+                                            } else if (val == 'aktifkan') {
+                                              _aktifkanPelanggan(
+                                                c['id'],
+                                                c['nama_lengkap'] ??
+                                                    'Pelanggan',
+                                              );
+                                            }
+                                          },
+                                        );
+                                      },
+                                    ),
                                   ),
                           ),
                         ),
@@ -1398,7 +1194,7 @@ class _PelangganTabState extends State<PelangganTab> {
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
                 child: Container(
-                  color: _DS.navy.withOpacity(0.3),
+                  color: AppTokens.navy.withOpacity(0.3),
                   child: Center(
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -1406,11 +1202,11 @@ class _PelangganTabState extends State<PelangganTab> {
                         vertical: 32,
                       ),
                       decoration: BoxDecoration(
-                        color: _DS.surface,
+                        color: AppTokens.surface,
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
-                            color: _DS.navy.withOpacity(0.2),
+                            color: AppTokens.navy.withOpacity(0.2),
                             blurRadius: 30,
                             offset: const Offset(0, 10),
                           ),
@@ -1419,13 +1215,13 @@ class _PelangganTabState extends State<PelangganTab> {
                       child: const Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _ModernLoadingDots(color: _DS.blue, size: 14),
+                          _ModernLoadingDots(color: AppTokens.blue, size: 14),
                           SizedBox(height: 20),
                           Text(
                             'Memproses...',
                             style: TextStyle(
                               fontWeight: FontWeight.w800,
-                              color: _DS.textPrimary,
+                              color: AppTokens.textPrimary,
                               fontSize: 15,
                             ),
                           ),
@@ -1443,6 +1239,303 @@ class _PelangganTabState extends State<PelangganTab> {
 }
 
 // =========================================================
+// WIDGET KARTU PELANGGAN (DENGAN ANIMASI MEMBAL)
+// =========================================================
+class _AnimatedCustomerCard extends StatefulWidget {
+  final Map<String, dynamic> customer;
+  final int poin;
+  final String? custId;
+  final bool isAdmin;
+  final bool showNonActive;
+  final VoidCallback onTap;
+  final Function(String) onAction;
+
+  const _AnimatedCustomerCard({
+    required this.customer,
+    required this.poin,
+    required this.custId,
+    required this.isAdmin,
+    required this.showNonActive,
+    required this.onTap,
+    required this.onAction,
+  });
+
+  @override
+  State<_AnimatedCustomerCard> createState() => _AnimatedCustomerCardState();
+}
+
+class _AnimatedCustomerCardState extends State<_AnimatedCustomerCard> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedScale(
+        scale: _isPressed ? 0.98 : 1.0,
+        duration: const Duration(milliseconds: 150),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: AppTokens.space12),
+          decoration: BoxDecoration(
+            color: AppTokens.surface,
+            borderRadius: BorderRadius.circular(AppTokens.radius16),
+            border: Border.all(color: AppTokens.border, width: 1.5),
+            boxShadow: AppTokens.cardShadow,
+          ),
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppTokens.space16,
+              vertical: AppTokens.space8,
+            ),
+            leading: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppTokens.sky,
+                borderRadius: BorderRadius.circular(AppTokens.radius12),
+              ),
+              child: Center(
+                child: Text(
+                  widget.customer['nama_lengkap']?[0]?.toUpperCase() ?? '?',
+                  style: const TextStyle(
+                    color: AppTokens.blue,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ),
+            title: Text(
+              widget.customer['nama_lengkap'] ?? '-',
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+                color: AppTokens.textPrimary,
+              ),
+            ),
+            subtitle: Text(
+              widget.customer['nomor_hp'] ?? '-',
+              style: const TextStyle(
+                color: AppTokens.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.stars_rounded,
+                        color: Colors.amber.shade600,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${widget.poin}',
+                        style: TextStyle(
+                          color: Colors.amber.shade900,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (widget.isAdmin) ...[
+                  const SizedBox(width: 4),
+                  PopupMenuButton<String>(
+                    icon: const Icon(
+                      Icons.more_vert_rounded,
+                      color: AppTokens.textHint,
+                    ),
+                    onSelected: widget.onAction,
+                    itemBuilder: (context) => widget.showNonActive
+                        ? [
+                            const PopupMenuItem(
+                              value: 'aktifkan',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.check_circle_outline_rounded,
+                                    color: Colors.green,
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Aktifkan Kembali',
+                                    style: TextStyle(color: Colors.green),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ]
+                        : [
+                            const PopupMenuItem(
+                              value: 'edit_nama',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.edit_rounded,
+                                    color: AppTokens.textPrimary,
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text('Edit Nama Pelanggan'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'edit_poin',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.edit_note_rounded,
+                                    color: AppTokens.blue,
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text('Koreksi Poin'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'reset_sandi',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.lock_reset_rounded,
+                                    color: Colors.orange,
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Reset Sandi',
+                                    style: TextStyle(color: Colors.orange),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'hapus',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.delete_outline_rounded,
+                                    color: Colors.red,
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Hapus Akun',
+                                    style: TextStyle(color: Colors.red),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// =========================================================
+// WIDGET SKELETON SHIMMER (PENGGANTI SPINNER MELOMPAT)
+// =========================================================
+class _CustomerSkeletonShimmer extends StatefulWidget {
+  const _CustomerSkeletonShimmer();
+
+  @override
+  State<_CustomerSkeletonShimmer> createState() =>
+      _CustomerSkeletonShimmerState();
+}
+
+class _CustomerSkeletonShimmerState extends State<_CustomerSkeletonShimmer>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _anim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.4, end: 1.0).animate(_anim),
+      child: ListView.builder(
+        padding: const EdgeInsets.all(AppTokens.space20),
+        itemCount: 6,
+        itemBuilder: (ctx, i) => Container(
+          margin: const EdgeInsets.only(bottom: AppTokens.space12),
+          padding: const EdgeInsets.all(AppTokens.space16),
+          decoration: BoxDecoration(
+            color: AppTokens.surface,
+            borderRadius: BorderRadius.circular(AppTokens.radius16),
+            border: Border.all(color: AppTokens.border),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppTokens.ground,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              const SizedBox(width: AppTokens.space16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(height: 14, width: 150, color: AppTokens.ground),
+                    const SizedBox(height: 8),
+                    Container(height: 10, width: 100, color: AppTokens.ground),
+                  ],
+                ),
+              ),
+              Container(height: 24, width: 50, color: AppTokens.ground),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// =========================================================
 // WIDGET BOTTOM SHEET (DETAIL & REDEEM & REFUND)
 // =========================================================
 class _CustomerDetailModal extends StatefulWidget {
@@ -1450,7 +1543,7 @@ class _CustomerDetailModal extends StatefulWidget {
   final String? customerId;
   final String namaLengkap;
   final int poinSaldoAwal;
-  final bool isAdmin; // <--- UPDATE: Terima data Role
+  final bool isAdmin;
   final VoidCallback onPoinBerubah;
 
   const _CustomerDetailModal({
@@ -1525,14 +1618,17 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
-                  color: _DS.textPrimary,
+                  color: AppTokens.textPrimary,
                 ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
                 message,
-                style: const TextStyle(color: _DS.textSecondary, fontSize: 13),
+                style: const TextStyle(
+                  color: AppTokens.textSecondary,
+                  fontSize: 13,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
@@ -1541,7 +1637,7 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
                 height: 48,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _DS.blue,
+                    backgroundColor: AppTokens.blue,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -1570,7 +1666,6 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
     try {
       final mutasiData = await _supabase
           .from('points_ledger')
-          // [UPDATE]: Menambahkan id & redemption_id
           .select(
             'id, tipe, jumlah, created_at, catatan, eksekutor, saldo_sesudah, redemption_id',
           )
@@ -1613,7 +1708,10 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
           'Tukar Barang?',
-          style: TextStyle(fontWeight: FontWeight.w800, color: _DS.textPrimary),
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            color: AppTokens.textPrimary,
+          ),
         ),
         content: Text(
           'Tukarkan $poinReq koin milik ${widget.namaLengkap} dengan $rewardName?\n\nKoin akan otomatis terpotong permanen.',
@@ -1624,12 +1722,12 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text(
               'Batal',
-              style: TextStyle(color: _DS.textSecondary),
+              style: TextStyle(color: AppTokens.textSecondary),
             ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: _DS.blue,
+              backgroundColor: AppTokens.blue,
               elevation: 0,
             ),
             onPressed: () => Navigator.pop(ctx, true),
@@ -1704,9 +1802,6 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
     }
   }
 
-  // ==========================================================
-  // FUNGSI BATAL TUKAR FISIK (REFUND KOIN) - REVISI ANTI-DOUBLE
-  // ==========================================================
   Future<void> _batalMutasi(Map<String, dynamic> m) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -1741,7 +1836,6 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
 
     if (confirm != true) return;
 
-    // Menyalakan state loading (kaca buram)
     setState(() => _isRedeeming = true);
     try {
       final adminId = _supabase.auth.currentUser!.id;
@@ -1754,13 +1848,12 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
           ? 'admin'
           : 'kasir';
 
-      final mutasiId = m['id']; // <--- Ini ID dari points_ledger
+      final mutasiId = m['id'];
       final int jumlahMinus = (m['jumlah'] as num).toInt();
       final int koinKembali = jumlahMinus.abs();
       final oldCatatan = m['catatan'] ?? '';
       final redemptionId = m['redemption_id'];
 
-      // 1. Tarik saldo terbaru pelanggan
       final custData = await _supabase
           .from('customers')
           .select('poin_saldo')
@@ -1769,13 +1862,11 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
       final int saldoSblm = (custData['poin_saldo'] as num).toInt();
       final int saldoSsdh = saldoSblm + koinKembali;
 
-      // 2. Kembalikan Koin
       await _supabase
           .from('customers')
           .update({'poin_saldo': saldoSsdh})
           .eq('id', widget.customerId!);
 
-      // 3. Catat mutasi Refund DENGAN TALI PENGIKAT (Ref ID)
       await _supabase.from('points_ledger').insert({
         'customer_id': widget.customerId!,
         'tipe': 'reversed',
@@ -1787,7 +1878,6 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
         'catatan': 'Refund [Ref ID: $mutasiId] - $oldCatatan',
       });
 
-      // 4. Hanguskan voucher jika dari App Pelanggan
       if (redemptionId != null) {
         await _supabase
             .from('reward_redemptions')
@@ -1811,7 +1901,6 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
           isSuccess: false,
         );
     } finally {
-      // Mematikan state loading
       setState(() => _isRedeeming = false);
     }
   }
@@ -1827,15 +1916,39 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
       children: [
         Container(
           height: MediaQuery.of(context).size.height * 0.9,
-          decoration: const BoxDecoration(color: _DS.ground, borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+          decoration: const BoxDecoration(
+            color: AppTokens.ground,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
           child: Column(
             children: [
               Container(
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-                decoration: BoxDecoration(color: _DS.surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(28)), boxShadow: [BoxShadow(color: _DS.navy.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))]),
+                decoration: BoxDecoration(
+                  color: AppTokens.surface,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(28),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTokens.navy.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
                 child: Column(
                   children: [
-                    Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1843,19 +1956,50 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(widget.namaLengkap, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _DS.textPrimary)),
+                            Text(
+                              widget.namaLengkap,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: AppTokens.textPrimary,
+                              ),
+                            ),
                             const SizedBox(height: 4),
-                            const Text('Detail Loyalitas Pelanggan', style: TextStyle(color: _DS.textSecondary, fontSize: 13)),
+                            const Text(
+                              'Detail Loyalitas Pelanggan',
+                              style: TextStyle(
+                                color: AppTokens.textSecondary,
+                                fontSize: 13,
+                              ),
+                            ),
                           ],
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.amber.shade200)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.amber.shade200),
+                          ),
                           child: Row(
                             children: [
-                              Icon(Icons.stars_rounded, color: Colors.amber.shade600, size: 20),
+                              Icon(
+                                Icons.stars_rounded,
+                                color: Colors.amber.shade600,
+                                size: 20,
+                              ),
                               const SizedBox(width: 6),
-                              Text('$_currentPoin', style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.w800, fontSize: 18)),
+                              Text(
+                                '$_currentPoin',
+                                style: TextStyle(
+                                  color: Colors.amber.shade900,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 18,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -1864,14 +2008,29 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
                     const SizedBox(height: 24),
                     Container(
                       padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(color: _DS.ground, borderRadius: BorderRadius.circular(12)),
+                      decoration: BoxDecoration(
+                        color: AppTokens.ground,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       child: TabBar(
                         controller: _tabController,
-                        indicator: BoxDecoration(color: _DS.surface, borderRadius: BorderRadius.circular(10), boxShadow: _DS.softShadow),
-                        labelColor: _DS.blue, unselectedLabelColor: _DS.textSecondary,
-                        labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
-                        indicatorSize: TabBarIndicatorSize.tab, dividerColor: Colors.transparent,
-                        tabs: const [Tab(text: 'Riwayat Mutasi'), Tab(text: 'Tukar Fisik')],
+                        indicator: BoxDecoration(
+                          color: AppTokens.surface,
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: AppTokens.softShadow,
+                        ),
+                        labelColor: AppTokens.blue,
+                        unselectedLabelColor: AppTokens.textSecondary,
+                        labelStyle: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                        ),
+                        indicatorSize: TabBarIndicatorSize.tab,
+                        dividerColor: Colors.transparent,
+                        tabs: const [
+                          Tab(text: 'Riwayat Mutasi'),
+                          Tab(text: 'Tukar Fisik'),
+                        ],
                       ),
                     ),
                   ],
@@ -1879,65 +2038,158 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
               ),
               Expanded(
                 child: _isLoading
-                    ? const Center(child: _ModernLoadingDots(color: _DS.blue, size: 14))
+                    ? const Center(
+                        child: _ModernLoadingDots(
+                          color: AppTokens.blue,
+                          size: 14,
+                        ),
+                      )
                     : TabBarView(
                         controller: _tabController,
                         children: [
                           _mutasiList.isEmpty
-                              ? const Center(child: Text('Belum ada riwayat koin.', style: TextStyle(color: _DS.textHint)))
+                              ? const Center(
+                                  child: Text(
+                                    'Belum ada riwayat koin.',
+                                    style: TextStyle(color: AppTokens.textHint),
+                                  ),
+                                )
                               : ListView.builder(
                                   padding: const EdgeInsets.all(20),
                                   physics: const BouncingScrollPhysics(),
                                   itemCount: _mutasiList.length,
                                   itemBuilder: (ctx, i) {
                                     final m = _mutasiList[i];
-                                    final int nominal = (m['jumlah'] as num?)?.toInt() ?? 0;
+                                    final int nominal =
+                                        (m['jumlah'] as num?)?.toInt() ?? 0;
                                     final isPlus = nominal > 0;
                                     final absNominal = nominal.abs();
-                                    final jumlahStr = isPlus ? '+$absNominal' : '-$absNominal';
-                                    final eksekutor = m['eksekutor'] ?? 'pelanggan';
+                                    final jumlahStr = isPlus
+                                        ? '+$absNominal'
+                                        : '-$absNominal';
+                                    final eksekutor =
+                                        m['eksekutor'] ?? 'pelanggan';
 
                                     // LOGIKA PENDETEKSI TALI PENGIKAT (REF ID)
                                     final currentId = m['id']?.toString() ?? '';
-                                    final catatanLengkap = m['catatan']?.toString() ?? '';
-                                    final bool isRedeemed = m['tipe'] == 'redeemed';
-                                    final bool isBarang = catatanLengkap.toLowerCase().contains('barang') || catatanLengkap.toLowerCase().contains('fisik');
-                                    
+                                    final catatanLengkap =
+                                        m['catatan']?.toString() ?? '';
+                                    final bool isRedeemed =
+                                        m['tipe'] == 'redeemed';
+                                    final bool isBarang =
+                                        catatanLengkap.toLowerCase().contains(
+                                          'barang',
+                                        ) ||
+                                        catatanLengkap.toLowerCase().contains(
+                                          'fisik',
+                                        );
+
                                     // Cek ke SELURUH riwayat, adakah yang me-refund ID mutasi ini?
-                                    final bool isCanceled = _mutasiList.any((mutasiLain) {
-                                      final catLain = mutasiLain['catatan']?.toString() ?? '';
-                                      return catLain.contains('[Ref ID: $currentId]');
+                                    final bool isCanceled = _mutasiList.any((
+                                      mutasiLain,
+                                    ) {
+                                      final catLain =
+                                          mutasiLain['catatan']?.toString() ??
+                                          '';
+                                      return catLain.contains(
+                                        '[Ref ID: $currentId]',
+                                      );
                                     });
 
-                                    final bool canCancel = widget.isAdmin && isRedeemed && isBarang && !isCanceled;
+                                    final bool canCancel =
+                                        widget.isAdmin &&
+                                        isRedeemed &&
+                                        isBarang &&
+                                        !isCanceled;
 
                                     return Container(
                                       margin: const EdgeInsets.only(bottom: 12),
                                       padding: const EdgeInsets.all(16),
-                                      decoration: BoxDecoration(color: _DS.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: _DS.border, width: 1.5)),
+                                      decoration: BoxDecoration(
+                                        color: AppTokens.surface,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: AppTokens.border,
+                                          width: 1.5,
+                                        ),
+                                      ),
                                       child: Row(
                                         children: [
                                           Container(
                                             padding: const EdgeInsets.all(10),
-                                            decoration: BoxDecoration(color: isPlus ? Colors.green.shade50 : Colors.red.shade50, shape: BoxShape.circle),
-                                            child: Icon(isPlus ? Icons.add_business_rounded : Icons.outbox_rounded, color: isPlus ? Colors.green : Colors.red, size: 20),
+                                            decoration: BoxDecoration(
+                                              color: isPlus
+                                                  ? Colors.green.shade50
+                                                  : Colors.red.shade50,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Icon(
+                                              isPlus
+                                                  ? Icons.add_business_rounded
+                                                  : Icons.outbox_rounded,
+                                              color: isPlus
+                                                  ? Colors.green
+                                                  : Colors.red,
+                                              size: 20,
+                                            ),
                                           ),
                                           const SizedBox(width: 14),
                                           Expanded(
                                             child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
-                                                Text(m['catatan'] ?? 'Transaksi Koin', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: _DS.textPrimary)),
+                                                Text(
+                                                  m['catatan'] ??
+                                                      'Transaksi Koin',
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 14,
+                                                    color:
+                                                        AppTokens.textPrimary,
+                                                  ),
+                                                ),
                                                 const SizedBox(height: 4),
                                                 Row(
                                                   children: [
-                                                    Text(_formatTgl(m['created_at']), style: const TextStyle(color: _DS.textSecondary, fontSize: 11)),
-                                                    if (eksekutor != 'pelanggan') ...[
+                                                    Text(
+                                                      _formatTgl(
+                                                        m['created_at'],
+                                                      ),
+                                                      style: const TextStyle(
+                                                        color: AppTokens
+                                                            .textSecondary,
+                                                        fontSize: 11,
+                                                      ),
+                                                    ),
+                                                    if (eksekutor !=
+                                                        'pelanggan') ...[
                                                       const SizedBox(width: 6),
                                                       Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                        decoration: BoxDecoration(color: _DS.sky, borderRadius: BorderRadius.circular(4)),
-                                                        child: Text('by $eksekutor', style: const TextStyle(color: _DS.blue, fontSize: 9, fontWeight: FontWeight.w800)),
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                              horizontal: 6,
+                                                              vertical: 2,
+                                                            ),
+                                                        decoration: BoxDecoration(
+                                                          color: AppTokens.sky,
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                4,
+                                                              ),
+                                                        ),
+                                                        child: Text(
+                                                          'by $eksekutor',
+                                                          style:
+                                                              const TextStyle(
+                                                                color: AppTokens
+                                                                    .blue,
+                                                                fontSize: 9,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w800,
+                                                              ),
+                                                        ),
                                                       ),
                                                     ],
                                                   ],
@@ -1947,26 +2199,57 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
                                           ),
                                           Row(
                                             mainAxisSize: MainAxisSize.min,
-                                            mainAxisAlignment: MainAxisAlignment.end,
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.end,
                                             children: [
                                               Column(
-                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                crossAxisAlignment: CrossAxisAlignment.end,
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.end,
                                                 children: [
-                                                  Text(jumlahStr, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: isPlus ? Colors.green.shade700 : Colors.red.shade700)),
-                                                  Text('Sisa: ${m['saldo_sesudah'] ?? '-'}', style: const TextStyle(color: _DS.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
+                                                  Text(
+                                                    jumlahStr,
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                      fontSize: 16,
+                                                      color: isPlus
+                                                          ? Colors
+                                                                .green
+                                                                .shade700
+                                                          : Colors.red.shade700,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    'Sisa: ${m['saldo_sesudah'] ?? '-'}',
+                                                    style: const TextStyle(
+                                                      color: AppTokens
+                                                          .textSecondary,
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
                                                 ],
                                               ),
                                               if (canCancel) ...[
                                                 const SizedBox(width: 8),
                                                 IconButton(
-                                                  onPressed: _isRedeeming ? null : () => _batalMutasi(m),
-                                                  icon: const Icon(Icons.undo_rounded, color: Colors.red),
-                                                  tooltip: 'Batal & Refund Koin',
+                                                  onPressed: _isRedeeming
+                                                      ? null
+                                                      : () => _batalMutasi(m),
+                                                  icon: const Icon(
+                                                    Icons.undo_rounded,
+                                                    color: Colors.red,
+                                                  ),
+                                                  tooltip:
+                                                      'Batal & Refund Koin',
                                                   padding: EdgeInsets.zero,
-                                                  constraints: const BoxConstraints(),
+                                                  constraints:
+                                                      const BoxConstraints(),
                                                 ),
-                                              ]
+                                              ],
                                             ],
                                           ),
                                         ],
@@ -1975,38 +2258,119 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
                                   },
                                 ),
                           _fisikRewards.isEmpty
-                              ? const Center(child: Text('Tidak ada hadiah fisik tersedia.', style: TextStyle(color: _DS.textHint)))
+                              ? const Center(
+                                  child: Text(
+                                    'Tidak ada hadiah fisik tersedia.',
+                                    style: TextStyle(color: AppTokens.textHint),
+                                  ),
+                                )
                               : ListView.builder(
                                   padding: const EdgeInsets.all(20),
                                   physics: const BouncingScrollPhysics(),
                                   itemCount: _fisikRewards.length,
                                   itemBuilder: (ctx, i) {
                                     final r = _fisikRewards[i];
-                                    final poinReq = (r['poin_dibutuhkan'] as num).toInt();
+                                    final poinReq =
+                                        (r['poin_dibutuhkan'] as num).toInt();
                                     final isEnough = _currentPoin >= poinReq;
 
                                     return Container(
                                       margin: const EdgeInsets.only(bottom: 12),
-                                      decoration: BoxDecoration(color: isEnough ? _DS.surface : _DS.border.withOpacity(0.3), borderRadius: BorderRadius.circular(16), border: Border.all(color: _DS.border)),
+                                      decoration: BoxDecoration(
+                                        color: isEnough
+                                            ? AppTokens.surface
+                                            : AppTokens.border.withOpacity(0.3),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: AppTokens.border,
+                                        ),
+                                      ),
                                       child: ListTile(
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 10,
+                                            ),
                                         leading: Container(
                                           padding: const EdgeInsets.all(10),
-                                          decoration: BoxDecoration(color: isEnough ? Colors.amber.shade50 : Colors.grey.shade200, borderRadius: BorderRadius.circular(12)),
-                                          child: Icon(Icons.inventory_2_rounded, color: isEnough ? Colors.amber.shade700 : Colors.grey),
+                                          decoration: BoxDecoration(
+                                            color: isEnough
+                                                ? Colors.amber.shade50
+                                                : Colors.grey.shade200,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                          child: Icon(
+                                            Icons.inventory_2_rounded,
+                                            color: isEnough
+                                                ? Colors.amber.shade700
+                                                : Colors.grey,
+                                          ),
                                         ),
-                                        title: Text(r['nama'] ?? '-', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: isEnough ? _DS.textPrimary : _DS.textSecondary)),
+                                        title: Text(
+                                          r['nama'] ?? '-',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 14,
+                                            color: isEnough
+                                                ? AppTokens.textPrimary
+                                                : AppTokens.textSecondary,
+                                          ),
+                                        ),
                                         subtitle: Padding(
-                                          padding: const EdgeInsets.only(top: 4),
-                                          child: Text('$poinReq Koin', style: TextStyle(color: isEnough ? _DS.blue : _DS.textHint, fontWeight: FontWeight.w700, fontSize: 13)),
+                                          padding: const EdgeInsets.only(
+                                            top: 4,
+                                          ),
+                                          child: Text(
+                                            '$poinReq Koin',
+                                            style: TextStyle(
+                                              color: isEnough
+                                                  ? AppTokens.blue
+                                                  : AppTokens.textHint,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 13,
+                                            ),
+                                          ),
                                         ),
                                         trailing: isEnough
                                             ? ElevatedButton(
-                                                style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, elevation: 0, padding: const EdgeInsets.symmetric(horizontal: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                                                onPressed: _isRedeeming ? null : () => _prosesTukarFisik(r),
-                                                child: const Text('Tukar', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor:
+                                                      AppTokens.blue,
+                                                  elevation: 0,
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 16,
+                                                      ),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          10,
+                                                        ),
+                                                  ),
+                                                ),
+                                                onPressed: _isRedeeming
+                                                    ? null
+                                                    : () =>
+                                                          _prosesTukarFisik(r),
+                                                child: const Text(
+                                                  'Tukar',
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 13,
+                                                  ),
+                                                ),
                                               )
-                                            : const Text('Koin Kurang', style: TextStyle(color: _DS.textHint, fontWeight: FontWeight.w600, fontSize: 12)),
+                                            : const Text(
+                                                'Koin Kurang',
+                                                style: TextStyle(
+                                                  color: AppTokens.textHint,
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
                                       ),
                                     );
                                   },
@@ -2017,7 +2381,7 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
             ],
           ),
         ),
-        
+
         // ==========================================================
         // OVERLAY LOADING SPINNER ANTI-FREEZE & ANTI-DOUBLE CLICK
         // ==========================================================
@@ -2026,17 +2390,37 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
               child: Container(
-                color: _DS.navy.withOpacity(0.3),
+                color: AppTokens.navy.withOpacity(0.3),
                 child: Center(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
-                    decoration: BoxDecoration(color: _DS.surface, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: _DS.navy.withOpacity(0.2), blurRadius: 30, offset: const Offset(0, 10))]),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 40,
+                      vertical: 32,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTokens.surface,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTokens.navy.withOpacity(0.2),
+                          blurRadius: 30,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
                     child: const Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _ModernLoadingDots(color: _DS.blue, size: 14),
+                        _ModernLoadingDots(color: AppTokens.blue, size: 14),
                         SizedBox(height: 20),
-                        Text('Memproses...', style: TextStyle(fontWeight: FontWeight.w800, color: _DS.textPrimary, fontSize: 15)),
+                        Text(
+                          'Memproses...',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: AppTokens.textPrimary,
+                            fontSize: 15,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -2055,10 +2439,7 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
 class _ModernLoadingDots extends StatefulWidget {
   final Color color;
   final double size;
-  const _ModernLoadingDots({
-    this.color = const Color(0xFF1565C0),
-    this.size = 12.0,
-  });
+  const _ModernLoadingDots({required this.color, required this.size});
 
   @override
   State<_ModernLoadingDots> createState() => _ModernLoadingDotsState();

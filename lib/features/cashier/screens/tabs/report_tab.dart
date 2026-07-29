@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:laundry_one/features/cashier/screens/kasir_management_screen.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // [TAMBAHAN] Import Supabase
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:laundry_one/features/cashier/screens/inventory_screen.dart';
-import 'package:laundry_one/features/cashier/screens/purchase_screen.dart'; // [TAMBAHAN BARU] Import Layar Pembelian
+import 'package:laundry_one/features/cashier/screens/purchase_screen.dart';
 import 'package:laundry_one/features/cashier/screens/services_management_screen.dart';
 import 'package:laundry_one/features/cashier/screens/reports/report_product_sales_screen.dart';
 import 'package:laundry_one/features/cashier/screens/reports/report_cash_flow_screen.dart';
@@ -45,18 +45,16 @@ class ReportTab extends StatefulWidget {
 }
 
 class _ReportTabState extends State<ReportTab> {
-  final _supabase =
-      Supabase.instance.client; // [TAMBAHAN] Inisialisasi Supabase
+  final _supabase = Supabase.instance.client;
   bool _isLoading = true;
-  bool _isAdmin = false; // [TAMBAHAN] Variabel penanda role admin
+  bool _isAdmin = false;
 
   @override
   void initState() {
     super.initState();
-    _checkRoleAndLoad(); // [UPDATE] Panggil fungsi pengecekan role terlebih dahulu
+    _checkRoleAndLoad();
   }
 
-  // [TAMBAHAN] Fungsi untuk mengecek role pengguna yang sedang login
   Future<void> _checkRoleAndLoad() async {
     setState(() => _isLoading = true);
 
@@ -70,7 +68,6 @@ class _ReportTabState extends State<ReportTab> {
 
       if (mounted && profile != null) {
         setState(() {
-          // Hanya super_admin yang dianggap admin di sini
           _isAdmin = profile['role'] == 'super_admin';
         });
       }
@@ -78,17 +75,43 @@ class _ReportTabState extends State<ReportTab> {
       debugPrint('Error role check: $e');
     }
 
-    // Simulasi loading agar ritme UX konsisten dengan tab Beranda & Pelanggan
     await Future.delayed(const Duration(milliseconds: 600));
     if (mounted) {
       setState(() => _isLoading = false);
     }
   }
 
+  // ============================================================
+  // CUSTOM ROUTE ANIMATION (FADE + SLIDE UP)
+  // ============================================================
+  Route _createRoute(Widget page) {
+    return PageRouteBuilder(
+      transitionDuration: const Duration(milliseconds: 400),
+      pageBuilder: (context, animation, secondaryAnimation) => page,
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        const begin = Offset(0.0, 0.05); // Muncul dari bawah sedikit
+        const end = Offset.zero;
+        const curve = Curves.easeOutCubic;
+
+        var slideTween = Tween(
+          begin: begin,
+          end: end,
+        ).chain(CurveTween(curve: curve));
+
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: animation.drive(slideTween),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      // [UPDATE UX] Latar belakang Navy agar jika ditarik ke bawah (bounce effect iOS/Android), warnanya biru solid
       color: _DS.navy,
       child: SafeArea(
         bottom: false,
@@ -129,15 +152,13 @@ class _ReportTabState extends State<ReportTab> {
 
             Expanded(
               child: Container(
-                // [UPDATE UX] Konten list dikembalikan ke warna ground agar kontrasnya bagus
                 color: _DS.ground,
                 child: _isLoading
                     ? const Center(
                         child: CircularProgressIndicator(color: _DS.blue),
                       )
                     : RefreshIndicator(
-                        onRefresh:
-                            _checkRoleAndLoad, // [UPDATE] Refresh juga mengecek role
+                        onRefresh: _checkRoleAndLoad,
                         color: _DS.blue,
                         backgroundColor: _DS.surface,
                         child: ListView(
@@ -146,9 +167,6 @@ class _ReportTabState extends State<ReportTab> {
                           ),
                           padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
                           children: [
-                            // ==========================================================
-                            // [TAMBAHAN BARU] MENU KHUSUS ADMIN
-                            // ==========================================================
                             if (_isAdmin) ...[
                               const Padding(
                                 padding: EdgeInsets.only(left: 8, bottom: 12),
@@ -162,28 +180,21 @@ class _ReportTabState extends State<ReportTab> {
                                   ),
                                 ),
                               ),
-
-                              _buildMenuCard(
-                                context,
+                              _MenuCardItem(
                                 icon: Icons.manage_accounts_rounded,
                                 iconColor: Colors.indigo.shade600,
                                 bgColor: Colors.indigo.shade50,
                                 title: 'Kelola Kasir',
                                 subtitle:
                                     'Persetujuan, reset sandi, & hapus akun kasir',
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const KasirManagementScreen(),
-                                    ),
-                                  );
-                                },
+                                onTap: () => Navigator.push(
+                                  context,
+                                  _createRoute(const KasirManagementScreen()),
+                                ),
                               ),
                               const SizedBox(height: 32),
                             ],
 
-                            // ==========================================================
                             const Padding(
                               padding: EdgeInsets.only(left: 8, bottom: 12),
                               child: Text(
@@ -197,8 +208,7 @@ class _ReportTabState extends State<ReportTab> {
                               ),
                             ),
 
-                            _buildMenuCard(
-                              context,
+                            _MenuCardItem(
                               icon: Icons.inventory_2_rounded,
                               iconColor: Colors.brown.shade600,
                               bgColor: Colors.brown.shade50,
@@ -206,16 +216,12 @@ class _ReportTabState extends State<ReportTab> {
                               subtitle: 'Atur produk jualan & restock barang',
                               onTap: () => Navigator.push(
                                 context,
-                                MaterialPageRoute(
-                                  builder: (_) => const InventoryScreen(),
-                                ),
+                                _createRoute(const InventoryScreen()),
                               ),
                             ),
                             const SizedBox(height: 12),
 
-                            // [TAMBAHAN BARU]: MENU PEMBELIAN & RESTOCK MASAL
-                            _buildMenuCard(
-                              context,
+                            _MenuCardItem(
                               icon: Icons.add_shopping_cart_rounded,
                               iconColor: Colors.green.shade600,
                               bgColor: Colors.green.shade50,
@@ -223,15 +229,12 @@ class _ReportTabState extends State<ReportTab> {
                               subtitle: 'Catat nota belanja grosir 1 pintu',
                               onTap: () => Navigator.push(
                                 context,
-                                MaterialPageRoute(
-                                  builder: (_) => const PurchaseScreen(),
-                                ),
+                                _createRoute(const PurchaseScreen()),
                               ),
                             ),
                             const SizedBox(height: 12),
 
-                            _buildMenuCard(
-                              context,
+                            _MenuCardItem(
                               icon: Icons.local_laundry_service_rounded,
                               iconColor: Colors.purple.shade600,
                               bgColor: Colors.purple.shade50,
@@ -239,10 +242,7 @@ class _ReportTabState extends State<ReportTab> {
                               subtitle: 'Tambah & atur tarif cucian',
                               onTap: () => Navigator.push(
                                 context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      const ServicesManagementScreen(),
-                                ),
+                                _createRoute(const ServicesManagementScreen()),
                               ),
                             ),
 
@@ -260,8 +260,7 @@ class _ReportTabState extends State<ReportTab> {
                               ),
                             ),
 
-                            _buildMenuCard(
-                              context,
+                            _MenuCardItem(
                               icon: Icons.bar_chart_rounded,
                               iconColor: _DS.blue,
                               bgColor: _DS.sky,
@@ -269,16 +268,12 @@ class _ReportTabState extends State<ReportTab> {
                               subtitle: 'Statistik item terlaris & omset',
                               onTap: () => Navigator.push(
                                 context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      const ReportProductSalesScreen(),
-                                ),
+                                _createRoute(const ReportProductSalesScreen()),
                               ),
                             ),
                             const SizedBox(height: 12),
 
-                            _buildMenuCard(
-                              context,
+                            _MenuCardItem(
                               icon: Icons.account_balance_wallet_rounded,
                               iconColor: Colors.teal.shade600,
                               bgColor: Colors.teal.shade50,
@@ -286,15 +281,12 @@ class _ReportTabState extends State<ReportTab> {
                               subtitle: 'Rincian uang masuk & pengeluaran',
                               onTap: () => Navigator.push(
                                 context,
-                                MaterialPageRoute(
-                                  builder: (_) => const ReportCashFlowScreen(),
-                                ),
+                                _createRoute(const ReportCashFlowScreen()),
                               ),
                             ),
                             const SizedBox(height: 12),
 
-                            _buildMenuCard(
-                              context,
+                            _MenuCardItem(
                               icon: Icons.monetization_on_rounded,
                               iconColor: Colors.orange.shade600,
                               bgColor: Colors.orange.shade50,
@@ -303,15 +295,12 @@ class _ReportTabState extends State<ReportTab> {
                                   'Riwayat top-up & penukaran koin loyalitas',
                               onTap: () => Navigator.push(
                                 context,
-                                MaterialPageRoute(
-                                  builder: (_) => const ReportCoinScreen(),
-                                ),
+                                _createRoute(const ReportCoinScreen()),
                               ),
                             ),
                             const SizedBox(height: 12),
 
-                            _buildMenuCard(
-                              context,
+                            _MenuCardItem(
                               icon: Icons.card_giftcard_rounded,
                               iconColor: Colors.pink.shade600,
                               bgColor: Colors.pink.shade50,
@@ -320,10 +309,7 @@ class _ReportTabState extends State<ReportTab> {
                                   'Atur daftar voucher diskon untuk pelanggan',
                               onTap: () => Navigator.push(
                                 context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      const RewardManagementScreen(),
-                                ),
+                                _createRoute(const RewardManagementScreen()),
                               ),
                             ),
                             const SizedBox(height: 12),
@@ -337,32 +323,56 @@ class _ReportTabState extends State<ReportTab> {
       ),
     );
   }
+}
 
-  Widget _buildMenuCard(
-    BuildContext context, {
-    required IconData icon,
-    required Color iconColor,
-    required Color bgColor,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: _DS.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _DS.border, width: 1.5),
-        boxShadow: _DS.cardShadow,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () {
-            HapticFeedback.selectionClick();
-            onTap(); // <-- Ini penting agar tombol membaca instruksi dari masing-masing menu
-          },
+// ============================================================
+// WIDGET KARTU MENU INTERAKTIF (DENGAN ANIMASI MEMBAL)
+// ============================================================
+class _MenuCardItem extends StatefulWidget {
+  final IconData icon;
+  final Color iconColor;
+  final Color bgColor;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _MenuCardItem({
+    required this.icon,
+    required this.iconColor,
+    required this.bgColor,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  State<_MenuCardItem> createState() => _MenuCardItemState();
+}
+
+class _MenuCardItemState extends State<_MenuCardItem> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        HapticFeedback.selectionClick();
+        widget.onTap(); // Panggil navigasi setelah diklik
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedScale(
+        scale: _isPressed ? 0.96 : 1.0, // Menyusut ke 96% saat ditekan
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutCubic,
+        child: Container(
+          decoration: BoxDecoration(
+            color: _DS.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: _DS.border, width: 1.5),
+            boxShadow: _DS.cardShadow,
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -370,10 +380,10 @@ class _ReportTabState extends State<ReportTab> {
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: bgColor,
+                    color: widget.bgColor,
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Icon(icon, color: iconColor, size: 26),
+                  child: Icon(widget.icon, color: widget.iconColor, size: 26),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -381,7 +391,7 @@ class _ReportTabState extends State<ReportTab> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        title,
+                        widget.title,
                         style: const TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 16,
@@ -391,7 +401,7 @@ class _ReportTabState extends State<ReportTab> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        subtitle,
+                        widget.subtitle,
                         style: const TextStyle(
                           color: _DS.textSecondary,
                           fontSize: 12,
