@@ -15,7 +15,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.laundry_one"
+    namespace = "com.laundryone.customer" // [UPDATE]: Ganti dari com.example
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -30,8 +30,8 @@ android {
     }
 
     defaultConfig {
-        // Ini akan menjadi base default
-        applicationId = "com.example.laundry_one"
+        // [UPDATE]: Jangan gunakan com.example, pakai ID aplikasi pelanggan sebagai default
+        applicationId = "com.laundryone.customer"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -40,37 +40,46 @@ android {
     }
 
     // ==========================================================
-    // [TAMBAHAN] KONFIGURASI FLAVORS UNTUK 2 APLIKASI
+    // KONFIGURASI FLAVORS UNTUK 2 APLIKASI
     // ==========================================================
     flavorDimensions += "app"
 
     productFlavors {
-    create("customer") {
-        dimension = "app"
-        applicationId = "com.laundryone.customer"
-        resValue("string", "app_name", "Laundry One")
+        create("customer") {
+            dimension = "app"
+            applicationId = "com.laundryone.customer"
+            resValue("string", "app_name", "Laundry One")
+        }
+        create("cashier") {
+            dimension = "app"
+            applicationId = "com.laundryone.cashier"
+            resValue("string", "app_name", "Laundry Kasir")
+        }
     }
-    create("cashier") {
-        dimension = "app"
-        applicationId = "com.laundryone.cashier"
-        resValue("string", "app_name", "Laundry Kasir")
-    }
-}
-
     // ==========================================================
 
     signingConfigs {
         create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String
-            keyPassword = keystoreProperties["keyPassword"] as String
-            storeFile = file(keystoreProperties["storeFile"] as String)
-            storePassword = keystoreProperties["storePassword"] as String
+            // Memastikan ini tidak error jika key.properties belum ada saat mode debug
+            if (keystorePropertiesFile.exists()) {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            // Hanya gunakan signing config jika file properties ada
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            // Optimasi Rilis: Membuang kode tak terpakai agar aplikasi pelanggan lebih ringan
+            minifyEnabled = true
+            shrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }
