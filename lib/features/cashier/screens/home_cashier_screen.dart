@@ -1835,6 +1835,9 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   Future<void> _showDetail(Map<String, dynamic> order) async {
     HapticFeedback.lightImpact();
 
+    // [FIX]: Tampilkan overlay loading "Memproses..." agar layar tidak terlihat freeze
+    setState(() => _isProcessing = true);
+
     List<Map<String, dynamic>> orderItemsRaw = [];
     try {
       orderItemsRaw = List<Map<String, dynamic>>.from(
@@ -1867,6 +1870,9 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       else if (dataKasir is Map)
         namaKasirFinal = dataKasir['nama_lengkap']?.toString() ?? 'Sistem';
     }
+
+    // [FIX]: Matikan overlay loading tepat sebelum layar berpindah
+    if (mounted) setState(() => _isProcessing = false);
 
     final action = await Navigator.push(
       context,
