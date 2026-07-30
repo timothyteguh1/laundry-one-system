@@ -257,22 +257,31 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           .eq('role', 'customer')
           .eq('is_active', true);
 
-      if (_searchCtrl.text.isNotEmpty) {
-        final q = _searchCtrl.text;
+      final q = _searchCtrl.text.trim();
+      final bool isSearchActive = q.isNotEmpty;
+
+      // Filter Pencarian Server
+      if (isSearchActive) {
         query = query.or('nama_lengkap.ilike.%$q%,nomor_hp.ilike.%$q%');
       }
 
-      final data = await query
-          .order('nama_lengkap')
-          .range(0, _customerPerPage - 1);
+      final List<dynamic> data;
+      // [FIXED]: Jika sedang mencari, bypass paginasi (tarik semua hasil yg cocok)
+      if (isSearchActive) {
+        data = await query.order('nama_lengkap');
+        _hasMoreCustomers = false; 
+      } else {
+        // Jika tidak mencari, gunakan paginasi normal
+        final startRow = _customerPage * _customerPerPage;
+        final endRow = startRow + _customerPerPage - 1;
+        data = await query.order('nama_lengkap').range(startRow, endRow);
+        if (data.length < _customerPerPage) _hasMoreCustomers = false;
+      }
 
       if (mounted) {
         setState(() {
           _allCustomers = List<Map<String, dynamic>>.from(data);
           _filteredCustomers = _allCustomers;
-          if (_allCustomers.length < _customerPerPage)
-            _hasMoreCustomers = false;
-
           _isFetchingCustomers = false;
           _isSearchingCustomer = false;
         });
@@ -1771,25 +1780,39 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         ),
 
         Expanded(
-          child: NotificationListener<ScrollNotification>(
-            onNotification: (ScrollNotification scrollInfo) {
-              if (!_isLoadingMoreCustomers &&
-                  _hasMoreCustomers &&
-                  scrollInfo.metrics.pixels >=
-                      scrollInfo.metrics.maxScrollExtent - 100) {
-                _loadMoreCustomers();
-              }
-              return false;
-            },
-            child: RefreshIndicator(
-              onRefresh: () => _loadCustomers(showFullLoading: false),
-              color: _DS.blue,
-              backgroundColor: _DS.surface,
-              child: _isFetchingCustomers
-                  ? const Center(
-                      child: _ModernLoadingDots(color: _DS.blue, size: 14),
-                    )
-                  : _filteredCustomers.isEmpty
+          // [UPDATE UX]: Tampilkan titik 3 di tengah saat memuat atau mencari data
+          child: (_isFetchingCustomers || _isSearchingCustomer)
+              ? const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _ModernLoadingDots(color: _DS.blue, size: 14),
+                      SizedBox(height: 16),
+                      Text(
+                        'Mencari data...',
+                        style: TextStyle(
+                          color: _DS.textHint,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : NotificationListener<ScrollNotification>(
+                  onNotification: (ScrollNotification scrollInfo) {
+                    if (!_isLoadingMoreCustomers &&
+                        _hasMoreCustomers &&
+                        scrollInfo.metrics.pixels >=
+                            scrollInfo.metrics.maxScrollExtent - 100) {
+                      _loadMoreCustomers();
+                    }
+                    return false;
+                  },
+                  child: RefreshIndicator(
+                    onRefresh: () => _loadCustomers(showFullLoading: false),
+                    color: _DS.blue,
+                    backgroundColor: _DS.surface,
+                    child: _filteredCustomers.isEmpty
                   ? Center(
                       child: ListView(
                         shrinkWrap: true,

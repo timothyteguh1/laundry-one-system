@@ -284,17 +284,30 @@ class _PelangganTabState extends State<PelangganTab> {
           .eq('role', 'customer')
           .eq('is_active', !_showNonActive);
 
-      if (_searchCtrl.text.isNotEmpty) {
-        final q = _searchCtrl.text;
+      final q = _searchCtrl.text.trim();
+      final bool isSearchActive = q.isNotEmpty;
+
+      // Filter Pencarian Server
+      if (isSearchActive) {
         query = query.or('nama_lengkap.ilike.%$q%,nomor_hp.ilike.%$q%');
       }
 
-      final data = await query.order('nama_lengkap').range(0, _perPage - 1);
+      final List<dynamic> data;
+      // [FIXED]: Jika sedang mencari, bypass paginasi (tarik semua hasil yg cocok)
+      if (isSearchActive) {
+        data = await query.order('nama_lengkap');
+        _hasMore = false; 
+      } else {
+        // Jika tidak mencari, gunakan paginasi normal
+        final startRow = _page * _perPage;
+        final endRow = startRow + _perPage - 1;
+        data = await query.order('nama_lengkap').range(startRow, endRow);
+        if (data.length < _perPage) _hasMore = false;
+      }
 
       if (mounted) {
         setState(() {
           _allCustomers = List<Map<String, dynamic>>.from(data);
-          if (_allCustomers.length < _perPage) _hasMore = false;
           _isLoading = false;
           _isSearching = false;
         });
@@ -1053,9 +1066,24 @@ class _PelangganTabState extends State<PelangganTab> {
               Expanded(
                 child: Container(
                   color: AppTokens.ground,
-                  // [UPDATE DESAIN]: Menggunakan Skeleton Shimmer yang halus saat memuat data pertama kali
-                  child: _isLoading
-                      ? const _CustomerSkeletonShimmer()
+                  // [UPDATE UX]: Sama seperti Home Cashier, munculkan Titik 3 di tengah
+                  child: (_isLoading || _isSearching)
+                      ? const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _ModernLoadingDots(color: AppTokens.blue, size: 14),
+                              SizedBox(height: 16),
+                              Text(
+                                'Mencari data...',
+                                style: TextStyle(
+                                  color: AppTokens.textHint,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
                       : NotificationListener<ScrollNotification>(
                           onNotification: (ScrollNotification scrollInfo) {
                             if (!_isLoadingMore &&

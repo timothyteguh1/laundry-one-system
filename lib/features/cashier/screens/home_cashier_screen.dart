@@ -1,6 +1,6 @@
 import 'dart:ui';
 import 'dart:math' as math;
-import 'dart:async'; // [TAMBAHAN]: Untuk Timer AJAX (Debounce)
+import 'dart:async'; // Untuk Timer AJAX (Debounce)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,8 +16,8 @@ import 'package:laundry_one/features/cashier/screens/invoice_screen.dart';
 import 'package:laundry_one/features/auth/screens/register_screen.dart';
 import 'package:laundry_one/features/cashier/screens/rekap_kasir_screen.dart';
 
-// [UPDATE]: Mengimpor AppTokens terpusat, pastikan path ini sesuai proyek Anda
-import 'package:laundry_one/core/tokens/app_tokens.dart'; 
+// Mengimpor AppTokens terpusat, pastikan path ini sesuai proyek Anda
+import 'package:laundry_one/core/tokens/app_tokens.dart';
 
 class HomeCashierScreen extends StatefulWidget {
   const HomeCashierScreen({super.key});
@@ -43,18 +43,25 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
   bool _isLoading = true;
   bool _isProcessing = false;
 
-  // =========================================================
   // PAGINASI & PENCARIAN (AJAX SILENT SEARCH)
-  // =========================================================
   int _orderPage = 0;
   final int _perPage = 25;
   bool _hasMoreOrders = true;
   bool _isLoadingMore = false;
 
-  bool _isSearching = false; 
+  bool _isSearching = false;
   String _searchQuery = '';
   final _searchCtrl = TextEditingController();
   Timer? _searchDebounce;
+
+  Timer? _rtDebounce;
+
+  static const String _orderSelectFields =
+      'id, nomor_order, cashier_id, status, total_harga, is_piutang, '
+      'metode_bayar_awal, created_at, estimasi_selesai, jatuh_tempo, '
+      'customer_id, poin_didapat, poin_sudah_diberikan, '
+      'customers(profiles(nama_lengkap, nomor_hp)), '
+      'profiles!orders_cashier_id_fkey(nama_lengkap)';
 
   String? _kasirNama;
 
@@ -78,7 +85,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       duration: const Duration(milliseconds: 600),
     )..forward();
     _loadUserProfile();
-    _loadData();
+    _refreshAll(showFullLoading: true);
     _subscribeRealtime();
   }
 
@@ -87,18 +94,16 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     _fabAnim?.dispose();
     _searchCtrl.dispose();
     _searchDebounce?.cancel();
+    _rtDebounce?.cancel();
     super.dispose();
   }
 
-  // [UPDATE UX]: Fungsi Debounce Pencarian Gaib (AJAX)
   void _onSearchChanged(String val) {
     if (_searchDebounce?.isActive ?? false) _searchDebounce!.cancel();
-    setState(
-      () => _isSearching = true,
-    ); 
-    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+    setState(() => _isSearching = true);
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
       setState(() => _searchQuery = val);
-      _loadData(showFullLoading: false); 
+      _loadOrdersList(reset: true, showFullLoading: false);
     });
   }
 
@@ -287,10 +292,9 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                     _showRedeemVoucherDialog();
                   },
                 ),
-
                 ListTile(
                   leading: const Icon(
-                    Icons.analytics_outlined, 
+                    Icons.analytics_outlined,
                     color: AppTokens.textPrimary,
                   ),
                   title: const Text(
@@ -301,7 +305,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                     ),
                   ),
                   onTap: () {
-                    Navigator.pop(context); 
+                    Navigator.pop(context);
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -416,7 +420,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                           config: LoginConfig(
                             roleName: 'Staf Kasir',
                             roleDatabase: 'cashier',
-                            labelIdentifier: 'Nomor HP',
+                            labelIdentifier: 'Nomor HP / Email',
                             hint: '081234567890',
                             keyboardType: TextInputType.phone,
                             primaryColor: Color(0xFF1565C0),
@@ -497,7 +501,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
         _startDate = picked.start;
         _endDate = picked.end;
       });
-      await _loadData();
+      await _loadOrdersList(reset: true, showFullLoading: true);
     }
   }
 
@@ -619,83 +623,16 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     );
   }
 
-  Future<void> _loadMoreOrders() async {
-    if (_isLoadingMore || !_hasMoreOrders) return;
-    setState(() => _isLoadingMore = true);
-
-    try {
-      _orderPage++;
-      final startRow = _orderPage * _perPage;
-      final endRow = startRow + _perPage - 1;
-
-      final startOfRangeLocal = DateTime(
-        _startDate.year,
-        _startDate.month,
-        _startDate.day,
-        0,
-        0,
-        0,
-      );
-      final endOfRangeLocal = DateTime(
-        _endDate.year,
-        _endDate.month,
-        _endDate.day,
-        23,
-        59,
-        59,
-      );
-      final startStr = startOfRangeLocal.toUtc().toIso8601String();
-      final endStr = endOfRangeLocal.toUtc().toIso8601String();
-
-      final queryStr =
-          'id, nomor_order, cashier_id, status, total_harga, is_piutang, metode_bayar_awal, created_at, estimasi_selesai, jatuh_tempo, customer_id, poin_didapat, poin_sudah_diberikan, customers(profiles(nama_lengkap, nomor_hp)), profiles!orders_cashier_id_fkey(nama_lengkap), order_items(jumlah, harga_satuan, services(nama))';
-
-      var query = _supabase
-          .from('orders')
-          .select(queryStr)
-          .gte('created_at', startStr)
-          .lte('created_at', endStr)
-          .order('created_at', ascending: false);
-
-      final newData = await query.range(startRow, endRow);
-      final newOrders = List<Map<String, dynamic>>.from(newData);
-
-      if (mounted) {
-        setState(() {
-          if (newOrders.length < _perPage) _hasMoreOrders = false;
-          _tabOrders.addAll(newOrders);
-          _isLoadingMore = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) setState(() => _isLoadingMore = false);
-    }
+  Future<void> _refreshAll({bool showFullLoading = false}) async {
+    await Future.wait([
+      _loadStatsAndPiutang(),
+      _loadOrdersList(reset: true, showFullLoading: showFullLoading),
+    ]);
   }
 
-  Future<void> _loadData({bool showFullLoading = true}) async {
-    if (showFullLoading) setState(() => _isLoading = true);
-    _orderPage = 0;
-    _hasMoreOrders = true;
-
+  Future<void> _loadStatsAndPiutang() async {
     try {
       final now = DateTime.now();
-
-      final startOfRangeLocal = DateTime(
-        _startDate.year,
-        _startDate.month,
-        _startDate.day,
-        0,
-        0,
-        0,
-      );
-      final endOfRangeLocal = DateTime(
-        _endDate.year,
-        _endDate.month,
-        _endDate.day,
-        23,
-        59,
-        59,
-      );
       final startOfTodayLocal = DateTime(now.year, now.month, now.day, 0, 0, 0);
       final endOfTodayLocal = DateTime(
         now.year,
@@ -705,37 +642,19 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
         59,
         59,
       );
-
-      final startStr = startOfRangeLocal.toUtc().toIso8601String();
-      final endStr = endOfRangeLocal.toUtc().toIso8601String();
       final todayStart = startOfTodayLocal.toUtc().toIso8601String();
       final todayEnd = endOfTodayLocal.toUtc().toIso8601String();
 
-      final queryStr =
-          'id, nomor_order, cashier_id, status, total_harga, is_piutang, metode_bayar_awal, created_at, estimasi_selesai, jatuh_tempo, customer_id, poin_didapat, poin_sudah_diberikan, customers(profiles(nama_lengkap, nomor_hp)), profiles!orders_cashier_id_fkey(nama_lengkap), order_items(jumlah, harga_satuan, services(nama))';
-
-      var queryOrders = _supabase
-          .from('orders')
-          .select(queryStr)
-          .gte('created_at', startStr)
-          .lte('created_at', endStr)
-          .order('created_at', ascending: false);
-
-      if (_searchQuery.isEmpty) {
-        queryOrders = queryOrders.range(0, _perPage - 1);
-      }
-
       final results = await Future.wait([
-        queryOrders,
         _supabase
             .from('orders')
-            .select(queryStr)
+            .select(_orderSelectFields)
             .gte('created_at', todayStart)
             .lte('created_at', todayEnd)
             .order('created_at', ascending: false),
         _supabase
             .from('orders')
-            .select(queryStr)
+            .select(_orderSelectFields)
             .eq('is_piutang', true)
             .neq('status', 'dibatalkan')
             .order('created_at', ascending: false),
@@ -746,14 +665,9 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
             .lte('created_at', todayEnd),
       ]);
 
-      final tabOrdersData = List<Map<String, dynamic>>.from(results[0]);
-      final todayOrdersData = List<Map<String, dynamic>>.from(results[1]);
-      final allPiutangData = List<Map<String, dynamic>>.from(results[2]);
-      final todayPaymentsData = List<Map<String, dynamic>>.from(results[3]);
-
-      if (_searchQuery.isNotEmpty || tabOrdersData.length < _perPage) {
-        _hasMoreOrders = false;
-      }
+      final todayOrdersData = List<Map<String, dynamic>>.from(results[0]);
+      final allPiutangData = List<Map<String, dynamic>>.from(results[1]);
+      final todayPaymentsData = List<Map<String, dynamic>>.from(results[2]);
 
       double kasTunaiHariIni = 0;
       double kasNonTunaiHariIni = 0;
@@ -773,7 +687,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
 
       if (mounted) {
         setState(() {
-          _tabOrders = tabOrdersData;
           _todayOrders = todayOrdersData;
           _allPiutangOrders = allPiutangData;
           _totalPenjualanHariIni = omsetHariIni;
@@ -797,17 +710,127 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
             0.0,
             (sum, o) => sum + (o['total_harga'] ?? 0).toDouble(),
           );
-          _isLoading = false;
-          _isSearching = false; 
         });
       }
     } catch (e) {
-      if (mounted)
-        setState(() {
-          _isLoading = false;
-          _isSearching = false;
-        });
+      debugPrint('Error loading stats: $e');
     }
+  }
+
+  Future<void> _loadOrdersList({
+    bool reset = true,
+    bool showFullLoading = false,
+  }) async {
+    if (reset) {
+      _orderPage = 0;
+      _hasMoreOrders = true;
+    } else {
+      if (_isLoadingMore || !_hasMoreOrders) return;
+      if (mounted) setState(() => _isLoadingMore = true);
+      _orderPage++;
+    }
+
+    if (showFullLoading && mounted) setState(() => _isLoading = true);
+
+    try {
+      final startOfRangeLocal = DateTime(
+        _startDate.year,
+        _startDate.month,
+        _startDate.day,
+        0,
+        0,
+        0,
+      );
+      final endOfRangeLocal = DateTime(
+        _endDate.year,
+        _endDate.month,
+        _endDate.day,
+        23,
+        59,
+        59,
+      );
+      final startStr = startOfRangeLocal.toUtc().toIso8601String();
+      final endStr = endOfRangeLocal.toUtc().toIso8601String();
+
+      var query = _supabase
+          .from('orders')
+          .select(_orderSelectFields)
+          .gte('created_at', startStr)
+          .lte('created_at', endStr);
+
+      final q = _searchQuery.trim();
+      final bool isSearchActive = q.isNotEmpty;
+
+      if (isSearchActive) {
+        List<Map<String, dynamic>> matchedCustomers = [];
+        try {
+          matchedCustomers = List<Map<String, dynamic>>.from(
+            await _supabase
+                .from('customers')
+                .select('id, profiles!inner(nama_lengkap)')
+                .ilike('profiles.nama_lengkap', '%$q%'),
+          );
+        } catch (e) {
+          debugPrint('Error searching customers: $e');
+        }
+
+        final custIds = matchedCustomers
+            .map((c) => c['id']?.toString())
+            .where((id) => id != null && id.isNotEmpty)
+            .join(',');
+
+        final orClauses = <String>['nomor_order.ilike.%$q%'];
+        if (custIds.isNotEmpty) {
+          orClauses.add('customer_id.in.($custIds)');
+        }
+        
+        // [PERBAIKAN PENCARIAN UMUM]
+        // Jika pencarian mengandung "umum" (case-insensitive), sertakan juga
+        // nota yang customer_id-nya NULL (Karena Flutter akan merendernya sbg "Umum")
+        if ('umum'.contains(q.toLowerCase())) {
+          orClauses.add('customer_id.is.null');
+        }
+
+        query = query.or(orClauses.join(','));
+      }
+
+      final List<dynamic> data;
+      if (isSearchActive) {
+        data = await query.order('created_at', ascending: false);
+        _hasMoreOrders = false; 
+      } else {
+        final startRow = _orderPage * _perPage;
+        final endRow = startRow + _perPage - 1;
+        data = await query
+            .order('created_at', ascending: false)
+            .range(startRow, endRow);
+        if (data.length < _perPage) _hasMoreOrders = false;
+      }
+
+      final newOrders = List<Map<String, dynamic>>.from(data);
+
+      if (mounted) {
+        setState(() {
+          _tabOrders = reset ? newOrders : [..._tabOrders, ...newOrders];
+          _isLoadingMore = false;
+          _isSearching = false;
+          if (showFullLoading) _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading orders list: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingMore = false;
+          _isSearching = false;
+          if (showFullLoading) _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadMoreOrders() async {
+    await _loadOrdersList(reset: false);
   }
 
   void _subscribeRealtime() {
@@ -818,7 +841,12 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'orders',
-          callback: (_) => _loadData(showFullLoading: false),
+          callback: (_) {
+            _rtDebounce?.cancel();
+            _rtDebounce = Timer(const Duration(milliseconds: 500), () {
+              _refreshAll(showFullLoading: false);
+            });
+          },
         )
         .subscribe();
     _supabase
@@ -909,7 +937,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
           .from('orders')
           .update({'status': newStatus})
           .eq('id', orderId);
-      await _loadData(showFullLoading: false);
+      await _refreshAll(showFullLoading: false);
       if (mounted)
         _showCustomDialog(
           title: 'Status Diperbarui',
@@ -1128,7 +1156,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
 
                             if (mounted) {
                               Navigator.pop(ctx);
-                              _loadData(showFullLoading: false);
+                              _refreshAll(showFullLoading: false);
                               _showCustomDialog(
                                 title: 'Pelunasan Berhasil',
                                 message:
@@ -1195,10 +1223,9 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                         isLoading: _isLoading,
                         isLoadingMore: _isLoadingMore,
                         hasMore: _hasMoreOrders,
-                        isSearching:
-                            _isSearching, 
+                        isSearching: _isSearching,
                         onLoadMore: _loadMoreOrders,
-                        onRefresh: _loadData,
+                        onRefresh: _refreshAll,
                         onUpdate: _handleUpdateStatus,
                         onDetail: _showDetail,
                         dateText: _dateRangeText,
@@ -1283,7 +1310,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                         builder: (_) => const CreateOrderScreen(),
                       ),
                     );
-                    if (r == true) _loadData(showFullLoading: false);
+                    if (r == true) _refreshAll(showFullLoading: false);
                   },
                   backgroundColor: AppTokens.blue,
                   foregroundColor: Colors.white,
@@ -1317,7 +1344,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       child: SafeArea(
         bottom: false,
         child: RefreshIndicator(
-          onRefresh: () => _loadData(showFullLoading: false),
+          onRefresh: () => _refreshAll(showFullLoading: false),
           color: AppTokens.blue,
           backgroundColor: AppTokens.surface,
           child: CustomScrollView(
@@ -1368,7 +1395,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                         child: Row(
                           children: [
-                            // [UPDATE ANIMASI MICRO-INTERACTION]
                             Expanded(
                               child: _AnimatedPenjualanCard(
                                 totalPenjualan: _totalPenjualanHariIni,
@@ -1376,7 +1402,6 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                               ),
                             ),
                             const SizedBox(width: 12),
-                            // [UPDATE ANIMASI MICRO-INTERACTION]
                             Expanded(
                               child: _AnimatedPiutangCard(
                                 totalPiutang: _totalPiutangAllTime,
@@ -1809,18 +1834,30 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
 
   Future<void> _showDetail(Map<String, dynamic> order) async {
     HapticFeedback.lightImpact();
-    final List<Map<String, dynamic>> mappedItems =
-        (order['order_items'] as List? ?? [])
-            .map(
-              (i) => {
-                'qty': (i['jumlah'] as num?)?.toInt() ?? 0,
-                'subtotal':
-                    (i['harga_satuan'] as num?)?.toDouble() ??
-                    0 * ((i['jumlah'] as num?)?.toInt() ?? 0),
-                'service': {'nama': i['services']?['nama'] ?? 'Item'},
-              },
-            )
-            .toList();
+
+    List<Map<String, dynamic>> orderItemsRaw = [];
+    try {
+      orderItemsRaw = List<Map<String, dynamic>>.from(
+        await _supabase
+            .from('order_items')
+            .select('jumlah, harga_satuan, services(nama)')
+            .eq('order_id', order['id']),
+      );
+    } catch (e) {
+      debugPrint('Error loading order items: $e');
+    }
+
+    final List<Map<String, dynamic>> mappedItems = orderItemsRaw
+        .map(
+          (i) => {
+            'qty': (i['jumlah'] as num?)?.toInt() ?? 0,
+            'subtotal':
+                (i['harga_satuan'] as num?)?.toDouble() ??
+                0 * ((i['jumlah'] as num?)?.toInt() ?? 0),
+            'service': {'nama': i['services']?['nama'] ?? 'Item'},
+          },
+        )
+        .toList();
 
     String namaKasirFinal = 'Sistem';
     final dataKasir = order['profiles'];
@@ -1859,7 +1896,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     else if (action == 'dibayar_lunas')
       _handleUpdateStatus(order, 'dibayar_lunas');
     else if (action == 'dihapus')
-      _loadData(showFullLoading: false);
+      _refreshAll(showFullLoading: false);
   }
 
   Widget _buildSectionHeader(
@@ -2380,7 +2417,7 @@ class _PremiumOrderCardState extends State<_PremiumOrderCard> {
       },
       onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedScale(
-        scale: _isPressed ? 0.93 : 1.0,
+        scale: _isPressed ? 0.98 : 1.0,
         duration: const Duration(milliseconds: 150),
         curve: Curves.easeOutCubic,
         child: Container(
@@ -3192,7 +3229,7 @@ class _PesananTabState extends State<_PesananTab>
   }
 
   List<Map<String, dynamic>> _filtered(String tab) {
-    List<Map<String, dynamic>> listData = tab == 'Aktif'
+    return tab == 'Aktif'
         ? widget.orders.where((o) => o['status'] == 'diproses').toList()
         : widget.orders
               .where(
@@ -3200,19 +3237,6 @@ class _PesananTabState extends State<_PesananTab>
                     o['status'] == 'selesai' || o['status'] == 'dibayar_lunas',
               )
               .toList();
-
-    if (widget.searchQuery.trim().isNotEmpty) {
-      listData = listData.where((order) {
-        final nama =
-            (order['customers']?['profiles']?['nama_lengkap'] ?? 'Umum')
-                .toString()
-                .toLowerCase();
-        final noOrder = (order['nomor_order'] ?? '').toString().toLowerCase();
-        return nama.contains(widget.searchQuery.toLowerCase()) ||
-            noOrder.contains(widget.searchQuery.toLowerCase());
-      }).toList();
-    }
-    return listData;
   }
 
   @override
@@ -3317,6 +3341,7 @@ class _PesananTabState extends State<_PesananTab>
                           vertical: 12,
                         ),
                         isDense: true,
+                        // [KEMBALI KE GAMBAR 2]: Menggunakan Spinner Lingkaran
                         suffixIcon: widget.isSearching
                             ? const Padding(
                                 padding: EdgeInsets.all(12),
@@ -3424,16 +3449,27 @@ class _PesananTabState extends State<_PesananTab>
                     controller: _tc,
                     children: _tabs.map<Widget>((String tab) {
                       final list = _filtered(tab);
-                      if (widget.isLoading) {
-                        return ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-                          itemCount: 5,
-                          itemBuilder: (_, i) => const Padding(
-                            padding: EdgeInsets.only(bottom: 12),
-                            child: _SkeletonOrderCard(),
+                      
+                      // [UPDATE UX]: Tampilkan titik 3 di tengah layar, bukan skeleton kasar
+                      if (widget.isLoading || widget.isSearching) {
+                        return const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _ModernLoadingDots(color: AppTokens.blue, size: 14),
+                              SizedBox(height: 16),
+                              Text(
+                                'Mencari data...',
+                                style: TextStyle(
+                                  color: AppTokens.textHint,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
                         );
                       }
+                      
                       if (list.isEmpty)
                         return widget.searchQuery.isNotEmpty
                             ? const _EmptyState(
