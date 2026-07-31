@@ -15,7 +15,7 @@ plugins {
 }
 
 android {
-    namespace = "com.laundryone.customer" // [UPDATE]: Ganti dari com.example
+    namespace = "com.example.laundry_one" // [UPDATE]: Ganti dari com.example
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -31,7 +31,7 @@ android {
 
     defaultConfig {
         // [UPDATE]: Jangan gunakan com.example, pakai ID aplikasi pelanggan sebagai default
-        applicationId = "com.laundryone.customer"
+        applicationId = "com.example.laundry_one"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -77,8 +77,8 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
             // Optimasi Rilis: Membuang kode tak terpakai agar aplikasi pelanggan lebih ringan
-            minifyEnabled = true
-            shrinkResources = true
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

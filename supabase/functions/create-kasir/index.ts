@@ -28,26 +28,25 @@ serve(async (req) => {
       throw new Error(`Akses Ditolak: Hanya Admin yang diizinkan.`)
     }
 
-    const { phone, password, full_name } = await req.json()
+    const { phone, password, full_name, branch_id } = await req.json()
     if (!phone || !password || !full_name) throw new Error('Data tidak lengkap.')
 
-    // 1. Format ke 08...
+    // [PENGAMAN]: Jika aplikasi lama tidak kirim branch_id, gunakan ID Happy Laundry
+    const finalBranchId = branch_id || '11111111-1111-1111-1111-111111111111'
+
     let localPhone = phone;
     if (phone.startsWith('+62')) localPhone = '0' + phone.substring(3);
 
-    // 2. BENTUK DUMMY EMAIL (Sesuai arsitektur Anda)
     const dummyEmail = `${localPhone}@laundry.local`;
 
-    // 3. Buat User di Auth Supabase menggunakan EMAIL
     const { data: newAuthUser, error: createAuthError } = await supabaseAdmin.auth.admin.createUser({
       email: dummyEmail, 
       password: password,
-      email_confirm: true // Langsung aktif
+      email_confirm: true 
     })
     if (createAuthError) throw createAuthError
     const newUserId = newAuthUser.user.id
 
-    // 4. Simpan ke Tabel Profiles 
     const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
       id: newUserId,
       nama_lengkap: full_name,
@@ -57,9 +56,10 @@ serve(async (req) => {
     })
     if (profileError) throw profileError
 
-    // 5. Simpan ke Tabel Kasir
+    // [UPDATE]: Masukkan ke cabang
     const { error: kasirError } = await supabaseAdmin.from('kasir').insert({
       profile_id: newUserId,
+      branch_id: finalBranchId,
       status: 'approved',
       approved_by: adminUser.id,
       approved_at: new Date().toISOString()
