@@ -265,8 +265,11 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         ? 'BELUM LUNAS (PIUTANG)'
         : 'LUNAS (${widget.metodeBayar.toUpperCase()})';
 
+    // [PERBAIKAN]: Gunakan nama cabang dinamis, fallback ke "LAUNDRY" jika kosong
+    final namaCabang = _branchName?.toUpperCase() ?? 'LAUNDRY';
+
     StringBuffer sb = StringBuffer();
-    sb.writeln('🧾 *NOTA PESANAN - HAPPY LAUNDRY*');
+    sb.writeln('🧾 *NOTA PESANAN - $namaCabang*');
     sb.writeln('-----------------------------------');
     sb.writeln('No Order : ${widget.nomorOrder}');
     sb.writeln('Tanggal  : ${_formatDateTime(widget.created_at)}');
@@ -332,7 +335,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         await bluetooth.connect(device);
       }
 
-      bluetooth.printCustom("HAPPY LAUNDRY", 3, 1); 
+      final namaCabang = _branchName?.toUpperCase() ?? 'LAUNDRY';
+      bluetooth.printCustom(namaCabang, 3, 1); 
       bluetooth.printNewLine();
       bluetooth.printCustom(widget.nomorOrder, 1, 1);
       bluetooth.printCustom(_formatDateTime(widget.created_at), 1, 1);

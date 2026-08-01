@@ -79,6 +79,9 @@ class CustomerInvoiceScreen extends StatelessWidget {
       statusText = 'LUNAS (${metodeBayar.toString().toUpperCase()})';
     }
 
+    // [PERBAIKAN]: Ambil nama cabang dari relasi database
+    final namaCabang = order['branches']?['nama_cabang']?.toString().toUpperCase() ?? 'LAUNDRY';
+
     final nomorOrder = order['nomor_order'] ?? '-';
     final namaPelanggan =
         order['customers']?['profiles']?['nama_lengkap'] ?? '-';
@@ -90,7 +93,7 @@ class CustomerInvoiceScreen extends StatelessWidget {
     final items = order['order_items'] as List<dynamic>? ?? [];
 
     StringBuffer sb = StringBuffer();
-    sb.writeln('🧾 *NOTA PESANAN - HAPPY LAUNDRY*');
+    sb.writeln('🧾 *NOTA PESANAN - $namaCabang*');
     sb.writeln('-----------------------------------');
     sb.writeln('No Order : $nomorOrder');
     sb.writeln('Tanggal  : ${_formatDateTime(order['created_at'])}');
