@@ -874,19 +874,6 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
                                           ],
                                         ),
                                       ),
-                                      const PopupMenuItem(
-                                        value: 'set_current',
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              Icons.check_circle_rounded,
-                                              size: 18,
-                                            ),
-                                            SizedBox(width: 8),
-                                            Text('Jadikan Cabang Aktif'),
-                                          ],
-                                        ),
-                                      ),
                                       const PopupMenuDivider(),
                                       const PopupMenuItem(
                                         value: 'delete',
