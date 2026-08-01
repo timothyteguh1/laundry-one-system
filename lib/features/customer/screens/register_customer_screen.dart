@@ -136,9 +136,18 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
         phone: _phoneController.text.trim(),
         fullName: _namaController.text.trim(),
         tanggalLahir: tanggalLahirStr,
-        // Password dihandle terpisah — perlu update auth_service
         password: _passwordController.text.trim(),
       );
+
+      // ==========================================================
+      // [PERBAIKAN FIX]: LOGIN OTOMATIS SETELAH REGISTER
+      // ==========================================================
+      await _authService.loginWithRole(
+        identifier: _phoneController.text.trim(),
+        password: _passwordController.text.trim(),
+        expectedRole: 'customer',
+      );
+      // ==========================================================
 
       // ==========================================================
       // [JURUS NINJA FCM]: UPDATE TOKEN DIAM-DIAM SETELAH DAFTAR
@@ -146,7 +155,7 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
       try {
         await NotificationService.saveTokenToSupabase();
       } catch (e) {
-        debugPrint('Ninja Token Gagal: $e'); // Gagal diam-diam tanpa merusak pendaftaran
+        debugPrint('Ninja Token Gagal: $e'); 
       }
       // ==========================================================
 

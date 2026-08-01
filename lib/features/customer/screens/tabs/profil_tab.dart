@@ -154,13 +154,20 @@ class _ProfilTabState extends State<ProfilTab> {
     
     setState(() => _isUploading = true);
     try {
-      final file = File(image.path);
+      // [PERBAIKAN]: Membaca gambar sebagai Bytes agar aman di Flutter Web & Mobile
+      final bytes = await image.readAsBytes(); 
       final userId = _supabase.auth.currentUser!.id;
       final fileExt = image.name.split('.').last;
       final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
       final filePath = '$userId/$fileName';
 
-      await _supabase.storage.from('avatars').upload(filePath, file, fileOptions: const FileOptions(upsert: true));
+      // [PERBAIKAN]: Menggunakan uploadBinary khusus untuk data Bytes
+      await _supabase.storage.from('avatars').uploadBinary(
+        filePath, 
+        bytes, 
+        fileOptions: const FileOptions(upsert: true)
+      );
+      
       final String publicUrl = _supabase.storage.from('avatars').getPublicUrl(filePath);
 
       await _supabase.from('profiles').update({'avatar_url': publicUrl}).eq('id', userId);

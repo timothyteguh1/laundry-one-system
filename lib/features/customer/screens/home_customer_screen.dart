@@ -147,7 +147,37 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
 
   Future<void> _handleLogout() async {
     HapticFeedback.mediumImpact();
+
+    // ==========================================================
+    // [PERBAIKAN UX]: TAMPILKAN EFEK LOADING SAAT KELUAR
+    // ==========================================================
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Kunci layar agar tidak bisa di-klik sembarangan
+      barrierColor: Colors.black.withOpacity(0.6), // Layar belakang agak digelapkan
+      builder: (ctx) => const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ModernSpinner(size: 48, color: Colors.white),
+            SizedBox(height: 16),
+            Text(
+              'Sedang Keluar...',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                decoration: TextDecoration.none, // Wajib agar teks tidak bergaris bawah kuning
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    // ==========================================================
+
     await AuthService().logout();
+    
     if (mounted) {
       Navigator.pushAndRemoveUntil( 
         context,
@@ -194,15 +224,14 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
             : IndexedStack(
                 index: _currentTab,
                 children: [
-                  // [GELOMBANG 3]: Menyambungkan Multi-Wallet ke UI
                   BerandaTab(
                     nama: nama, 
                     poin: poin, 
                     activeOrders: _activeOrders, 
-                    myWallets: _myWallets,              // <--- DATA BARU YANG DIMINTA FLUTTER
-                    activeWallet: _activeWallet,        // <--- DATA BARU YANG DIMINTA FLUTTER
-                    onSwitchWallet: switchWallet,       // <--- DATA BARU YANG DIMINTA FLUTTER
-                    onOpenNewBranch: _showBukaCabangSheet, // <--- DATA BARU YANG DIMINTA FLUTTER
+                    myWallets: _myWallets,              
+                    activeWallet: _activeWallet,        
+                    onSwitchWallet: switchWallet,       
+                    onOpenNewBranch: _showBukaCabangSheet, 
                     onRefresh: () => _fetchInitialData(_supabase.auth.currentUser!.id)
                   ),
                   AktivitasTab(
@@ -212,9 +241,16 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
                   ),
                   KatalogTab(
                     customerId: activeCustomerId, 
-                    activeBranchId: _activeWallet?['branch_id'], // Isolasi Cabang
+                    activeBranchId: _activeWallet?['branch_id'], 
                     currentPoin: poin,
                     onRefresh: () => _fetchInitialData(_supabase.auth.currentUser!.id),
+                  ),
+                  // 👇 INI BARIS YANG HILANG DAN HARUS DITAMBAHKAN KEMBALI 👇
+                  ProfilTab(
+                    nama: nama, 
+                    noHp: noHp, 
+                    avatarUrl: _profile?['avatar_url'], 
+                    onLogout: _handleLogout
                   ),
                 ],
               ),
