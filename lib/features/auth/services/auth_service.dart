@@ -60,6 +60,7 @@ class AuthService {
             .from('customers')
             .select('branch_id')
             .eq('profile_id', res.user!.id)
+            .limit(1) // <--- [SOLUSI]: Paksa ambil 1 saja agar tidak crash
             .maybeSingle();
 
         final branchId = custData != null && custData['branch_id'] != null

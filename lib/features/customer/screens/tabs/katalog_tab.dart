@@ -7,12 +7,14 @@ import 'package:laundry_one/features/customer/widgets/customer_shared_widgets.da
 
 class KatalogTab extends StatefulWidget {
   final String? customerId;
+  final String? activeBranchId; // [GELOMBANG 3]: Isolasi Cabang
   final int currentPoin;
   final Future<void> Function() onRefresh;
 
   const KatalogTab({
     super.key,
     required this.customerId,
+    required this.activeBranchId,
     required this.currentPoin,
     required this.onRefresh,
   });
@@ -44,8 +46,17 @@ class _KatalogTabState extends State<KatalogTab> {
   Future<void> _fetchData() async {
     setState(() => _isLoading = true);
     try {
-      final resRewards = await _supabase.from('rewards_catalog').select().eq('is_active', true).order('poin_dibutuhkan', ascending: true);
-      final resServices = await _supabase.from('services').select().eq('is_active', true).order('nama', ascending: true);
+      // [GELOMBANG 3]: Isolasi Katalog berdasarkan Cabang
+      var qRewards = _supabase.from('rewards_catalog').select().eq('is_active', true);
+      var qServices = _supabase.from('services').select().eq('is_active', true);
+      
+      if (widget.activeBranchId != null) {
+        qRewards = qRewards.eq('branch_id', widget.activeBranchId!);
+        qServices = qServices.eq('branch_id', widget.activeBranchId!);
+      }
+      
+      final resRewards = await qRewards.order('poin_dibutuhkan', ascending: true);
+      final resServices = await qServices.order('nama', ascending: true);
       
       List<Map<String, dynamic>> validVouchers = [];
       Map<String, DateTime> usedDates = {};
@@ -107,7 +118,7 @@ class _KatalogTabState extends State<KatalogTab> {
   }
 
   Future<void> _tukarPoin(Map<String, dynamic> reward) async {
-    if (widget.customerId == null) return;
+    if (widget.customerId == null || widget.activeBranchId == null) return;
     
     final bool isBarang = reward['tipe_reward'] == 'gratis_layanan';
     final String safeRewardId = reward['id']?.toString() ?? '';
@@ -182,12 +193,11 @@ class _KatalogTabState extends State<KatalogTab> {
       final nowUtcStr = DateTime.now().toUtc().toIso8601String();
       final expiredTimeUtc = DateTime.now().toUtc().add(const Duration(minutes: 5)).toIso8601String();
 
-      // [PERBAIKAN]: Buat wadah untuk menangkap hasil Insert
       Map<String, dynamic> insertedVoucher;
 
       if (isBarang) {
-        // [PERBAIKAN]: Tambahkan .select().single()
         insertedVoucher = await _supabase.from('reward_redemptions').insert({
+          'branch_id': widget.activeBranchId, // [KUNCI KEAMANAN]: Mengunci voucher ke cabang ini
           'customer_id': widget.customerId,
           'reward_id': safeRewardId,
           'kode_voucher': randomCode,
@@ -197,8 +207,8 @@ class _KatalogTabState extends State<KatalogTab> {
           'poin_digunakan': poinDibutuhkan,
         }).select().single();
       } else {
-        // [PERBAIKAN]: Tambahkan .select().single()
         insertedVoucher = await _supabase.from('reward_redemptions').insert({
+          'branch_id': widget.activeBranchId, // [KUNCI KEAMANAN]: Mengunci voucher ke cabang ini
           'customer_id': widget.customerId,
           'reward_id': safeRewardId,
           'kode_voucher': randomCode,
@@ -209,12 +219,13 @@ class _KatalogTabState extends State<KatalogTab> {
       }
 
       await _supabase.from('points_ledger').insert({
+        'branch_id': widget.activeBranchId, // [KUNCI KEAMANAN]
         'customer_id': widget.customerId,
         'tipe': 'redeemed',
         'jumlah': -poinDibutuhkan,
         'saldo_sebelum': currentDbPoin,
         'saldo_sesudah': newSaldo,
-        'redemption_id': insertedVoucher['id'], // <--- [PERBAIKAN UTAMA]: Ini benang merahnya!
+        'redemption_id': insertedVoucher['id'], 
         'catatan': isBarang ? 'Ambil Barang: $namaReward' : 'Tukar Voucher: $namaReward'
       });
 
@@ -244,9 +255,6 @@ class _KatalogTabState extends State<KatalogTab> {
     return 'Rp $result';
   }
 
-  // ============================================================
-  // [UPDATE REVISI FINAL]: PEMISAHAN LOGIKA BARANG FISIK & DISKON
-  // ============================================================
   String _getRewardDescription(Map<String, dynamic> r) {
     final tipe = r['tipe_reward']?.toString() ?? '';
     final nilai = int.tryParse(r['nilai_reward']?.toString() ?? '0') ?? 0;
@@ -255,13 +263,11 @@ class _KatalogTabState extends State<KatalogTab> {
     
     final deskripsiManual = r['deskripsi']?.toString() ?? '';
     
-    // Bersihkan deskripsi dari string error lama database (jika telanjur tersimpan)
     String deskripsiBersih = '';
     if (deskripsiManual.isNotEmpty && !deskripsiManual.toLowerCase().contains('layanan sebesar rp 0')) {
       deskripsiBersih = deskripsiManual;
     }
     
-    // 1. LOGIKA KHUSUS BARANG FISIK
     if (tipe == 'gratis_layanan') {
       if (deskripsiBersih.isNotEmpty) {
         return deskripsiBersih;
@@ -269,7 +275,6 @@ class _KatalogTabState extends State<KatalogTab> {
         return 'Tukarkan koin Anda untuk mendapatkan hadiah fisik ini.';
       }
     } 
-    // 2. LOGIKA KHUSUS VOUCHER DISKON
     else {
       String hasil = '';
       if (tipe == 'diskon_nominal') {
@@ -536,7 +541,7 @@ class _KatalogTabState extends State<KatalogTab> {
 
   Widget _buildListHarga() {
     if (_services.isEmpty) {
-      return const EmptyState(icon: Icons.list_alt_rounded, message: 'Katalog Kosong', sub: 'Daftar harga layanan belum tersedia.');
+      return const EmptyState(icon: Icons.list_alt_rounded, message: 'Katalog Kosong', sub: 'Daftar harga layanan belum tersedia di cabang ini.');
     }
     return RefreshIndicator(
       color: CustomerTheme.primary,
@@ -579,18 +584,11 @@ class _KatalogTabState extends State<KatalogTab> {
   }
 }
 
-// ==============================================================
-// WIDGET KARTU VOUCHER KHUSUS DENGAN TIMER HITUNG MUNDUR
-// ==============================================================
 class ActiveVoucherCard extends StatefulWidget {
   final Map<String, dynamic> voucherData;
   final VoidCallback onExpired;
 
-  const ActiveVoucherCard({
-    super.key, 
-    required this.voucherData, 
-    required this.onExpired
-  });
+  const ActiveVoucherCard({super.key, required this.voucherData, required this.onExpired});
 
   @override
   State<ActiveVoucherCard> createState() => _ActiveVoucherCardState();
