@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:laundry_one/core/services/app_state.dart';
 
 // ============================================================
 // DESIGN SYSTEM - KONSISTEN
@@ -185,26 +186,40 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   Future<void> _loadInventory() async {
+    final branchId = await AppState.getBranchId();
     setState(() => _isLoading = true);
     try {
-      final data = await _supabase
+      var invQuery = _supabase
           .from('inventory')
           .select()
-          .eq('is_active', true)
-          .order('nama_item');
+          .eq('is_active', true);
+
+      // [MULTI-BRANCH]: Filter stok hanya dari cabang yang aktif
+      if (branchId != null) {
+        invQuery = invQuery.eq('branch_id', branchId);
+      }
+
+      final data = await invQuery.order('nama_item');
       final inventoryList = List<Map<String, dynamic>>.from(data);
 
       Map<String, Map<String, dynamic>> links = {};
       if (inventoryList.isNotEmpty) {
         final ids = inventoryList.map((e) => e['id']).toList();
-        final svcData = await _supabase
+        var svcQuery = _supabase
             .from('services')
             .select(
-              // [UPDATE HARGA GROSIR]: Menambahkan min_qty_grosir & harga_grosir
+              // [UPDATE HARGA GROSIL]: Menambahkan min_qty_grosir & harga_grosir
               'id, inventory_id, is_pinned, nama, harga_per_satuan, min_qty_grosir, harga_grosir, satuan, is_active',
             )
             .inFilter('inventory_id', ids)
             .eq('is_active', true);
+
+        // [MULTI-BRANCH]: Juga filter service link berdasarkan cabang
+        if (branchId != null) {
+          svcQuery = svcQuery.eq('branch_id', branchId);
+        }
+
+        final svcData = await svcQuery;
         for (final s in svcData) {
           if (s['inventory_id'] != null) {
             links[s['inventory_id'].toString()] = Map<String, dynamic>.from(s);
@@ -579,19 +594,21 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   () => _isLoading = true,
                 ); 
 
-                try {
-                  final qty = int.parse(stokCtrl.text.trim());
-                  final hargaBeliPerSatuan = int.parse(
-                    hargaBeliCtrl.text.trim(),
-                  );
-                  final totalModal = hargaBeliPerSatuan * qty; 
-                  final kasirId = _supabase.auth.currentUser!.id;
+                 try {
+                   final branchId = await AppState.getBranchId();
+                   final qty = int.parse(stokCtrl.text.trim());
+                   final hargaBeliPerSatuan = int.parse(
+                     hargaBeliCtrl.text.trim(),
+                   );
+                   final totalModal = hargaBeliPerSatuan * qty; 
+                   final kasirId = _supabase.auth.currentUser!.id;
 
-                  final invRes = await _supabase
-                      .from('inventory')
-                      .insert({
-                        'nama_item': namaCtrl.text.trim(),
-                        'stok_saat_ini': qty,
+                   final invRes = await _supabase
+                       .from('inventory')
+                       .insert({
+                         'nama_item': namaCtrl.text.trim(),
+                         'branch_id': branchId,
+                         'stok_saat_ini': qty,
                         'satuan': 'pcs',
                         'harga_beli': hargaBeliPerSatuan,
                         'is_active': true,
@@ -599,10 +616,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       .select()
                       .single();
 
-                  if (isDijual) {
-                    await _supabase.from('services').insert({
-                      'nama': namaCtrl.text.trim(),
-                      'harga_per_satuan': int.parse(hargaJualCtrl.text.trim()),
+                    if (isDijual) {
+                     await _supabase.from('services').insert({
+                       'nama': namaCtrl.text.trim(),
+                       'branch_id': branchId,
+                       'harga_per_satuan': int.parse(hargaJualCtrl.text.trim()),
                       // [UPDATE HARGA GROSIR]: Payload
                       'min_qty_grosir': isGrosir ? int.parse(minGrosirCtrl.text.trim()) : null,
                       'harga_grosir': isGrosir ? int.parse(hargaGrosirCtrl.text.trim()) : null,
@@ -616,6 +634,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
                   await _supabase.from('inventory_log').insert({
                     'inventory_id': invRes['id'],
+                    'branch_id': branchId,
                     'tipe': 'masuk',
                     'qty': qty,
                     'stok_sebelum': 0,
@@ -627,6 +646,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   if (totalModal > 0) {
                     await _supabase.from('expenses').insert({
                       'cashier_id': kasirId,
+                      'branch_id': branchId,
                       'nominal': totalModal,
                       'keterangan':
                           'Belanja Stok Awal: ${namaCtrl.text.trim()}',
@@ -890,9 +910,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
                             'is_active': true,
                           })
                           .eq('id', existingServiceId);
-                    } else {
+                      } else {
+                      final branchId = await AppState.getBranchId();
                       await _supabase.from('services').insert({
                         'nama': namaBaru,
+                        'branch_id': branchId,
                         'harga_per_satuan': hargaJualBaru,
                         'min_qty_grosir': mg,
                         'harga_grosir': hg,

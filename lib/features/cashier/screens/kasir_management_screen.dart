@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:laundry_one/core/services/app_state.dart';
 
 // ============================================================
 // DESIGN SYSTEM - KONSISTEN
@@ -57,10 +58,49 @@ class _KasirManagementScreenState extends State<KasirManagementScreen> {
   final _searchCtrl = TextEditingController();
   bool _isLoading = true;
 
+  // [MULTI-BRANCH]: Daftar cabang & filter untuk Super Admin
+  List<Map<String, dynamic>> _branches = [];
+  String? _selectedBranchFilterId;
+  bool _isSuperAdmin = false;
+
   @override
   void initState() {
     super.initState();
-    _loadKasir();
+    _initData(); // Panggil fungsi antrean baru
+  }
+
+  // Tambahkan fungsi baru ini tepat di bawah initState
+  Future<void> _initData() async {
+    await _checkRoleAndBranches(); // Tunggu sampai status Admin dan ID Cabang selesai disiapkan
+    await _loadKasir(); // Baru tarik data kasir berdasarkan cabang yang benar
+  }
+
+  Future<void> _checkRoleAndBranches() async {
+    final role = await AppState.getRole();
+    _isSuperAdmin = role == 'super_admin';
+
+    if (_isSuperAdmin) {
+      await _loadBranches();
+      // [PERBAIKAN]: Default untuk Admin adalah Semua Cabang (null)
+      if (mounted) setState(() => _selectedBranchFilterId = null);
+    } else {
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _loadBranches() async {
+    try {
+      final data = await _supabase
+          .from('branches')
+          .select('id, nama_cabang')
+          .eq('is_active', true)
+          .order('nama_cabang');
+      if (mounted) {
+        setState(() => _branches = List<Map<String, dynamic>>.from(data));
+      }
+    } catch (e) {
+      debugPrint('Error loading branches: $e');
+    }
   }
 
   @override
@@ -196,17 +236,30 @@ class _KasirManagementScreenState extends State<KasirManagementScreen> {
   Future<void> _loadKasir() async {
     setState(() => _isLoading = true);
     try {
-      // Mengambil data dari tabel kasir dan JOIN dengan tabel profiles
-      final data = await _supabase.from('kasir').select('''
-        id,
-        profile_id,
-        status,
-        created_at,
-        profiles!kasir_profile_id_fkey (
-          nama_lengkap,
-          nomor_hp
-        )
-      ''').order('created_at', ascending: false);
+      final branchId = await AppState.getBranchId();
+      // Super Admin pakai filter yang dipilih di dropdown; Kasir pakai AppState
+      final effectiveBranch = _isSuperAdmin ? _selectedBranchFilterId : branchId;
+
+      var query = _supabase.from('kasir').select('''
+          id,
+          profile_id,
+          status,
+          branch_id,
+          created_at,
+          branches ( nama_cabang ),
+          profiles!kasir_profile_id_fkey (
+            nama_lengkap,
+            nomor_hp
+          )
+        ''');
+
+      // [MULTI-BRANCH]: Hanya tampilkan kasir dari cabang yang dipilih;
+      // Super Admin yang belum pilih cabang akan lihat semua.
+      if (effectiveBranch != null) {
+        query = query.eq('branch_id', effectiveBranch);
+      }
+
+      final data = await query.order('created_at', ascending: false);
 
       if (mounted) {
         setState(() {
@@ -268,6 +321,80 @@ class _KasirManagementScreenState extends State<KasirManagementScreen> {
         setState(() => _isLoading = false);
         final pesanRamah = _getFriendlyErrorMessage(e.toString());
         _showCustomDialog(title: 'Gagal Memperbarui', message: pesanRamah, isSuccess: false);
+      }
+    }
+  }
+
+  Future<void> _dialogApproveDanAssignCabang(Map<String, dynamic> kasirData, String namaKasir) async {
+    String? selectedBranchId = kasirData['branch_id'];
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => AlertDialog(
+          backgroundColor: _DS.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Setujui & Pilih Cabang', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: _DS.textPrimary)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Tentukan cabang tempat $namaKasir akan bertugas:', style: const TextStyle(color: _DS.textSecondary, fontSize: 13)),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: selectedBranchId,
+                hint: const Text('Pilih Cabang Kasir', style: TextStyle(color: _DS.textHint, fontSize: 13)),
+                items: _branches
+                    .map((b) => DropdownMenuItem(
+                          value: b['id'] as String,
+                          child: Text(b['nama_cabang'] as String? ?? '-'),
+                        ))
+                    .toList(),
+                onChanged: (val) => setModalState(() => selectedBranchId = val),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: _DS.ground,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  prefixIcon: const Icon(Icons.store_rounded, color: _DS.textHint, size: 20),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal', style: TextStyle(color: _DS.textSecondary))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              onPressed: () {
+                if (selectedBranchId != null) {
+                  Navigator.pop(ctx, true);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pilih cabang terlebih dahulu!'), backgroundColor: Colors.red));
+                }
+              },
+              child: const Text('Setujui', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirm == true && selectedBranchId != null) {
+      setState(() => _isLoading = true);
+      try {
+        final adminId = _supabase.auth.currentUser!.id;
+        await _supabase.from('kasir').update({
+          'status': 'approved',
+          'branch_id': selectedBranchId,
+          'approved_by': adminId,
+          'approved_at': DateTime.now().toUtc().toIso8601String(),
+        }).eq('id', kasirData['id']);
+        
+        await _loadKasir();
+        if (mounted) _showCustomDialog(title: 'Berhasil', message: '$namaKasir berhasil disetujui dan ditugaskan ke cabang.', isSuccess: true);
+      } catch (e) {
+        setState(() => _isLoading = false);
+        if (mounted) _showCustomDialog(title: 'Gagal', message: e.toString(), isSuccess: false);
       }
     }
   }
@@ -385,6 +512,36 @@ class _KasirManagementScreenState extends State<KasirManagementScreen> {
         backgroundColor: _DS.navy,
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: _isSuperAdmin
+            ? [
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: DropdownButton<String?>(
+                      value: _selectedBranchFilterId,
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('Semua Cabang', style: TextStyle(color: Colors.white, fontSize: 13)),
+                        ),
+                        ..._branches.map((b) => DropdownMenuItem<String?>(
+                              value: b['id'] as String,
+                              child: Text(b['nama_cabang'] as String? ?? '-', style: const TextStyle(color: Colors.white, fontSize: 13)),
+                            )),
+                      ],
+                      onChanged: (val) {
+                        setState(() => _selectedBranchFilterId = val);
+                        _loadKasir();
+                      },
+                      style: const TextStyle(color: Colors.white),
+                      dropdownColor: _DS.blue,
+                      underline: const SizedBox.shrink(),
+                      icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+                    ),
+                  ),
+                )
+              ]
+            : null,
       ),
       body: Stack(
         children: [
@@ -440,6 +597,8 @@ class _KasirManagementScreenState extends State<KasirManagementScreen> {
                             final status = k['status'];
                             final nama = profile['nama_lengkap'] ?? 'Tanpa Nama';
                             final hp = profile['nomor_hp'] ?? '-';
+                            // [FITUR BARU] Tarik nama cabang
+                            final namaCabang = k['branches']?['nama_cabang'] ?? 'Belum Ditugaskan';
 
                             // Konfigurasi Badge Status
                             Color badgeColor = Colors.grey;
@@ -470,7 +629,7 @@ class _KasirManagementScreenState extends State<KasirManagementScreen> {
                                   borderRadius: BorderRadius.circular(16),
                                   onTap: status == 'approved' 
                                       ? () => _showRiwayatKasirBottomSheet(k['profile_id'], nama)
-                                      : null, // Hanya kasir aktif yang bisa dilihat riwayatnya
+                                      : null, 
                                   child: Padding(
                                     padding: const EdgeInsets.all(16),
                                     child: Column(
@@ -497,6 +656,20 @@ class _KasirManagementScreenState extends State<KasirManagementScreen> {
                                                   Text(nama, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _DS.textPrimary)),
                                                   const SizedBox(height: 4),
                                                   Text(hp, style: const TextStyle(color: _DS.textSecondary, fontSize: 12)),
+                                                  const SizedBox(height: 6),
+                                                  // [FITUR BARU] Indikator Cabang
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                    decoration: BoxDecoration(color: _DS.ground, borderRadius: BorderRadius.circular(6)),
+                                                    child: Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        const Icon(Icons.store_rounded, size: 10, color: _DS.textSecondary),
+                                                        const SizedBox(width: 4),
+                                                        Text(namaCabang, style: const TextStyle(color: _DS.textSecondary, fontSize: 10, fontWeight: FontWeight.w700)),
+                                                      ],
+                                                    ),
+                                                  ),
                                                 ],
                                               ),
                                             ),
@@ -523,7 +696,8 @@ class _KasirManagementScreenState extends State<KasirManagementScreen> {
                                                     backgroundColor: Colors.green.shade50, foregroundColor: Colors.green.shade700, elevation: 0,
                                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                                   ),
-                                                  onPressed: () => _ubahStatusKasir(k['id'], 'approved', nama),
+                                                  // [FITUR BARU] Ganti fungsi klik persetujuan
+                                                  onPressed: () => _dialogApproveDanAssignCabang(k, nama),
                                                   icon: const Icon(Icons.check_circle_rounded, size: 16),
                                                   label: const Text('Setujui', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                                 ),
@@ -615,17 +789,19 @@ class _KasirManagementScreenState extends State<KasirManagementScreen> {
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), boxShadow: _DS.fabShadow),
         child: FloatingActionButton.extended(
-          onPressed: () async {
-            final nameCtrl = TextEditingController();
-            final phoneCtrl = TextEditingController();
-            final pwdCtrl = TextEditingController();
+            onPressed: () async {
+              final nameCtrl = TextEditingController();
+              final phoneCtrl = TextEditingController();
+              final pwdCtrl = TextEditingController();
+              String? selectedFormBranchId;
 
-            final confirm = await showDialog<bool>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                backgroundColor: _DS.surface,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                title: const Text('Tambah Kasir Baru', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: _DS.textPrimary)),
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => StatefulBuilder(
+                  builder: (ctx, setModalState) => AlertDialog(
+                    backgroundColor: _DS.surface,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    title: const Text('Tambah Kasir Baru', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: _DS.textPrimary)),
                 content: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -642,6 +818,31 @@ class _KasirManagementScreenState extends State<KasirManagementScreen> {
                       ),
                       const SizedBox(height: 12),
                       TextField(controller: pwdCtrl, obscureText: true, decoration: _modernInputDecoration('Password (Min 6 Karakter)', icon: Icons.lock_outline)),
+
+                      // [MULTI-BRANCH]: Dropdown cabang khusus Super Admin
+                      if (_isSuperAdmin) ...[
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          value: selectedFormBranchId,
+                          hint: const Text('Pilih Cabang Kasir', style: TextStyle(color: _DS.textHint, fontSize: 13)),
+                          items: _branches
+                              .map((b) => DropdownMenuItem(
+                                    value: b['id'] as String,
+                                    child: Text(b['nama_cabang'] as String? ?? '-'),
+                                  ))
+                              .toList(),
+                          onChanged: (val) => setModalState(() => selectedFormBranchId = val),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: _DS.ground,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _DS.blue, width: 1.5)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            prefixIcon: const Icon(Icons.store_rounded, color: _DS.textHint, size: 20),
+                          ),
+                          validator: (val) => (val == null || val.isEmpty) ? 'Pilih cabang dulu' : null,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -650,7 +851,8 @@ class _KasirManagementScreenState extends State<KasirManagementScreen> {
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                     onPressed: () {
-                      if (nameCtrl.text.trim().isNotEmpty && phoneCtrl.text.trim().length >= 10 && pwdCtrl.text.length >= 6) {
+                      final branchOk = !_isSuperAdmin || (selectedFormBranchId != null && selectedFormBranchId!.isNotEmpty);
+                      if (nameCtrl.text.trim().isNotEmpty && phoneCtrl.text.trim().length >= 10 && pwdCtrl.text.length >= 6 && branchOk) {
                         Navigator.pop(ctx, true);
                       }
                     },
@@ -658,7 +860,8 @@ class _KasirManagementScreenState extends State<KasirManagementScreen> {
                   ),
                 ],
               ),
-            );
+            ),
+          );
 
            if (confirm == true) {
               setState(() => _isLoading = true);
@@ -679,10 +882,13 @@ class _KasirManagementScreenState extends State<KasirManagementScreen> {
                 // ==========================================
 
                 // Panggil Edge Function create-kasir
+                final appBranchId = await AppState.getBranchId();
+                final branchId = _isSuperAdmin ? selectedFormBranchId ?? appBranchId : appBranchId;
                 await _supabase.functions.invoke('create-kasir', body: {
                   'full_name': nameCtrl.text.trim(),
-                  'phone': finalPhone, 
+                  'phone': finalPhone,
                   'password': pwdCtrl.text.trim(),
+                  'branch_id': branchId,
                 });
                 
                 await _loadKasir(); 

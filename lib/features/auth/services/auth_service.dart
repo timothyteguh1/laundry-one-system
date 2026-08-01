@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:laundry_one/core/services/app_state.dart';
 
 class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -54,6 +55,21 @@ class AuthService {
         throw Exception('Akses ditolak. Gunakan aplikasi yang sesuai.');
       }
 
+      if (profile['role'] == 'customer') {
+        final custData = await _supabase
+            .from('customers')
+            .select('branch_id')
+            .eq('profile_id', res.user!.id)
+            .maybeSingle();
+
+        final branchId = custData != null && custData['branch_id'] != null
+            ? custData['branch_id'] as String
+            : null;
+
+        await AppState.saveBranch(branchId: branchId);
+        await AppState.saveRole('customer');
+      }
+
       return profile;
     } on AuthException catch (e) {
       throw Exception(_translateError(e.message));
@@ -90,7 +106,7 @@ class AuthService {
     }
   }
 
- // ============================================================
+  // ============================================================
   // REGISTER PELANGGAN (VIA EDGE FUNCTION ANTI-LOGOUT)
   // ============================================================
   Future<void> registerPelanggan({
@@ -98,6 +114,7 @@ class AuthService {
     required String fullName,
     String? password,       // opsional, default = nomor HP
     String? tanggalLahir,   // opsional, untuk notif ulang tahun
+    String? branchId,       // [MULTI-BRANCH]: cabang tempat pelanggan didaftarkan
   }) async {
     try {
       final authEmail = _hpKeEmail(phone);
@@ -105,6 +122,12 @@ class AuthService {
       final authPassword = (password != null && password.isNotEmpty)
           ? password
           : phone.trim();
+
+      final currentRole = await AppState.getRole();
+      String? branchIdToSend = branchId;
+      if (branchIdToSend == null && currentRole != null) {
+        branchIdToSend = await AppState.getBranchId();
+      }
 
       // [UPDATE]: Kita gunakan Edge Function agar sesi kasir tidak tertimpa!
       final response = await _supabase.functions.invoke(
@@ -115,6 +138,7 @@ class AuthService {
           'full_name': fullName,
           'phone': phone,
           'tanggal_lahir': tanggalLahir,
+          'branch_id': branchIdToSend,
         },
       );
 
@@ -198,13 +222,32 @@ class AuthService {
       }
 
       final role = profile['role'];
-      
+       
       // Izinkan masuk JIKA dia cashier ATAU super_admin
       if (role != 'cashier' && role != 'super_admin') {
         await _supabase.auth.signOut();
         throw Exception('Akses ditolak. Aplikasi ini hanya untuk Pegawai.');
       }
 
+      // [MULTI-BRANCH]: Ambil branch_id dari tabel kasir untuk role cashier
+      // Super Admin tetap fleksibel (branch_id = null, bisa ganti cabang nanti)
+      if (role == 'cashier') {
+        final kasirData = await _supabase
+            .from('kasir')
+            .select('branch_id')
+            .eq('profile_id', res.user!.id)
+            .maybeSingle();
+
+        final branchId = kasirData != null && kasirData['branch_id'] != null
+            ? kasirData['branch_id'] as String
+            : null;
+
+        await AppState.saveBranch(branchId: branchId);
+      } else {
+        await AppState.saveBranch(branchId: null);
+      }
+
+      await AppState.saveRole(role);
       return profile;
     } on AuthException catch (e) {
       throw Exception(_translateError(e.message));
@@ -249,6 +292,7 @@ class AuthService {
     
     // Baru kemudian hancurkan sesi login
     await _supabase.auth.signOut();
+    await AppState.clearAll();
   }
   // ============================================================
   // LUPA SANDI VIA OTP (Memanggil Edge Function otp-self-reset)

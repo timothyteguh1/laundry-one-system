@@ -25,33 +25,39 @@ class _CustomerNotificationScreenState extends State<CustomerNotificationScreen>
     try {
       final userId = _supabase.auth.currentUser!.id;
 
-      // Ambil customer_id
+      // [PERBAIKAN MULTI-WALLET]: Ambil SEMUA dompet cabang milik user ini
       final customerData = await _supabase
           .from('customers')
           .select('id')
-          .eq('profile_id', userId)
-          .single();
+          .eq('profile_id', userId);
       
-      final customerId = customerData['id'];
+      if (customerData.isEmpty) {
+        setState(() { _notifications = []; _isLoading = false; });
+        return;
+      }
 
-      // Ambil data notifikasi
+      final List<String> custIds = customerData.map((e) => e['id'] as String).toList();
+
+      // [PERBAIKAN]: Tarik notifikasi dari seluruh dompet menggunakan inFilter
       final notifResponse = await _supabase
           .from('notifications')
           .select()
-          .eq('customer_id', customerId)
+          .inFilter('customer_id', custIds)
           .order('created_at', ascending: false);
 
       setState(() {
         _notifications = List<Map<String, dynamic>>.from(notifResponse);
       });
 
-      // Update status lokal agar titik merah di layar ini langsung hilang
+      // Update status menjadi terbaca untuk SEMUA dompet
       if (_notifications.any((n) => n['is_read'] == false)) {
-        await _supabase
-            .from('notifications')
-            .update({'is_read': true})
-            .eq('customer_id', customerId)
-            .eq('is_read', false); 
+        for (String cId in custIds) {
+          await _supabase
+              .from('notifications')
+              .update({'is_read': true})
+              .eq('customer_id', cId)
+              .eq('is_read', false); 
+        }
             
         setState(() {
           for (var n in _notifications) {

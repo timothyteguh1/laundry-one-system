@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:laundry_one/core/services/app_state.dart';
 
 // ============================================================
 // DESIGN SYSTEM - KONSISTEN
@@ -40,10 +42,69 @@ class _ReportCashFlowScreenState extends State<ReportCashFlowScreen> {
   double _totalTransfer = 0;
   double _totalPengeluaran = 0;
 
+  // [MULTI-BRANCH]
+  List<Map<String, dynamic>> _branches = [];
+  String? _selectedBranchId;
+  bool _isSuperAdmin = false;
+
   @override
   void initState() {
     super.initState();
+    _checkRoleAndLoad();
+  }
+
+  Future<void> _checkRoleAndLoad() async {
+    final branchId = await AppState.getBranchId();
+    final role = await AppState.getRole();
+    _isSuperAdmin = role == 'super_admin' || branchId == null;
+
+    if (_isSuperAdmin) {
+      await _loadBranches();
+      // [PERBAIKAN]: Set default menjadi Semua Cabang (null)
+      _selectedBranchId = null; 
+    } else {
+      _selectedBranchId = branchId;
+    }
+
+    setState(() {});
     _loadData();
+  }
+
+  Future<void> _loadBranches() async {
+    try {
+      final data = await _supabase
+          .from('branches')
+          .select('id, nama_cabang')
+          .eq('is_active', true)
+          .order('nama_cabang');
+      setState(() => _branches = List<Map<String, dynamic>>.from(data));
+    } catch (e) {
+      debugPrint('Error loading branches: $e');
+    }
+  }
+
+  Widget _buildBranchDropdown() {
+    return DropdownButton<String?>(
+      value: _selectedBranchId,
+      dropdownColor: _DS.navy,
+      items: [
+        const DropdownMenuItem<String?>(
+          value: null,
+          child: Text('Semua Cabang', style: TextStyle(color: Colors.white)),
+        ),
+        ..._branches.map((b) => DropdownMenuItem<String?>(
+              value: b['id'] as String,
+              child: Text(b['nama_cabang'] as String? ?? '-', style: const TextStyle(color: Colors.white)),
+            )),
+      ],
+      onChanged: (val) {
+        setState(() => _selectedBranchId = val);
+        _loadData();
+      },
+      underline: const SizedBox.shrink(),
+      icon: const Icon(Icons.arrow_drop_down_rounded, color: Colors.white),
+      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+    );
   }
 
   String _formatRupiah(double amount) {
@@ -62,6 +123,9 @@ class _ReportCashFlowScreenState extends State<ReportCashFlowScreen> {
   }
 
   Future<void> _pickDate() async {
+    HapticFeedback.selectionClick(); // Umpan balik fisik agar responsif
+    await Future.delayed(const Duration(milliseconds: 50)); // Jeda untuk animasi tombol
+    
     final picked = await showDateRangePicker(
       context: context, firstDate: DateTime(2023), lastDate: DateTime.now(), initialDateRange: DateTimeRange(start: _startDate, end: _endDate),
       builder: (ctx, child) => Theme(data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: _DS.blue)), child: child!),
@@ -78,11 +142,24 @@ class _ReportCashFlowScreenState extends State<ReportCashFlowScreen> {
       final startLocal = DateTime(_startDate.year, _startDate.month, _startDate.day, 0, 0, 0);
       final endLocal = DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59, 59);
 
-      final startStr = startLocal.toUtc().toIso8601String();
-      final endStr = endLocal.toUtc().toIso8601String();
+       final startStr = startLocal.toUtc().toIso8601String();
+       final endStr = endLocal.toUtc().toIso8601String();
 
-      final resPayments = await _supabase.from('order_payments').select('jumlah, metode').gte('created_at', startStr).lte('created_at', endStr);
-      double cash = 0, qris = 0, transfer = 0;
+       final selectedBranchId = _selectedBranchId;
+
+       // [MULTI-BRANCH]: Filter order_payments melalui join orders
+       var payQuery = _supabase
+           .from('order_payments')
+           .select('jumlah, metode, orders!inner(branch_id)')
+           .gte('created_at', startStr)
+           .lte('created_at', endStr);
+
+       if (selectedBranchId != null) {
+         payQuery = payQuery.eq('orders.branch_id', selectedBranchId);
+       }
+
+       final resPayments = await payQuery;
+       double cash = 0, qris = 0, transfer = 0;
       for (var p in resPayments) {
         final amt = (p['jumlah'] ?? 0).toDouble();
         final method = p['metode'];
@@ -91,7 +168,18 @@ class _ReportCashFlowScreenState extends State<ReportCashFlowScreen> {
         else if (method == 'transfer') transfer += amt;
       }
 
-      final resExpenses = await _supabase.from('expenses').select('nominal').gte('created_at', startStr).lte('created_at', endStr);
+       // [MULTI-BRANCH]: Filter expenses hanya dari cabang yang aktif
+       var expQuery = _supabase
+           .from('expenses')
+           .select('nominal')
+           .gte('created_at', startStr)
+           .lte('created_at', endStr);
+
+       if (selectedBranchId != null) {
+         expQuery = expQuery.eq('branch_id', selectedBranchId);
+       }
+
+       final resExpenses = await expQuery;
       double keluar = 0;
       for (var e in resExpenses) { keluar += (e['nominal'] ?? 0).toDouble(); }
 
@@ -118,7 +206,11 @@ class _ReportCashFlowScreenState extends State<ReportCashFlowScreen> {
       appBar: AppBar(
         title: const Text('Laporan Kas', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
         backgroundColor: _DS.navy, foregroundColor: Colors.white, elevation: 0,
-        actions: [IconButton(icon: const Icon(Icons.calendar_month_rounded), onPressed: _pickDate)],
+        actions: [
+          if (_isSuperAdmin) Center(child: Padding(padding: const EdgeInsets.only(right: 8), child: _buildBranchDropdown())),
+          IconButton(icon: const Icon(Icons.calendar_month_rounded), onPressed: _pickDate),
+          const SizedBox(width: 8),
+        ],
       ),
       body: _isLoading
         ? const Center(child: CircularProgressIndicator(color: _DS.blue))

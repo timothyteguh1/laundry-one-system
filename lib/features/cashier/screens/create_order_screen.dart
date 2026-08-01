@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:laundry_one/features/cashier/screens/invoice_screen.dart';
 import 'package:laundry_one/features/auth/services/auth_service.dart';
+import 'package:laundry_one/core/services/app_state.dart';
 
 // ============================================================
 // DESIGN SYSTEM - KONSISTEN
@@ -224,14 +225,21 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   }
 
   Future<void> _loadServices() async {
-    final data = await _supabase
+    final branchId = await AppState.getBranchId();
+    var query = _supabase
         .from('services')
         .select(
-          // [UPDATE HARGA GROSIR]: Menambahkan kolom min_qty_grosir & harga_grosir pada Query 1 Kali Tarik
+          // [UPDATE HARGA GROSIL]: Menambahkan kolom min_qty_grosir & harga_grosir pada Query 1 Kali Tarik
           'id, nama, harga_per_satuan, min_qty_grosir, harga_grosir, satuan, tipe, is_active, inventory_id, qty_per_unit, is_pinned, inventory:inventory_id(stok_saat_ini)',
         )
-        .eq('is_active', true)
-        .order('nama');
+        .eq('is_active', true);
+
+    // [MULTI-BRANCH]: Filter layanan berdasarkan cabang yang aktif
+    if (branchId != null) {
+      query = query.eq('branch_id', branchId);
+    }
+
+    final data = await query.order('nama');
     if (mounted)
       setState(() => _services = List<Map<String, dynamic>>.from(data));
   }
@@ -250,28 +258,35 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     _customerPage = 0;
     _hasMoreCustomers = true;
 
+    final branchId = await AppState.getBranchId();
+
     try {
       var query = _supabase
           .from('profiles')
-          .select('id, nama_lengkap, nomor_hp')
+          .select(
+            // [KUNCI PERBAIKAN]: Tambahkan !inner agar benar-benar terisolasi
+            'id, nama_lengkap, nomor_hp, customers!inner(branch_id)',
+          )
           .eq('role', 'customer')
           .eq('is_active', true);
+
+      // [MULTI-BRANCH]: Filter pelanggan hanya dari cabang yang aktif
+      if (branchId != null) {
+        query = query.eq('customers.branch_id', branchId);
+      }
 
       final q = _searchCtrl.text.trim();
       final bool isSearchActive = q.isNotEmpty;
 
-      // Filter Pencarian Server
       if (isSearchActive) {
         query = query.or('nama_lengkap.ilike.%$q%,nomor_hp.ilike.%$q%');
       }
 
       final List<dynamic> data;
-      // [FIXED]: Jika sedang mencari, bypass paginasi (tarik semua hasil yg cocok)
       if (isSearchActive) {
         data = await query.order('nama_lengkap');
         _hasMoreCustomers = false; 
       } else {
-        // Jika tidak mencari, gunakan paginasi normal
         final startRow = _customerPage * _customerPerPage;
         final endRow = startRow + _customerPerPage - 1;
         data = await query.order('nama_lengkap').range(startRow, endRow);
@@ -300,6 +315,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     if (_isLoadingMoreCustomers || !_hasMoreCustomers) return;
     setState(() => _isLoadingMoreCustomers = true);
 
+    final branchId = await AppState.getBranchId();
+
     try {
       _customerPage++;
       final start = _customerPage * _customerPerPage;
@@ -307,9 +324,16 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
       var query = _supabase
           .from('profiles')
-          .select('id, nama_lengkap, nomor_hp')
+          .select(
+            // [KUNCI PERBAIKAN]: Tambahkan !inner
+            'id, nama_lengkap, nomor_hp, customers!inner(branch_id)', 
+          )
           .eq('role', 'customer')
           .eq('is_active', true);
+
+      if (branchId != null) {
+        query = query.eq('customers.branch_id', branchId);
+      }
 
       if (_searchCtrl.text.isNotEmpty) {
         final q = _searchCtrl.text;
@@ -502,23 +526,30 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     setState(() => _isLoading = true);
     try {
       final profileId = _selectedCustomer!['id'];
+      // [UPDATE]: Pindahkan pengambilan branchId ke atas
+      final branchId = await AppState.getBranchId();
 
       final custData = await _supabase
           .from('customers')
           .select('id, poin_saldo')
           .eq('profile_id', profileId)
+          .eq('branch_id', branchId!) // <--- [KUNCI PERBAIKAN]: Filter berdasarkan cabang
           .maybeSingle();
+          
       final int poinSaldo = custData != null
           ? (custData['poin_saldo'] as num).toInt()
           : 0;
       final String? customerId = custData?['id'];
 
-      final rewards = await _supabase
+      var rewardQuery = _supabase
           .from('rewards_catalog')
           .select()
           .inFilter('tipe_reward', ['diskon_nominal', 'diskon_persen'])
-          .eq('is_active', true)
-          .order('poin_dibutuhkan');
+          .eq('is_active', true);
+
+      rewardQuery = rewardQuery.eq('branch_id', branchId);
+
+      final rewards = await rewardQuery.order('poin_dibutuhkan');
 
       List<Map<String, dynamic>> validVouchers = [];
       Map<String, DateTime> usedDates = {};
@@ -936,12 +967,17 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     setState(() => _isLoading = true);
     try {
       final profileId = _selectedCustomer!['id'];
+      // [UPDATE]: Ambil branchId
+      final branchId = await AppState.getBranchId();
+
       final custData = await _supabase
           .from('customers')
           .select('id')
           .eq('profile_id', profileId)
+          .eq('branch_id', branchId!) // <--- [KUNCI PERBAIKAN]: Filter berdasarkan cabang
           .maybeSingle();
-      if (custData == null) throw 'Data pelanggan belum lengkap.';
+          
+      if (custData == null) throw 'Data pelanggan belum lengkap di cabang ini.';
       final customerId = custData['id'];
 
       final voucher = await _supabase
@@ -999,6 +1035,10 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       final namaKasir = kasirProfile['nama_lengkap'] ?? 'Kasir';
       final roleKasir = kasirProfile['role'] ?? 'cashier';
       final eksekutorName = roleKasir == 'super_admin' ? 'admin' : 'kasir';
+      
+      // [UPDATE]: Pindahkan pengambilan branchId ke atas
+      final branchId = await AppState.getBranchId();
+      if (branchId == null) throw 'Cabang tidak ditemukan!';
 
       String? customerId;
       if (_selectedCustomer != null) {
@@ -1007,6 +1047,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             .from('customers')
             .select('id')
             .eq('profile_id', profileId)
+            .eq('branch_id', branchId) // <--- [KUNCI PERBAIKAN]: Kunci spesifik ke cabang ini
             .maybeSingle();
         customerId = custData?['id'];
       }
@@ -1028,27 +1069,58 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       int poinDidapat = 0;
       if (customerId != null) poinDidapat = (_total / _rupiahPerPoin).floor();
 
-      final now = DateTime.now();
-      final prefix =
-          'ORD-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+      // =======================================================
+      // [UPDATE MULTI-BRANCH]: GENERATE KODE INISIAL CABANG
+      // =======================================================
+      String branchCode = 'CAB'; // Default jika gagal
+      if (branchId != null) {
+        try {
+          final branchData = await _supabase
+              .from('branches')
+              .select('nama_cabang')
+              .eq('id', branchId)
+              .maybeSingle();
+          if (branchData != null && branchData['nama_cabang'] != null) {
+            // Ambil 3 huruf/angka pertama, buang spasi dan simbol
+            String nama = branchData['nama_cabang']
+                .toString()
+                .toUpperCase()
+                .replaceAll(RegExp(r'[^A-Z0-9]'), '');
+            branchCode = nama.length >= 3 ? nama.substring(0, 3) : nama.padRight(3, 'X');
+          }
+        } catch (_) {}
+      }
 
-      final lastOrderResponse = await _supabase
+      final now = DateTime.now();
+      // Format Baru: ORD-LSH-20260731 atau ORD-HAP-20260731
+      final prefix =
+          'ORD-$branchCode-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+
+      var lastOrderQuery = _supabase
           .from('orders')
           .select('nomor_order')
-          .like('nomor_order', '$prefix-%')
-          .order('nomor_order', ascending: false) // Urutkan dari yang terbesar
-          .limit(1) // Ambil 1 saja yang paling atas
+          .like('nomor_order', '$prefix-%'); // Pastikan difilter dengan format baru
+
+      if (branchId != null) {
+        lastOrderQuery = lastOrderQuery.eq('branch_id', branchId);
+      }
+
+      final lastOrderResponse = await lastOrderQuery
+          .order('nomor_order', ascending: false)
+          .limit(1)
           .maybeSingle();
 
       int urutanBaru = 1;
       if (lastOrderResponse != null) {
         final lastNomor = lastOrderResponse['nomor_order'] as String;
+        // split('-').last DIJAMIN AMAN membedah format lama maupun format baru
         final lastUrutanStr = lastNomor.split('-').last;
         final lastUrutanInt = int.tryParse(lastUrutanStr) ?? 0;
         urutanBaru = lastUrutanInt + 1; // Lanjutkan hitungan
       }
 
       final nomorOrder = '$prefix-${urutanBaru.toString().padLeft(4, '0')}';
+      // =======================================================
 
       final int totalDibayar = _tipeBayar == 'piutang' ? 0 : _total.toInt();
       final String metodeBayarFinal = _tipeBayar == 'piutang'
@@ -1059,6 +1131,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         'nomor_order': nomorOrder,
         'customer_id': customerId,
         'cashier_id': kasirId,
+        'branch_id': branchId,
         'status': 'diproses',
         'total_harga': _total.toInt(),
         'total_dibayar': totalDibayar,
@@ -1142,6 +1215,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             .eq('id', invId);
         await _supabase.from('inventory_log').insert({
           'inventory_id': invId,
+          'branch_id': branchId,
           'tipe': 'keluar',
           'qty': qtyKurang,
           'stok_sebelum': stokBefore,
@@ -1167,6 +1241,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             .eq('id', customerId);
         await _supabase.from('points_ledger').insert({
           'customer_id': customerId,
+          'branch_id': branchId,
           'tipe': 'earned',
           'jumlah': poinDidapat,
           'saldo_sebelum': saldoSebelumC,
@@ -1204,6 +1279,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             .eq('id', customerId);
         await _supabase.from('points_ledger').insert({
           'customer_id': customerId,
+          'branch_id': branchId,
           'tipe': 'redeemed',
           'jumlah': -poinReq,
           'saldo_sebelum': saldoSebelumR,
@@ -1218,6 +1294,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             .from('reward_redemptions')
             .insert({
               'customer_id': customerId,
+              'branch_id': branchId,
               'reward_id': _selectedAutoReward!['id'],
               'kode_voucher':
                   'POS-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}',
@@ -1347,7 +1424,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'Password otomatis = nomor HP',
+                  'Sistem akan otomatis mengecek data lintas cabang',
                   style: TextStyle(color: _DS.textSecondary, fontSize: 12),
                 ),
                 const SizedBox(height: 20),
@@ -1392,54 +1469,130 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                         ? null
                         : () async {
                             if (isSubmitting) return;
-
                             if (!formKey.currentState!.validate()) return;
+                            
                             setModalState(() => isSubmitting = true);
                             try {
-                              await AuthService().registerPelanggan(
-                                phone: hpCtrl.text.trim(),
-                                fullName: namaCtrl.text.trim(),
-                              );
-                              await Future.delayed(
-                                const Duration(milliseconds: 800),
-                              );
-                              await _loadCustomers();
-                              if (mounted) {
-                                Navigator.pop(ctx);
-                                final c = _allCustomers.firstWhere(
-                                  (e) => e['nomor_hp'] == hpCtrl.text.trim(),
-                                );
-                                setState(() {
-                                  _selectedCustomer = c;
-                                  _step = 2;
-                                });
-                                _showCustomDialog(
-                                  title: 'Berhasil Mendaftar',
-                                  message:
-                                      '${namaCtrl.text.trim()} berhasil didaftarkan dan dipilih!',
-                                  isSuccess: true,
-                                );
-                              }
+                               final branchId = await AppState.getBranchId();
+                               // [PERBAIKAN ERROR]: Pastikan branchId tidak null agar Supabase tidak protes
+                               if (branchId == null) throw 'Cabang tidak ditemukan. Silakan login ulang.';
+
+                               final phoneInput = hpCtrl.text.trim();
+                               final nameInput = namaCtrl.text.trim();
+
+                               // INTERCEPTOR PROFIL (Cek Global)
+                               final existingProfile = await _supabase
+                                   .from('profiles')
+                                   .select('id, nama_lengkap')
+                                   .eq('nomor_hp', phoneInput)
+                                   .maybeSingle();
+
+                               if (existingProfile != null) {
+                                 // Profil Ditemukan!
+                                 setModalState(() => isSubmitting = false);
+                                 final profileId = existingProfile['id'];
+                                 final namaTerdaftar = existingProfile['nama_lengkap'] ?? nameInput;
+
+                                 final confirmWallet = await showDialog<bool>(
+                                   context: ctx,
+                                   builder: (dialogCtx) => AlertDialog(
+                                     backgroundColor: _DS.surface,
+                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                     title: const Text('Akun Ditemukan', style: TextStyle(fontWeight: FontWeight.w800, color: _DS.textPrimary)),
+                                     content: Text('Nomor $phoneInput sudah terdaftar atas nama "$namaTerdaftar" di cabang lain.\n\nKlik "Lanjut" untuk mengaktifkan dompet poin di cabang ini.'),
+                                     actions: [
+                                       TextButton(
+                                         onPressed: () => Navigator.pop(dialogCtx, false), 
+                                         child: const Text('Batal', style: TextStyle(color: _DS.textSecondary, fontWeight: FontWeight.w600))
+                                       ),
+                                       ElevatedButton(
+                                         style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, foregroundColor: Colors.white, elevation: 0),
+                                         onPressed: () => Navigator.pop(dialogCtx, true),
+                                         child: const Text('Lanjut Buat Dompet', style: TextStyle(fontWeight: FontWeight.w700)),
+                                       ),
+                                     ],
+                                   )
+                                 );
+
+                                 if (confirmWallet == true) {
+                                   setModalState(() => isSubmitting = true);
+                                   
+                                   final existingWallet = await _supabase
+                                       .from('customers')
+                                       .select('id')
+                                       .eq('profile_id', profileId)
+                                       .eq('branch_id', branchId!) // <--- TAMBAHKAN TANDA SERU DI SINI
+                                       .maybeSingle();
+
+                                   if (existingWallet == null) {
+                                     // [PERBAIKAN ERROR]: Gunakan <String, dynamic> agar Dart mengerti tipe datanya
+                                     await _supabase.from('customers').insert(<String, dynamic>{
+                                       'profile_id': profileId,
+                                       'branch_id': branchId,
+                                       'poin_saldo': 0
+                                     });
+                                   }
+                                   
+                                   await _loadCustomers();
+                                   if (mounted) {
+                                     Navigator.pop(ctx); 
+                                     final c = _allCustomers.firstWhere(
+                                       (e) => e['nomor_hp'] == phoneInput,
+                                       orElse: () => <String, dynamic>{
+                                         'id': profileId,
+                                         'nama_lengkap': namaTerdaftar,
+                                         'nomor_hp': phoneInput,
+                                       },
+                                     );
+                                     setState(() {
+                                       _selectedCustomer = c;
+                                       _step = 2; // Khusus di halaman pesanan, pindah ke step 2
+                                     });
+                                     _showCustomDialog(
+                                       title: 'Dompet Aktif',
+                                       message: 'Dompet $namaTerdaftar berhasil diaktifkan dan dipilih!',
+                                       isSuccess: true,
+                                     );
+                                   }
+                                 }
+                               } else {
+                                 // Profil Kosong -> Daftar Normal
+                                 await AuthService().registerPelanggan(
+                                   phone: phoneInput,
+                                   fullName: nameInput,
+                                   branchId: branchId,
+                                 );
+                                 await Future.delayed(const Duration(milliseconds: 800));
+                                 await _loadCustomers();
+                                 if (mounted) {
+                                   Navigator.pop(ctx);
+                                   final c = _allCustomers.firstWhere(
+                                     (e) => e['nomor_hp'] == phoneInput,
+                                     orElse: () => <String, dynamic>{
+                                       'id': '',
+                                       'nama_lengkap': nameInput,
+                                       'nomor_hp': phoneInput,
+                                     },
+                                   );
+                                   setState(() {
+                                     _selectedCustomer = c;
+                                     _step = 2; // Khusus di halaman pesanan, pindah ke step 2
+                                   });
+                                  _showCustomDialog(
+                                    title: 'Berhasil Mendaftar',
+                                    message: '$nameInput berhasil didaftarkan dan dipilih!',
+                                    isSuccess: true,
+                                  );
+                                }
+                               }
                             } catch (e) {
                               setModalState(() => isSubmitting = false);
-
-                              String pesanError = e.toString().replaceAll(
-                                'Exception: ',
-                                '',
-                              );
-                              if (pesanError.contains(
-                                    'already been registered',
-                                  ) ||
-                                  pesanError.contains('already exists')) {
+                              String pesanError = e.toString().replaceAll('Exception: ', '');
+                              if (pesanError.contains('already been registered') || pesanError.contains('already exists')) {
                                pesanError = 'Nomor WhatsApp sudah terdaftar.\n\nSilakan cari di daftar pelanggan atau tarik layar ke bawah untuk refresh.';
                               }
-
                               if (mounted) {
-                                _showCustomDialog(
-                                  title: 'Gagal Mendaftar',
-                                  message: pesanError,
-                                  isSuccess: false,
-                                );
+                                _showCustomDialog(title: 'Gagal Mendaftar', message: pesanError, isSuccess: false);
                               }
                             }
                           },
@@ -2581,31 +2734,37 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             const SizedBox(height: 12),
             Row(
               children: [
-                _PayOption(
-                  label: 'Cash',
-                  icon: Icons.payments_rounded,
-                  selected: _metodeBayar == 'cash',
-                  color: Colors.green.shade700,
-                  bgColor: Colors.green.shade50,
-                  onTap: () => setState(() => _metodeBayar = 'cash'),
+                Expanded(
+                  child: _PayOption(
+                    label: 'Cash',
+                    icon: Icons.payments_rounded,
+                    selected: _metodeBayar == 'cash',
+                    color: Colors.green.shade700,
+                    bgColor: Colors.green.shade50,
+                    onTap: () => setState(() => _metodeBayar = 'cash'),
+                  ),
                 ),
                 const SizedBox(width: 8),
-                _PayOption(
-                  label: 'Transfer',
-                  icon: Icons.account_balance_rounded,
-                  selected: _metodeBayar == 'transfer',
-                  color: Colors.purple.shade700,
-                  bgColor: Colors.purple.shade50,
-                  onTap: () => setState(() => _metodeBayar = 'transfer'),
+                Expanded(
+                  child: _PayOption(
+                    label: 'Transfer',
+                    icon: Icons.account_balance_rounded,
+                    selected: _metodeBayar == 'transfer',
+                    color: Colors.purple.shade700,
+                    bgColor: Colors.purple.shade50,
+                    onTap: () => setState(() => _metodeBayar = 'transfer'),
+                  ),
                 ),
                 const SizedBox(width: 8),
-                _PayOption(
-                  label: 'QRIS',
-                  icon: Icons.qr_code_scanner_rounded,
-                  selected: _metodeBayar == 'qris',
-                  color: _DS.blue,
-                  bgColor: _DS.sky,
-                  onTap: () => setState(() => _metodeBayar = 'qris'),
+                Expanded(
+                  child: _PayOption(
+                    label: 'QRIS',
+                    icon: Icons.qr_code_scanner_rounded,
+                    selected: _metodeBayar == 'qris',
+                    color: _DS.blue,
+                    bgColor: _DS.sky,
+                    onTap: () => setState(() => _metodeBayar = 'qris'),
+                  ),
                 ),
               ],
             ),

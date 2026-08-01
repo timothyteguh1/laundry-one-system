@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:laundry_one/core/services/app_state.dart';
 
 // ============================================================
 // DESIGN SYSTEM - KONSISTEN
@@ -137,9 +138,17 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
   }
 
   Future<void> _loadServices() async {
+    final branchId = await AppState.getBranchId();
     setState(() => _isLoading = true);
     try {
-      final data = await _supabase.from('services').select().eq('is_active', true).eq('tipe', 'jasa').order('nama');
+      var query = _supabase.from('services').select().eq('is_active', true).eq('tipe', 'jasa');
+
+      // [MULTI-BRANCH]: Filter jasa berdasarkan cabang yang aktif
+      if (branchId != null) {
+        query = query.eq('branch_id', branchId);
+      }
+
+      final data = await query.order('nama');
       if (mounted) {
         setState(() {
           _services = List<Map<String, dynamic>>.from(data);
@@ -352,19 +361,22 @@ class _ServicesManagementScreenState extends State<ServicesManagementScreen> {
                 if (isGrosir && (minGrosirCtrl.text.isEmpty || hargaGrosirCtrl.text.isEmpty)) return;
                 
                 Navigator.pop(ctx);
-                setState(() => _isLoading = true); 
-                
-                final payload = {
-                  'nama': namaCtrl.text.trim(),
-                  'harga_per_satuan': int.parse(hargaCtrl.text.trim()),
-                  'satuan': satuanSelected,
-                  'tipe': 'jasa',
-                  'is_active': true,
-                  'is_pinned': isPinned,
-                  // [UPDATE HARGA GROSIR]: Inject Payload
-                  'min_qty_grosir': isGrosir ? int.parse(minGrosirCtrl.text.trim()) : null,
-                  'harga_grosir': isGrosir ? int.parse(hargaGrosirCtrl.text.trim()) : null,
-                };
+                 setState(() => _isLoading = true); 
+                 
+                 final branchId = await AppState.getBranchId();
+                 
+                 final payload = {
+                   'nama': namaCtrl.text.trim(),
+                   'harga_per_satuan': int.parse(hargaCtrl.text.trim()),
+                   'satuan': satuanSelected,
+                   'tipe': 'jasa',
+                   'is_active': true,
+                   'is_pinned': isPinned,
+                   'branch_id': branchId,
+                   // [UPDATE HARGA GROSIL]: Inject Payload
+                   'min_qty_grosir': isGrosir ? int.parse(minGrosirCtrl.text.trim()) : null,
+                   'harga_grosir': isGrosir ? int.parse(hargaGrosirCtrl.text.trim()) : null,
+                 };
 
                 try {
                   if (isEdit) {

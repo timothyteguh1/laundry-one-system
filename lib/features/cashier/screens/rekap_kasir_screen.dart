@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:laundry_one/core/services/app_state.dart';
 
 // ============================================================
 // DESIGN SYSTEM - Sesuai dengan Laundry One POS
@@ -124,25 +125,32 @@ class _RekapPendapatanScreenState extends State<RekapPendapatanScreen> {
         59,
       ).toUtc().toIso8601String();
 
-      // 3. Bangun Query Efisien (Hanya ke order_payments)
-      var query = _supabase
-          .from('order_payments')
-          .select('jumlah, metode, created_at');
+       // 3. Bangun Query Efisien (Hanya ke order_payments)
+       final branchId = await AppState.getBranchId();
 
-      // [LOGIKA UTAMA FILTER KASIR]
-      if (_userRole != 'super_admin') {
-        // Jika Kasir: Kunci paksa ke ID dia sendiri
-        query = query.eq('diterima_oleh', user.id);
-      } else if (_userRole == 'super_admin' && _selectedKasirId != null) {
-        // Jika Admin dan memilih kasir tertentu dari dropdown
-        query = query.eq('diterima_oleh', _selectedKasirId!);
-      }
+       var query = _supabase
+           .from('order_payments')
+           .select('jumlah, metode, created_at, orders!inner(branch_id)');
 
-      // Akhiri query dengan rentang tanggal dan sorting
-      final payments = await query
-          .gte('created_at', startIso)
-          .lte('created_at', endIso)
-          .order('created_at', ascending: false);
+       // [LOGIKA UTAMA FILTER KASIR]
+       if (_userRole != 'super_admin') {
+         // Jika Kasir: Kunci paksa ke ID dia sendiri
+         query = query.eq('diterima_oleh', user.id);
+       } else if (_userRole == 'super_admin' && _selectedKasirId != null) {
+         // Jika Admin dan memilih kasir tertentu dari dropdown
+         query = query.eq('diterima_oleh', _selectedKasirId!);
+       }
+
+       // [MULTI-BRANCH]: Filter berdasarkan cabang (kasir) atau cabang yang dipilih (super admin)
+       if (branchId != null) {
+         query = query.eq('orders.branch_id', branchId);
+       }
+
+       // Akhiri query dengan rentang tanggal dan sorting
+       final payments = await query
+           .gte('created_at', startIso)
+           .lte('created_at', endIso)
+           .order('created_at', ascending: false);
 
       const months = [
         'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des',

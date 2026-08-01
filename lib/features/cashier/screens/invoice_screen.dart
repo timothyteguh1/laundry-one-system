@@ -59,11 +59,42 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   bool _connected = false;
 
   final _supabase = Supabase.instance.client;
+  String? _branchName;
+  String? _branchAddress;
 
   @override
   void initState() {
     super.initState();
     _initBluetooth();
+    _loadBranchInfo();
+  }
+
+  // [MULTI-BRANCH]: Fetch branch name & address dynamically from branches table
+  Future<void> _loadBranchInfo() async {
+    try {
+      final order = await _supabase
+          .from('orders')
+          .select('branch_id')
+          .eq('id', widget.orderId)
+          .maybeSingle();
+
+      final branchId = order?['branch_id'] as String?;
+      if (branchId != null) {
+        final branch = await _supabase
+            .from('branches')
+            .select('nama_cabang, alamat')
+            .eq('id', branchId)
+            .maybeSingle();
+        if (branch != null && mounted) {
+          setState(() {
+            _branchName = branch['nama_cabang'] as String?;
+            _branchAddress = branch['alamat'] as String?;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading branch info: $e');
+    }
   }
 
   // ============================================================
@@ -95,12 +126,14 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         final orderId = widget.orderId;
         final currentKasirId = _supabase.auth.currentUser!.id;
 
+        // Ambil data order lengkap beserta branch_id nya
         final ord = await _supabase.from('orders').select().eq('id', orderId).single();
         final custId = ord['customer_id'];
         final int poin = ord['poin_didapat'] ?? 0;
         final bool poinDiberikan = ord['poin_sudah_diberikan'] == true;
+        final branchId = ord['branch_id']; // <--- KUNCI PERBAIKAN: Ambil ID Cabang
 
-        // 1. TARIK KEMBALI POIN YANG DIDAPAT DARI TRANSAKSI INI
+        // 1. TARIK KEMBALI POIN EARNED (JIKA ADA)
         if (custId != null && poinDiberikan && poin > 0) {
           final custData = await _supabase.from('customers').select('poin_saldo').eq('id', custId).single();
           final int saldoSaatIni = custData['poin_saldo'] ?? 0;
@@ -110,6 +143,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
           
           await _supabase.from('points_ledger').insert({
             'customer_id': custId,
+            'branch_id': branchId, // <--- PASTIKAN MASUK KE CABANG YANG TEPAT
             'tipe': 'reversed',
             'jumlah': -poin,
             'saldo_sebelum': saldoSaatIni,
@@ -119,18 +153,16 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
           });
         }
 
-        // 2. [PERBAIKAN LOGIKA REFUND VOUCHER]
-        // Hanya kembalikan poin JIKA dan HANYA JIKA ada diskon (Voucher dipakai di nota ini)
-        if (widget.diskon > 0 && custId != null) {
+        // 2. REFUND POIN VOUCHER (TANPA SYARAT DISKON)
+        if (custId != null) {
           List<dynamic> redemptions = [];
           
-          // Cari voucher HANYA jika voucher itu terikat secara spesifik ke orderId ini
           try {
+            // Tarik semua voucher yang terikat ke nota ini (baik diskon maupun barang fisik)
             final res = await _supabase.from('reward_redemptions').select().eq('dipakai_di_order', orderId);
             if (res.isNotEmpty) redemptions.addAll(res);
           } catch (_) {}
 
-          // Eksekusi Pengembalian Saldo Voucher ke pelanggan
           for (var red in redemptions) {
             final int poinDigunakan = red['poin_digunakan'] ?? 0;
             final String? redCustId = red['customer_id'];
@@ -142,10 +174,12 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
               await _supabase.from('customers').update({'poin_saldo': saldoBaru}).eq('id', redCustId);
 
+              // KEMBALIKAN POIN KE PELANGGAN
               await _supabase.from('points_ledger').insert({
                 'customer_id': redCustId,
+                'branch_id': branchId, // <--- PASTIKAN MASUK KE CABANG YANG TEPAT
                 'tipe': 'reversed',
-                'jumlah': poinDigunakan,
+                'jumlah': poinDigunakan, // Angka Positif = Saldo Bertambah
                 'saldo_sebelum': saldoSaatIni,
                 'saldo_sesudah': saldoBaru,
                 'dilakukan_oleh': currentKasirId,
@@ -157,7 +191,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                await _supabase.from('notifications').delete().eq('redemption_id', red['id']);
             } catch (_) {}
 
-            // Hapus rekam jejak voucher agar pelanggan bisa menggunakannya lagi
+            // Hapus rekam jejak voucher
             await _supabase.from('reward_redemptions').delete().eq('id', red['id']);
           }
         }
@@ -168,7 +202,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         if (mounted) {
           Navigator.pop(context); // Tutup Loading
           Navigator.pop(context, 'dihapus'); // Tutup Invoice
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Nota batal & Hukuman 90 Hari di-reset!'), backgroundColor: Colors.green));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Nota batal & Poin/Voucher telah dikembalikan!'), backgroundColor: Colors.green));
         }
       } catch (e) {
         if (mounted) {
@@ -435,14 +469,35 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                       ),
                                     ),
                                     const SizedBox(height: AppTokens.space4),
-                                    Text(
-                                      widget.nomorOrder,
-                                      style: const TextStyle(
-                                        color: AppTokens.textSecondary,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
+                                     Text(
+                                       widget.nomorOrder,
+                                       style: const TextStyle(
+                                         color: AppTokens.textSecondary,
+                                         fontSize: 13,
+                                         fontWeight: FontWeight.w600,
+                                       ),
+                                     ),
+                                     const SizedBox(height: AppTokens.space4),
+
+                                     // [MULTI-BRANCH]: Nama & alamat cabang secara dinamis
+                                     if (_branchName != null)
+                                       Text(
+                                         _branchName!,
+                                         style: const TextStyle(
+                                           color: AppTokens.textPrimary,
+                                           fontSize: 13,
+                                           fontWeight: FontWeight.w700,
+                                         ),
+                                       ),
+                                     if (_branchAddress != null)
+                                       Text(
+                                         _branchAddress!,
+                                         style: const TextStyle(
+                                           color: AppTokens.textSecondary,
+                                           fontSize: 11,
+                                         ),
+                                         textAlign: TextAlign.center,
+                                       ),
                                   ],
                                 ),
                               ),

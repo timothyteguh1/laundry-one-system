@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:laundry_one/core/services/app_state.dart';
 
 // ============================================================
 // DESIGN SYSTEM
@@ -110,17 +111,25 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
       final profile = await _supabase.from('profiles').select('role').eq('id', myId).maybeSingle();
       if (profile != null) _isAdmin = profile['role'] == 'super_admin';
 
+      final branchId = await AppState.getBranchId();
+
       final startIso = DateTime(_startDate.year, _startDate.month, _startDate.day, 0, 0, 0).toUtc().toIso8601String();
       final endIso = DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59, 59).toUtc().toIso8601String();
 
-      final data = await _supabase
+      var logQuery = _supabase
           .from('inventory_log')
           .select('inventory_id, created_at, qty, keterangan, inventory(nama_item, harga_beli, satuan)')
           .eq('tipe', 'masuk')
           .like('keterangan', '%[ID: BLJ-%')
           .gte('created_at', startIso)
-          .lte('created_at', endIso)
-          .order('created_at', ascending: false);
+          .lte('created_at', endIso);
+
+      // [MULTI-BRANCH]: Filter riwayat pembelian hanya dari cabang yang aktif
+      if (branchId != null) {
+        logQuery = logQuery.eq('branch_id', branchId);
+      }
+
+      final data = await logQuery.order('created_at', ascending: false);
 
       final Map<String, _NotaData> grouped = {};
 
@@ -470,13 +479,21 @@ class _CreatePurchaseScreenState extends State<_CreatePurchaseScreen> {
   Future<void> _loadInitialData() async {
     setState(() => _isLoading = true);
     try {
+      final branchId = await AppState.getBranchId();
       final myId = _supabase.auth.currentUser!.id;
       final profile = await _supabase.from('profiles').select('nama_lengkap').eq('id', myId).maybeSingle();
       if (profile != null && profile['nama_lengkap'] != null) {
         _operatorName = profile['nama_lengkap'];
       }
 
-      final data = await _supabase.from('inventory').select().eq('is_active', true).order('nama_item');
+      var invQuery = _supabase.from('inventory').select().eq('is_active', true);
+
+      // [MULTI-BRANCH]: Hanya tampilkan stok dari cabang yang aktif
+      if (branchId != null) {
+        invQuery = invQuery.eq('branch_id', branchId);
+      }
+
+      final data = await invQuery.order('nama_item');
       if (mounted) {
         setState(() {
           _inventoryList = List<Map<String, dynamic>>.from(data);
@@ -581,8 +598,9 @@ class _CreatePurchaseScreenState extends State<_CreatePurchaseScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      final adminId = _supabase.auth.currentUser!.id;
-      final totalPengeluaran = _cart.fold(0, (sum, item) => sum + ((int.tryParse(item.qtyCtrl.text) ?? 0) * item.hargaBeli));
+       final adminId = _supabase.auth.currentUser!.id;
+       final branchId = await AppState.getBranchId();
+       final totalPengeluaran = _cart.fold(0, (sum, item) => sum + ((int.tryParse(item.qtyCtrl.text) ?? 0) * item.hargaBeli));
       
       final supplierName = _supplierCtrl.text.trim();
       final notaId = 'BLJ-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}'; 
@@ -590,9 +608,10 @@ class _CreatePurchaseScreenState extends State<_CreatePurchaseScreen> {
       
       Future? expenseFuture;
       if (totalPengeluaran > 0) {
-        expenseFuture = _supabase.from('expenses').insert({
-          'cashier_id': adminId,
-          'nominal': totalPengeluaran,
+         expenseFuture = _supabase.from('expenses').insert({
+           'cashier_id': adminId,
+           'branch_id': branchId,
+           'nominal': totalPengeluaran,
           'keterangan': 'Restock Grosir - $supplierName [ID: $notaId]', 
         });
       }
@@ -605,9 +624,10 @@ class _CreatePurchaseScreenState extends State<_CreatePurchaseScreen> {
         final qtyMasuk = int.parse(item.qtyCtrl.text);
         final stokBaru = item.stokSaatIni + qtyMasuk;
 
-        logsToInsert.add({
-          'inventory_id': item.id,
-          'tipe': 'masuk',
+         logsToInsert.add({
+           'inventory_id': item.id,
+           'branch_id': branchId,
+           'tipe': 'masuk',
           'qty': qtyMasuk,
           'stok_sebelum': item.stokSaatIni,
           'stok_sesudah': stokBaru,

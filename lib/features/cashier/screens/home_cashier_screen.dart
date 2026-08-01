@@ -5,6 +5,7 @@ import 'dart:async'; // Untuk Timer AJAX (Debounce)
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:laundry_one/features/cashier/screens/point_settings_screen.dart';
+import 'package:laundry_one/features/cashier/screens/branch_management_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:laundry_one/features/auth/services/auth_service.dart';
 import 'package:laundry_one/features/auth/screens/login_screen.dart';
@@ -18,6 +19,7 @@ import 'package:laundry_one/features/cashier/screens/rekap_kasir_screen.dart';
 
 // Mengimpor AppTokens terpusat, pastikan path ini sesuai proyek Anda
 import 'package:laundry_one/core/tokens/app_tokens.dart';
+import 'package:laundry_one/core/services/app_state.dart';
 
 class HomeCashierScreen extends StatefulWidget {
   const HomeCashierScreen({super.key});
@@ -65,6 +67,11 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
 
   String? _kasirNama;
 
+  List<Map<String, dynamic>> _branches = [];
+  String? _selectedBranchId;
+  String? _selectedBranchName;
+  bool _isSwitchingBranch = false;
+
   int _todayTotalOrder = 0;
   int _todayAktif = 0;
   int _todaySelesai = 0;
@@ -84,9 +91,18 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       vsync: this,
       duration: const Duration(milliseconds: 600),
     )..forward();
-    _loadUserProfile();
-    _refreshAll(showFullLoading: true);
-    _subscribeRealtime();
+    
+    // [PERBAIKAN UX]: Beri jeda 150 milidetik agar animasi Loading sempat muncul
+    // Ini akan mencegah layar terasa stuck/freeze.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      setState(() => _isLoading = true);
+      await Future.delayed(const Duration(milliseconds: 150)); 
+      
+      _loadUserProfile();
+      _loadBranchesForSwitcher();
+      _refreshAll(showFullLoading: true);
+      _subscribeRealtime();
+    });
   }
 
   @override
@@ -189,6 +205,44 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
     } catch (e) {
       debugPrint('Error loading profile: $e');
     }
+  }
+
+  Future<void> _loadBranchesForSwitcher() async {
+    final role = await AppState.getRole();
+    if (role != 'super_admin') return;
+    try {
+      final data = await _supabase.from('branches').select('id, nama_cabang').eq('is_active', true).order('nama_cabang');
+      final branchId = await AppState.getBranchId();
+      final branchName = await AppState.getBranchName();
+      if (mounted) {
+        setState(() {
+          _branches = List<Map<String, dynamic>>.from(data);
+          if (branchId != null) {
+            _selectedBranchId = branchId;
+            _selectedBranchName = branchName;
+          } else if (_branches.isNotEmpty) {
+            // Default ke cabang utama jika belum pernah pilih
+            _selectedBranchId = _branches.first['id'] as String;
+            _selectedBranchName = _branches.first['nama_cabang'] as String? ?? 'Cabang';
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading branches for switcher: $e');
+    }
+  }
+
+  Future<void> _switchBranch(String? branchId, String branchName) async {
+    setState(() => _isSwitchingBranch = true);
+    await AppState.saveBranch(branchId: branchId, branchName: branchName);
+    if (mounted) setState(() => _selectedBranchId = branchId);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Cabang: $branchName'), backgroundColor: Colors.green.shade800),
+      );
+    }
+    await _refreshAll(showFullLoading: true);
+    if (mounted) setState(() => _isSwitchingBranch = false);
   }
 
   Widget _buildDrawer() {
@@ -356,7 +410,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    onTap: () {
+                     onTap: () {
                       Navigator.pop(context);
                       Navigator.push(
                         context,
@@ -365,7 +419,29 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                         ),
                       );
                     },
-                  ),
+                   ),
+                   ListTile(
+                     leading: const Icon(
+                       Icons.store_rounded,
+                       color: Colors.red,
+                     ),
+                     title: const Text(
+                       'Kelola Cabang',
+                       style: TextStyle(
+                         color: Colors.red,
+                         fontWeight: FontWeight.w600,
+                       ),
+                     ),
+                     onTap: () {
+                       Navigator.pop(context);
+                       Navigator.push(
+                         context,
+                         MaterialPageRoute(
+                           builder: (_) => const BranchManagementScreen(),
+                         ),
+                       );
+                     },
+                   ),
                   ListTile(
                     leading: const Icon(
                       Icons.settings_suggest_rounded,
@@ -563,13 +639,20 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                       if (kode.isEmpty) return;
 
                       setModalState(() => isSubmitting = true);
-                      try {
-                        final res = await _supabase
-                            .from('reward_redemptions')
-                            .select('*, rewards_catalog(nama)')
-                            .eq('kode_voucher', kode)
-                            .eq('status', 'aktif')
-                            .maybeSingle();
+                       try {
+                         final branchId = await AppState.getBranchId();
+                         var voucherQuery = _supabase
+                             .from('reward_redemptions')
+                             .select('*, rewards_catalog(nama)')
+                             .eq('kode_voucher', kode)
+                             .eq('status', 'aktif');
+
+                         // [MULTI-BRANCH]: Hanya izinkan pakai voucher dari cabang aktif
+                         if (branchId != null) {
+                           voucherQuery = voucherQuery.eq('branch_id', branchId);
+                         }
+
+                         final res = await voucherQuery.maybeSingle();
                         if (res == null)
                           throw 'Voucher tidak ditemukan, palsu, atau sudah hangus (lewat 5 menit)!';
 
@@ -645,24 +728,37 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       final todayStart = startOfTodayLocal.toUtc().toIso8601String();
       final todayEnd = endOfTodayLocal.toUtc().toIso8601String();
 
+      final branchId = await AppState.getBranchId();
+
+      var ordersTodayQuery = _supabase
+          .from('orders')
+          .select(_orderSelectFields)
+          .gte('created_at', todayStart)
+          .lte('created_at', todayEnd);
+
+      var piutangQuery = _supabase
+          .from('orders')
+          .select(_orderSelectFields)
+          .eq('is_piutang', true)
+          .neq('status', 'dibatalkan');
+
+      var paymentsQuery = _supabase
+          .from('order_payments')
+          .select('jumlah, metode, orders!inner(branch_id)')
+          .gte('created_at', todayStart)
+          .lte('created_at', todayEnd);
+
+      // [MULTI-BRANCH]: Filter semua query berdasarkan cabang yang aktif
+      if (branchId != null) {
+        ordersTodayQuery = ordersTodayQuery.eq('branch_id', branchId);
+        piutangQuery = piutangQuery.eq('branch_id', branchId);
+        paymentsQuery = paymentsQuery.eq('orders.branch_id', branchId);
+      }
+
       final results = await Future.wait([
-        _supabase
-            .from('orders')
-            .select(_orderSelectFields)
-            .gte('created_at', todayStart)
-            .lte('created_at', todayEnd)
-            .order('created_at', ascending: false),
-        _supabase
-            .from('orders')
-            .select(_orderSelectFields)
-            .eq('is_piutang', true)
-            .neq('status', 'dibatalkan')
-            .order('created_at', ascending: false),
-        _supabase
-            .from('order_payments')
-            .select('jumlah, metode')
-            .gte('created_at', todayStart)
-            .lte('created_at', todayEnd),
+        ordersTodayQuery.order('created_at', ascending: false),
+        piutangQuery.order('created_at', ascending: false),
+        paymentsQuery.order('created_at', ascending: false),
       ]);
 
       final todayOrdersData = List<Map<String, dynamic>>.from(results[0]);
@@ -752,11 +848,18 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       final startStr = startOfRangeLocal.toUtc().toIso8601String();
       final endStr = endOfRangeLocal.toUtc().toIso8601String();
 
+      final branchId = await AppState.getBranchId();
+
       var query = _supabase
           .from('orders')
           .select(_orderSelectFields)
           .gte('created_at', startStr)
           .lte('created_at', endStr);
+
+      // [MULTI-BRANCH]: Filter order hanya dari cabang yang aktif
+      if (branchId != null) {
+        query = query.eq('branch_id', branchId);
+      }
 
       final q = _searchQuery.trim();
       final bool isSearchActive = q.isNotEmpty;
@@ -764,12 +867,17 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       if (isSearchActive) {
         List<Map<String, dynamic>> matchedCustomers = [];
         try {
-          matchedCustomers = List<Map<String, dynamic>>.from(
-            await _supabase
-                .from('customers')
-                .select('id, profiles!inner(nama_lengkap)')
-                .ilike('profiles.nama_lengkap', '%$q%'),
-          );
+          var custQuery = _supabase
+              .from('customers')
+              .select('id, profiles!inner(nama_lengkap)')
+              .ilike('profiles.nama_lengkap', '%$q%');
+
+          // [MULTI-BRANCH]: Filter pencarian pelanggan hanya dari cabang yang aktif
+          if (branchId != null) {
+            custQuery = custQuery.eq('branch_id', branchId);
+          }
+
+          matchedCustomers = List<Map<String, dynamic>>.from(await custQuery);
         } catch (e) {
           debugPrint('Error searching customers: $e');
         }
@@ -1046,6 +1154,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
               const SizedBox(height: 12),
               Row(
                 children: [
+                  // HAPUS Expanded di sini, panggil _PayOption langsung
                   _PayOption(
                     label: 'Cash',
                     icon: Icons.payments_outlined,
@@ -1078,25 +1187,17 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                 ],
               ),
               const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    elevation: 0,
-                  ),
-                  onPressed: isSubmitting
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: isSubmitting
                       ? null
                       : () async {
                           HapticFeedback.heavyImpact();
-                          setModalState(() => isSubmitting = true);
-                          try {
-                            final currentStatus = order['status'];
+                           setModalState(() => isSubmitting = true);
+                           try {
+                             final branchId = await AppState.getBranchId();
+                             final currentStatus = order['status'];
                             String newStatus = currentStatus;
                             if (currentStatus == 'selesai')
                               newStatus = 'dibayar_lunas';
@@ -1118,12 +1219,13 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                                   'poin_sudah_diberikan': true,
                                 })
                                 .eq('id', orderId);
-                            await _supabase.from('order_payments').insert({
-                              'order_id': orderId,
-                              'jumlah': total.toInt(),
-                              'metode': metodeBayar,
-                              'diterima_oleh': kasirId,
-                            });
+                             await _supabase.from('order_payments').insert({
+                               'order_id': orderId,
+                               'branch_id': branchId,
+                               'jumlah': total.toInt(),
+                               'metode': metodeBayar,
+                               'diterima_oleh': kasirId,
+                             });
 
                             if (customerId != null &&
                                 poinDidapat > 0 &&
@@ -1143,6 +1245,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                                   .eq('id', customerId);
                               await _supabase.from('points_ledger').insert({
                                 'customer_id': customerId,
+                                'branch_id': branchId,
                                 'tipe': 'earned',
                                 'jumlah': poinDidapat,
                                 'saldo_sebelum': saldoSebelum,
@@ -1175,24 +1278,42 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                             }
                           }
                         },
-                  child: isSubmitting
-                      ? const SizedBox(
-                          width: 40,
-                          height: 22,
-                          child: Center(
-                            child: _ModernLoadingDots(
-                              color: Colors.white,
-                              size: 10,
+                  borderRadius: BorderRadius.circular(14),
+                  child: Ink(
+                    height: 52,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: isSubmitting ? Colors.green.withOpacity(0.6) : Colors.green,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Center(
+                      child: isSubmitting
+                          ? const SizedBox(
+                              width: 100,
+                              height: 22,
+                              child: Center(
+                                child: _ModernLoadingDots(
+                                  color: Colors.white,
+                                  size: 10,
+                                ),
+                              ),
+                            )
+                          : const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 16),
+                              child: FittedBox( // <--- KUNCI ANTI-MELEBER
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  'Konfirmasi Pelunasan',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 15,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
-                        )
-                      : const Text(
-                          'Konfirmasi Pelunasan',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                          ),
-                        ),
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -1234,7 +1355,7 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                         searchCtrl: _searchCtrl,
                         onSearchChanged: _onSearchChanged,
                       ),
-                      const PelangganTab(),
+                      PelangganTab(isActive: _currentTab == 2),
                       _buildTabLaporan(),
                     ],
                   ),
@@ -1243,7 +1364,8 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
             ],
           ),
 
-          if (_isProcessing)
+          // [PERBAIKAN UX]: Loading akan muncul saat _isLoading ATAU _isProcessing
+          if (_isLoading || _isProcessing)
             Positioned.fill(
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
@@ -1266,14 +1388,14 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                           ),
                         ],
                       ),
-                      child: const Column(
+                      child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _ModernLoadingDots(color: AppTokens.blue, size: 14),
-                          SizedBox(height: 20),
+                          const _ModernLoadingDots(color: AppTokens.blue, size: 14),
+                          const SizedBox(height: 20),
                           Text(
-                            'Memproses...',
-                            style: TextStyle(
+                            _isProcessing ? 'Memproses...' : 'Memuat Data...',
+                            style: const TextStyle(
                               fontWeight: FontWeight.w800,
                               color: AppTokens.textPrimary,
                               fontSize: 15,
@@ -1532,11 +1654,14 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                       children: [
                         Row(
                           children: [
-                            Text(
-                              _greeting(),
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
-                                fontSize: 13,
+                            Flexible( // <--- BUNGKUS DENGAN FLEXIBLE AGAR BISA MENGALAH
+                              child: Text(
+                                _greeting(),
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.7),
+                                  fontSize: 13,
+                                ),
+                                overflow: TextOverflow.ellipsis, // <--- TAMBAHKAN ELLIPSIS
                               ),
                             ),
                             const SizedBox(width: 4),
@@ -1555,11 +1680,68 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                             fontWeight: FontWeight.w800,
                             letterSpacing: -0.5,
                           ),
+                          overflow: TextOverflow.ellipsis, // <--- TAMBAHKAN ELLIPSIS AGAR AMAN
                         ),
                       ],
                     ),
                   ),
                   if (_userProfile?['role'] == 'super_admin') ...[
+                    if (_branches.isNotEmpty)
+                      Flexible( // <--- 1. BUNGKUS DENGAN FLEXIBLE AGAR TIDAK NABRAK LAYAR
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible( // <--- 2. DROPDOWN JUGA DIBUNGKUS FLEXIBLE
+                                child: DropdownButton<String>(
+                                  isExpanded: true, // <--- 3. WAJIB! Agar teks kepanjangan jadi titik-titik (ellipsis)
+                                  value: _selectedBranchId,
+                                  hint: Text(
+                                    (_selectedBranchName ?? _branches.first['nama_cabang'] as String? ?? 'Cabang'),
+                                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                    overflow: TextOverflow.ellipsis, // <--- 4. EFEK TITIK-TITIK
+                                  ),
+                                  items: [
+                                    for (final b in _branches)
+                                      DropdownMenuItem<String>(
+                                        value: b['id'] as String,
+                                        child: Text(
+                                          b['nama_cabang'] as String? ?? '-', 
+                                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                  ],
+                                  onChanged: _isSwitchingBranch
+                                      ? null
+                                      : (val) {
+                                          final name = (_branches.firstWhere((b) => b['id'] == val, orElse: () => {})['nama_cabang'] as String? ?? 'Cabang');
+                                          _switchBranch(val, name);
+                                        },
+                                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                                  dropdownColor: const Color(0xFF1565C0),
+                                  underline: const SizedBox.shrink(),
+                                  icon: const Icon(Icons.arrow_drop_down, color: Colors.white, size: 16),
+                                ),
+                              ),
+                              if (_isSwitchingBranch) ...[
+                                const SizedBox(width: 4),
+                                const SizedBox(
+                                  width: 10,
+                                  height: 10,
+                                  child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white70),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    const SizedBox(width: 8),
                     Material(
                       color: Colors.white.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
@@ -2643,19 +2825,23 @@ class _PayOption extends StatelessWidget {
     required this.selected,
     required this.onTap,
   });
+
   @override
   Widget build(BuildContext context) {
+    // _PayOption sudah punya Expanded dari asalnya, jadi kita biarkan!
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          // Tambahkan sedikit horizontal padding agar teks punya ruang napas
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
           decoration: BoxDecoration(
             color: selected ? Colors.blue.withOpacity(0.05) : Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: selected ? Colors.blue : AppTokens.border),
           ),
           child: Column(
+            mainAxisSize: MainAxisSize.min, // Cegah error vertikal
             children: [
               Icon(
                 icon,
@@ -2663,12 +2849,16 @@ class _PayOption extends StatelessWidget {
                 size: 22,
               ),
               const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  color: selected ? Colors.blue : AppTokens.textSecondary,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                  fontSize: 13,
+              // KUNCI ANTI-MELEBER: Bungkus Teks dengan FittedBox
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: selected ? Colors.blue : AppTokens.textSecondary,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    fontSize: 13,
+                  ),
                 ),
               ),
             ],

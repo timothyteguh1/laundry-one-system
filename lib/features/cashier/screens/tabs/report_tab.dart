@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:laundry_one/features/cashier/screens/kasir_management_screen.dart';
+import 'package:laundry_one/features/cashier/screens/branch_management_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:laundry_one/features/cashier/screens/inventory_screen.dart';
 import 'package:laundry_one/features/cashier/screens/purchase_screen.dart';
@@ -180,6 +181,19 @@ class _ReportTabState extends State<ReportTab> {
                                   ),
                                 ),
                               ),
+                              _MenuCardItem(
+                                icon: Icons.store_rounded,
+                                iconColor: Colors.deepPurple.shade600,
+                                bgColor: Colors.deepPurple.shade50,
+                                title: 'Kelola Cabang',
+                                subtitle:
+                                    'Tambah, edit, & kelola cabang laundry',
+                                onTap: () => Navigator.push(
+                                  context,
+                                  _createRoute(const BranchManagementScreen()),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
                               _MenuCardItem(
                                 icon: Icons.manage_accounts_rounded,
                                 iconColor: Colors.indigo.shade600,

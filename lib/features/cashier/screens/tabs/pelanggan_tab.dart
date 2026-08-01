@@ -1,18 +1,18 @@
 import 'dart:math' as math;
 import 'dart:ui';
-import 'dart:async'; // Untuk Timer AJAX (Debounce)
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 
-// [UPDATE]: Hapus class _DS dan gunakan AppTokens terpusat
-// Ganti path ini sesuai dengan lokasi AppTokens di project Anda
 import 'package:laundry_one/core/tokens/app_tokens.dart';
+import 'package:laundry_one/core/services/app_state.dart';
 
 class PelangganTab extends StatefulWidget {
-  const PelangganTab({super.key});
+  final bool isActive;
+  const PelangganTab({super.key, this.isActive = false});
 
   @override
   State<PelangganTab> createState() => _PelangganTabState();
@@ -29,7 +29,6 @@ class _PelangganTabState extends State<PelangganTab> {
   bool _isAdmin = false;
   bool _showNonActive = false;
 
-  // PAGINASI & PENCARIAN GAIB
   int _page = 0;
   final int _perPage = 15;
   bool _hasMore = true;
@@ -41,6 +40,14 @@ class _PelangganTabState extends State<PelangganTab> {
     super.initState();
     _checkRoleAndLoad();
   }
+  @override
+  void didUpdateWidget(covariant PelangganTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Jika tab ini baru saja di-klik / menjadi aktif
+    if (widget.isActive && !oldWidget.isActive) {
+      _loadCustomers(showFullLoading: false); // Refresh diam-diam dari server
+    }
+  }
 
   @override
   void dispose() {
@@ -49,7 +56,6 @@ class _PelangganTabState extends State<PelangganTab> {
     super.dispose();
   }
 
-  // [LOGIKA ASLI DIPERTAHANKAN]: Tetap 500ms sesuai instruksi Anda
   void _onSearchChanged(String val) {
     if (_searchDebounce?.isActive ?? false) _searchDebounce!.cancel();
     setState(() => _isSearching = true);
@@ -277,28 +283,33 @@ class _PelangganTabState extends State<PelangganTab> {
     if (showFullLoading) setState(() => _isLoading = true);
     _page = 0;
     _hasMore = true;
+
+    final branchId = await AppState.getBranchId();
+
     try {
       var query = _supabase
           .from('profiles')
-          .select('id, nama_lengkap, nomor_hp, customers(id, poin_saldo)')
+          // [KUNCI PERBAIKAN]: Tambahkan !inner
+          .select('id, nama_lengkap, nomor_hp, customers!inner(id, poin_saldo, branch_id)') 
           .eq('role', 'customer')
           .eq('is_active', !_showNonActive);
+
+      if (branchId != null) {
+        query = query.eq('customers.branch_id', branchId!);
+      }
 
       final q = _searchCtrl.text.trim();
       final bool isSearchActive = q.isNotEmpty;
 
-      // Filter Pencarian Server
       if (isSearchActive) {
         query = query.or('nama_lengkap.ilike.%$q%,nomor_hp.ilike.%$q%');
       }
 
       final List<dynamic> data;
-      // [FIXED]: Jika sedang mencari, bypass paginasi (tarik semua hasil yg cocok)
       if (isSearchActive) {
         data = await query.order('nama_lengkap');
         _hasMore = false; 
       } else {
-        // Jika tidak mencari, gunakan paginasi normal
         final startRow = _page * _perPage;
         final endRow = startRow + _perPage - 1;
         data = await query.order('nama_lengkap').range(startRow, endRow);
@@ -330,11 +341,18 @@ class _PelangganTabState extends State<PelangganTab> {
       final start = _page * _perPage;
       final end = start + _perPage - 1;
 
+      final branchId = await AppState.getBranchId();
+
       var query = _supabase
           .from('profiles')
-          .select('id, nama_lengkap, nomor_hp, customers(id, poin_saldo)')
+          // [KUNCI PERBAIKAN]: Tambahkan !inner
+          .select('id, nama_lengkap, nomor_hp, customers!inner(id, poin_saldo, branch_id)') 
           .eq('role', 'customer')
           .eq('is_active', !_showNonActive);
+
+      if (branchId != null) {
+        query = query.eq('customers.branch_id', branchId!);
+      }
 
       if (_searchCtrl.text.isNotEmpty) {
         final q = _searchCtrl.text;
@@ -842,15 +860,17 @@ class _PelangganTabState extends State<PelangganTab> {
 
                           HapticFeedback.heavyImpact();
                           setModalState(() => isSubmitting = true);
-                          try {
-                            final adminId = _supabase.auth.currentUser!.id;
-                            await _supabase
-                                .from('customers')
-                                .update({'poin_saldo': saldoSesudah})
-                                .eq('id', custId);
-                            await _supabase.from('points_ledger').insert({
-                              'customer_id': custId,
-                              'tipe': 'adjusted',
+                           try {
+                             final adminId = _supabase.auth.currentUser!.id;
+                             final branchId = await AppState.getBranchId();
+                             await _supabase
+                                 .from('customers')
+                                 .update({'poin_saldo': saldoSesudah})
+                                 .eq('id', custId);
+                             await _supabase.from('points_ledger').insert({
+                               'customer_id': custId,
+                               'branch_id': branchId, // Sudah string di sini (nullable tp di Map aman)
+                               'tipe': 'adjusted',
                               'jumlah': val * tipeAdjust,
                               'saldo_sebelum': currentPoin,
                               'saldo_sesudah': saldoSesudah,
@@ -1066,7 +1086,6 @@ class _PelangganTabState extends State<PelangganTab> {
               Expanded(
                 child: Container(
                   color: AppTokens.ground,
-                  // [UPDATE UX]: Sama seperti Home Cashier, munculkan Titik 3 di tengah
                   child: (_isLoading || _isSearching)
                       ? const Center(
                           child: Column(
@@ -1154,7 +1173,6 @@ class _PelangganTabState extends State<PelangganTab> {
                                           c['customers'],
                                         );
 
-                                        // [UPDATE DESAIN]: Menggunakan Kartu dengan Animasi Membal
                                         return _AnimatedCustomerCard(
                                           customer: c,
                                           poin: extracted['poin'],
@@ -1266,9 +1284,6 @@ class _PelangganTabState extends State<PelangganTab> {
   }
 }
 
-// =========================================================
-// WIDGET KARTU PELANGGAN (DENGAN ANIMASI MEMBAL)
-// =========================================================
 class _AnimatedCustomerCard extends StatefulWidget {
   final Map<String, dynamic> customer;
   final int poin;
@@ -1488,9 +1503,6 @@ class _AnimatedCustomerCardState extends State<_AnimatedCustomerCard> {
   }
 }
 
-// =========================================================
-// WIDGET SKELETON SHIMMER (PENGGANTI SPINNER MELOMPAT)
-// =========================================================
 class _CustomerSkeletonShimmer extends StatefulWidget {
   const _CustomerSkeletonShimmer();
 
@@ -1563,9 +1575,6 @@ class _CustomerSkeletonShimmerState extends State<_CustomerSkeletonShimmer>
   }
 }
 
-// =========================================================
-// WIDGET BOTTOM SHEET (DETAIL & REDEEM & REFUND)
-// =========================================================
 class _CustomerDetailModal extends StatefulWidget {
   final String profileId;
   final String? customerId;
@@ -2098,7 +2107,6 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
                                     final eksekutor =
                                         m['eksekutor'] ?? 'pelanggan';
 
-                                    // LOGIKA PENDETEKSI TALI PENGIKAT (REF ID)
                                     final currentId = m['id']?.toString() ?? '';
                                     final catatanLengkap =
                                         m['catatan']?.toString() ?? '';
@@ -2112,7 +2120,6 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
                                           'fisik',
                                         );
 
-                                    // Cek ke SELURUH riwayat, adakah yang me-refund ID mutasi ini?
                                     final bool isCanceled = _mutasiList.any((
                                       mutasiLain,
                                     ) {
@@ -2410,9 +2417,6 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
           ),
         ),
 
-        // ==========================================================
-        // OVERLAY LOADING SPINNER ANTI-FREEZE & ANTI-DOUBLE CLICK
-        // ==========================================================
         if (_isRedeeming)
           Positioned.fill(
             child: BackdropFilter(
@@ -2461,9 +2465,6 @@ class _CustomerDetailModalState extends State<_CustomerDetailModal>
   }
 }
 
-// ============================================================
-// WIDGET: MODERN 3-DOTS LOADING
-// ============================================================
 class _ModernLoadingDots extends StatefulWidget {
   final Color color;
   final double size;

@@ -246,7 +246,7 @@ class _LoginScreenState extends State<LoginScreen>
             } else {
               final kasirData = await Supabase.instance.client
                   .from('kasir')
-                  .select('status')
+                  .select('status, branch_id') // [UPDATE] Tarik branch_id juga
                   .eq('profile_id', userId)
                   .maybeSingle();
 
@@ -256,12 +256,18 @@ class _LoginScreenState extends State<LoginScreen>
               }
 
               final status = kasirData['status'];
+              final branchId = kasirData['branch_id'];
+
               if (status == 'pending') {
                 await Supabase.instance.client.auth.signOut();
                 throw Exception('Akun Anda masih "Menunggu Persetujuan". Silakan hubungi Admin untuk membuka akses.');
               } else if (status == 'rejected') {
                 await Supabase.instance.client.auth.signOut();
                 throw Exception('Akses Anda telah ditolak/dicabut oleh Admin.');
+              } else if (status == 'approved' && branchId == null) {
+                 // [UPDATE] Tahan Kasir di Pintu Gerbang jika Cabang belum di-assign
+                 await Supabase.instance.client.auth.signOut();
+                 throw Exception('Akun disetujui, tapi Anda belum ditugaskan ke cabang mana pun. Lapor ke Admin.');
               }
             }
           }

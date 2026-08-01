@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:laundry_one/core/services/app_state.dart';
 
 // ============================================================
 // DESIGN SYSTEM - KONSISTEN
@@ -60,9 +61,17 @@ class _RewardManagementScreenState extends State<RewardManagementScreen> {
   }
 
   Future<void> _loadRewards() async {
+    final branchId = await AppState.getBranchId();
     setState(() => _isLoading = true);
     try {
-      final data = await _supabase.from('rewards_catalog').select().eq('is_active', true).order('poin_dibutuhkan');
+      var query = _supabase.from('rewards_catalog').select().eq('is_active', true);
+
+      // [MULTI-BRANCH]: Filter reward berdasarkan cabang yang aktif
+      if (branchId != null) {
+        query = query.eq('branch_id', branchId);
+      }
+
+      final data = await query.order('poin_dibutuhkan');
       if (mounted) setState(() { _rewards = List<Map<String, dynamic>>.from(data); _isLoading = false; });
     } catch (e) {
       debugPrint('Load rewards error: $e');
@@ -195,16 +204,19 @@ class _RewardManagementScreenState extends State<RewardManagementScreen> {
                 
                 final String? deskripsiFinal = deskripsiCtrl.text.trim().isNotEmpty ? deskripsiCtrl.text.trim() : null;
 
-                final payload = {
-                  'nama': namaCtrl.text.trim(),
-                  'deskripsi': deskripsiFinal,
-                  'poin_dibutuhkan': int.tryParse(poinCtrl.text.trim()) ?? 0,
-                  'tipe_reward': tipeSelected,
-                  'nilai_reward': tipeSelected == 'gratis_layanan' ? 0 : (int.tryParse(nilaiCtrl.text.trim()) ?? 0),
-                  'min_transaksi': tipeSelected == 'gratis_layanan' ? 0 : (int.tryParse(minTransaksiCtrl.text.trim()) ?? 0),
-                  'maks_diskon': tipeSelected == 'gratis_layanan' ? 0 : (int.tryParse(maksDiskonCtrl.text.trim()) ?? 0),
-                  'is_active': true,
-                };
+                 final branchId = await AppState.getBranchId();
+                 
+                 final payload = {
+                   'nama': namaCtrl.text.trim(),
+                   'deskripsi': deskripsiFinal,
+                   'poin_dibutuhkan': int.tryParse(poinCtrl.text.trim()) ?? 0,
+                   'tipe_reward': tipeSelected,
+                   'nilai_reward': tipeSelected == 'gratis_layanan' ? 0 : (int.tryParse(nilaiCtrl.text.trim()) ?? 0),
+                   'min_transaksi': tipeSelected == 'gratis_layanan' ? 0 : (int.tryParse(minTransaksiCtrl.text.trim()) ?? 0),
+                   'maks_diskon': tipeSelected == 'gratis_layanan' ? 0 : (int.tryParse(maksDiskonCtrl.text.trim()) ?? 0),
+                   'is_active': true,
+                   'branch_id': branchId,
+                 };
 
                 try {
                   if (isEdit) {

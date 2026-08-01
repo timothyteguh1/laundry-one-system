@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:laundry_one/core/services/app_state.dart';
 
 // ============================================================
 // DESIGN SYSTEM
@@ -48,10 +49,72 @@ class _ReportCoinScreenState extends State<ReportCoinScreen> {
   DateTime _startDate = DateTime.now();
   DateTime _endDate = DateTime.now();
 
+  // [MULTI-BRANCH]
+  List<Map<String, dynamic>> _branches = [];
+  String? _selectedBranchId;
+  bool _isSuperAdmin = false;
+
   @override
   void initState() {
     super.initState();
+    _checkRoleAndLoad();
+  }
+
+  Future<void> _checkRoleAndLoad() async {
+    final branchId = await AppState.getBranchId();
+    final role = await AppState.getRole();
+    _isSuperAdmin = role == 'super_admin' || branchId == null;
+
+    if (_isSuperAdmin) {
+      await _loadBranches();
+      if (_branches.isNotEmpty) {
+        _selectedBranchId = _branches.first['id'] as String?;
+      }
+    }
+
+    final effectiveBranch = _isSuperAdmin ? _selectedBranchId : branchId;
+    setState(() => _selectedBranchId = effectiveBranch);
     _loadData();
+  }
+
+  Future<void> _loadBranches() async {
+    try {
+      final data = await _supabase
+          .from('branches')
+          .select('id, nama_cabang')
+          .eq('is_active', true)
+          .order('nama_cabang');
+      setState(() => _branches = List<Map<String, dynamic>>.from(data));
+    } catch (e) {
+      debugPrint('Error loading branches: $e');
+    }
+  }
+
+  // [MULTI-BRANCH]: Dropdown pemilihan cabang untuk Super Admin
+  Widget _buildBranchDropdown() {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: DropdownButton<String>(
+        value: _selectedBranchId ?? '',
+        dropdownColor: _DS.navy,
+        items: [
+          const DropdownMenuItem(value: '', child: Text('Semua Cabang')),
+          ..._branches.map((b) => DropdownMenuItem(
+                value: b['id'] as String,
+                child: Text(b['nama_cabang'] as String? ?? '-'),
+              )),
+        ],
+        onChanged: (val) {
+          setState(() => _selectedBranchId = val == '' ? null : val);
+          _loadData();
+        },
+        underline: const SizedBox(),
+        icon: const Icon(Icons.arrow_drop_down_rounded, color: Colors.white70),
+        style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+        hint: const Text('Pilih Cabang',
+            style: TextStyle(color: Colors.white70, fontSize: 13)),
+      ),
+    );
   }
 
   @override
@@ -70,15 +133,22 @@ class _ReportCoinScreenState extends State<ReportCoinScreen> {
       final startLocal = DateTime(_startDate.year, _startDate.month, _startDate.day, 0, 0, 0);
       final endLocal = DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59, 59);
 
-      final startStr = startLocal.toUtc().toIso8601String();
-      final endStr = endLocal.toUtc().toIso8601String();
+       final startStr = startLocal.toUtc().toIso8601String();
+       final endStr = endLocal.toUtc().toIso8601String();
 
-      final response = await _supabase
-          .from('points_ledger')
-          .select('*, customers(profiles(nama_lengkap))')
-          .gte('created_at', startStr)
-          .lte('created_at', endStr)
-          .order('created_at', ascending: false);
+       var query = _supabase
+           .from('points_ledger')
+           .select('*, customers(profiles(nama_lengkap))')
+           .gte('created_at', startStr)
+           .lte('created_at', endStr);
+
+       // [MULTI-BRANCH]: Filter hanya dari cabang yang aktif / dipilih
+       final selectedBranchId = _selectedBranchId;
+       if (selectedBranchId != null) {
+         query = query.eq('branch_id', selectedBranchId);
+       }
+
+       final response = await query.order('created_at', ascending: false);
 
       if (mounted) {
         setState(() {
@@ -181,6 +251,9 @@ class _ReportCoinScreenState extends State<ReportCoinScreen> {
         backgroundColor: _DS.navy,
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          if (_isSuperAdmin) _buildBranchDropdown(),
+        ],
       ),
       body: Column(
         children: [

@@ -1,33 +1,69 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:laundry_one/core/tokens/app_tokens.dart'; 
+import 'package:laundry_one/core/tokens/app_tokens.dart';
+import 'package:laundry_one/core/services/app_state.dart';
 
 class ReportProductSalesScreen extends StatefulWidget {
   const ReportProductSalesScreen({super.key});
 
   @override
-  State<ReportProductSalesScreen> createState() => _ReportProductSalesScreenState();
+  State<ReportProductSalesScreen> createState() =>
+      _ReportProductSalesScreenState();
 }
 
 class _ReportProductSalesScreenState extends State<ReportProductSalesScreen> {
   final _supabase = Supabase.instance.client;
-  
+
   bool _isLoading = true;
   String? _errorMessage;
 
-  DateTime _startDate = DateTime.now(); 
+  DateTime _startDate = DateTime.now();
   DateTime _endDate = DateTime.now();
 
   double _totalPenjualan = 0;
   int _jumlahTransaksi = 0;
   double _rataRata = 0;
-  
+
   List<Map<String, dynamic>> _ringkasanItem = [];
+  List<Map<String, dynamic>> _branches = [];
+  String? _selectedBranchId;
+  bool _isSuperAdmin = false;
 
   @override
   void initState() {
     super.initState();
+    _checkRoleAndLoad();
+  }
+
+  Future<void> _checkRoleAndLoad() async {
+    final branchId = await AppState.getBranchId();
+    final role = await AppState.getRole();
+    _isSuperAdmin = role == 'super_admin' || branchId == null;
+
+    if (_isSuperAdmin) {
+      await _loadBranches();
+      _selectedBranchId = null; // Default Semua Cabang
+    } else {
+      _selectedBranchId = branchId;
+    }
+
+    setState(() {});
     _loadData();
+  }
+
+  Future<void> _loadBranches() async {
+    try {
+      final data = await _supabase
+          .from('branches')
+          .select('id, nama_cabang')
+          .eq('is_active', true)
+          .order('nama_cabang');
+      setState(() => _branches = List<Map<String, dynamic>>.from(data));
+    } catch (e) {
+      debugPrint('Error loading branches: $e');
+    }
   }
 
   String _formatDateStr(DateTime d) {
@@ -35,24 +71,27 @@ class _ReportProductSalesScreenState extends State<ReportProductSalesScreen> {
   }
 
   Future<void> _pickDate() async {
+    HapticFeedback.selectionClick();
+    await Future.delayed(const Duration(milliseconds: 50));
+
     final picked = await showDateRangePicker(
-      context: context, 
-      firstDate: DateTime(2023), 
-      lastDate: DateTime.now(), 
+      context: context,
+      firstDate: DateTime(2023),
+      lastDate: DateTime.now(),
       initialDateRange: DateTimeRange(start: _startDate, end: _endDate),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: AppTokens.primarySeed)
-        ), 
-        child: child!
+          colorScheme: const ColorScheme.light(primary: AppTokens.primarySeed),
+        ),
+        child: child!,
       ),
     );
     if (picked != null) {
-      setState(() { 
-        _startDate = picked.start; 
-        _endDate = picked.end; 
+      setState(() {
+        _startDate = picked.start;
+        _endDate = picked.end;
       });
-      await _loadData(); 
+      await _loadData();
     }
   }
 
@@ -62,19 +101,44 @@ class _ReportProductSalesScreenState extends State<ReportProductSalesScreen> {
       _isLoading = true;
       _errorMessage = null;
     });
-    
+
     try {
-      final startLocal = DateTime(_startDate.year, _startDate.month, _startDate.day, 0, 0, 0);
-      final endLocal = DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59, 59);
+      final startLocal = DateTime(
+        _startDate.year,
+        _startDate.month,
+        _startDate.day,
+        0,
+        0,
+        0,
+      );
+      final endLocal = DateTime(
+        _endDate.year,
+        _endDate.month,
+        _endDate.day,
+        23,
+        59,
+        59,
+      );
 
       final startStr = startLocal.toUtc().toIso8601String();
       final endStr = endLocal.toUtc().toIso8601String();
 
-      final res = await _supabase.from('orders')
-          .select('id, total_harga, order_items(jumlah, harga_satuan, subtotal, services(nama))')
+      var query = _supabase
+          .from('orders')
+          .select(
+            'id, total_harga, order_items(jumlah, harga_satuan, subtotal, services(nama))',
+          )
           .gte('created_at', startStr)
           .lte('created_at', endStr)
           .neq('status', 'dibatalkan');
+
+      // [MULTI-BRANCH]: Filter hanya dari cabang yang aktif / dipilih
+      final selectedBranchId = _selectedBranchId;
+      if (selectedBranchId != null) {
+        query = query.eq('branch_id', selectedBranchId);
+      }
+
+      final res = await query;
 
       double total = 0;
       int transaksi = res.length;
@@ -83,13 +147,14 @@ class _ReportProductSalesScreenState extends State<ReportProductSalesScreen> {
       for (var order in res) {
         total += (order['total_harga'] as num?)?.toDouble() ?? 0;
         final items = order['order_items'] as List<dynamic>? ?? [];
-        
+
         for (var item in items) {
           String nama = 'Item Terhapus';
           if (item['services'] != null) {
             if (item['services'] is Map) {
               nama = item['services']['nama'] ?? nama;
-            } else if (item['services'] is List && item['services'].isNotEmpty) {
+            } else if (item['services'] is List &&
+                item['services'].isNotEmpty) {
               nama = item['services'][0]['nama'] ?? nama;
             }
           }
@@ -101,7 +166,12 @@ class _ReportProductSalesScreenState extends State<ReportProductSalesScreen> {
             groupedItems[nama]!['qty'] += qty;
             groupedItems[nama]!['subtotal'] += sub;
           } else {
-            groupedItems[nama] = {'nama': nama, 'qty': qty, 'harga_satuan': hargaSatuan, 'subtotal': sub};
+            groupedItems[nama] = {
+              'nama': nama,
+              'qty': qty,
+              'harga_satuan': hargaSatuan,
+              'subtotal': sub,
+            };
           }
         }
       }
@@ -110,7 +180,9 @@ class _ReportProductSalesScreenState extends State<ReportProductSalesScreen> {
       final rataRata = total / diffDays;
 
       final sortedItems = groupedItems.values.toList();
-      sortedItems.sort((a, b) => (b['subtotal'] as double).compareTo(a['subtotal'] as double));
+      sortedItems.sort(
+        (a, b) => (b['subtotal'] as double).compareTo(a['subtotal'] as double),
+      );
 
       if (mounted) {
         setState(() {
@@ -131,6 +203,40 @@ class _ReportProductSalesScreenState extends State<ReportProductSalesScreen> {
     }
   }
 
+  // [MULTI-BRANCH]: Dropdown pemilihan cabang untuk Super Admin
+  Widget _buildBranchDropdown() {
+    return DropdownButton<String?>(
+      value: _selectedBranchId,
+      dropdownColor: AppTokens.navy,
+      items: [
+        const DropdownMenuItem<String?>(
+          value: null,
+          child: Text('Semua Cabang', style: TextStyle(color: Colors.white)),
+        ),
+        ..._branches.map(
+          (b) => DropdownMenuItem<String?>(
+            value: b['id'] as String,
+            child: Text(
+              b['nama_cabang'] as String? ?? '-',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        ),
+      ],
+      onChanged: (val) {
+        setState(() => _selectedBranchId = val);
+        _loadData();
+      },
+      underline: const SizedBox.shrink(),
+      icon: const Icon(Icons.arrow_drop_down_rounded, color: Colors.white),
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
@@ -138,20 +244,28 @@ class _ReportProductSalesScreenState extends State<ReportProductSalesScreen> {
     return Scaffold(
       backgroundColor: AppTokens.ground,
       appBar: AppBar(
-        title: Text('Laporan Penjualan', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, color: AppTokens.surface)),
-        backgroundColor: AppTokens.navy, 
-        foregroundColor: AppTokens.surface, 
+        title: Text(
+          'Laporan Penjualan',
+          style: textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: AppTokens.surface,
+          ),
+        ),
+        backgroundColor: AppTokens.navy,
+        foregroundColor: AppTokens.surface,
         elevation: 0,
         actions: [
+          if (_isSuperAdmin) Center(child: Padding(padding: const EdgeInsets.only(right: 8), child: _buildBranchDropdown())),
           Semantics(
             button: true,
             label: 'Pilih Rentang Tanggal',
             child: IconButton(
-              icon: const Icon(Icons.calendar_month_rounded), 
+              icon: const Icon(Icons.calendar_month_rounded),
               onPressed: _pickDate,
-              constraints: const BoxConstraints(minWidth: 48, minHeight: 48), // Aksesibilitas tap target
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
             ),
-          )
+          ),
+          const SizedBox(width: 8),
         ],
       ),
       // LayoutBuilder untuk memastikan tampilan bagus di Tablet Kasir
@@ -161,7 +275,9 @@ class _ReportProductSalesScreenState extends State<ReportProductSalesScreen> {
           return Align(
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: isTablet ? 800 : double.infinity),
+              constraints: BoxConstraints(
+                maxWidth: isTablet ? 800 : double.infinity,
+              ),
               child: _buildBody(textTheme),
             ),
           );
@@ -184,18 +300,40 @@ class _ReportProductSalesScreenState extends State<ReportProductSalesScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline_rounded, color: Colors.red, size: 48),
+              const Icon(
+                Icons.error_outline_rounded,
+                color: Colors.red,
+                size: 48,
+              ),
               const SizedBox(height: AppTokens.space16),
-              Text('Gagal memuat laporan', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: AppTokens.textPrimary)),
+              Text(
+                'Gagal memuat laporan',
+                style: textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: AppTokens.textPrimary,
+                ),
+              ),
               const SizedBox(height: AppTokens.space8),
-              Text(_errorMessage!, textAlign: TextAlign.center, style: textTheme.bodyMedium?.copyWith(color: AppTokens.textSecondary)),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: textTheme.bodyMedium?.copyWith(
+                  color: AppTokens.textSecondary,
+                ),
+              ),
               const SizedBox(height: AppTokens.space24),
               ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(backgroundColor: AppTokens.primarySeed, foregroundColor: AppTokens.surface),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTokens.primarySeed,
+                  foregroundColor: AppTokens.surface,
+                ),
                 onPressed: _loadData,
                 icon: const Icon(Icons.refresh),
-                label: const Text('Coba Lagi', style: TextStyle(fontWeight: FontWeight.bold)),
-              )
+                label: const Text(
+                  'Coba Lagi',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
             ],
           ),
         ),
@@ -208,7 +346,9 @@ class _ReportProductSalesScreenState extends State<ReportProductSalesScreen> {
       color: AppTokens.blue,
       backgroundColor: AppTokens.surface,
       child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
         padding: const EdgeInsets.all(AppTokens.space20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -219,13 +359,25 @@ class _ReportProductSalesScreenState extends State<ReportProductSalesScreen> {
               jumlahTransaksi: _jumlahTransaksi,
               textTheme: textTheme,
             ),
-            
+
             const SizedBox(height: AppTokens.space32),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Ringkasan Terlaris', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, color: AppTokens.textPrimary)),
-                Text('${_formatDateStr(_startDate)} s/d ${_formatDateStr(_endDate)}', style: textTheme.labelSmall?.copyWith(color: AppTokens.blue, fontWeight: FontWeight.w700)),
+                Text(
+                  'Ringkasan Terlaris',
+                  style: textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: AppTokens.textPrimary,
+                  ),
+                ),
+                Text(
+                  '${_formatDateStr(_startDate)} s/d ${_formatDateStr(_endDate)}',
+                  style: textTheme.labelSmall?.copyWith(
+                    color: AppTokens.blue,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: AppTokens.space16),
@@ -233,25 +385,38 @@ class _ReportProductSalesScreenState extends State<ReportProductSalesScreen> {
             // 4. STATE: EMPTY
             if (_ringkasanItem.isEmpty)
               Padding(
-                padding: const EdgeInsets.all(AppTokens.space32), 
+                padding: const EdgeInsets.all(AppTokens.space32),
                 child: Center(
                   child: Column(
                     children: [
-                      const Icon(Icons.inventory_2_outlined, size: 64, color: AppTokens.border),
+                      const Icon(
+                        Icons.inventory_2_outlined,
+                        size: 64,
+                        color: AppTokens.border,
+                      ),
                       const SizedBox(height: AppTokens.space16),
-                      Text('Belum ada penjualan pada periode ini.', style: textTheme.bodyMedium?.copyWith(color: AppTokens.textSecondary, fontWeight: FontWeight.w600)),
+                      Text(
+                        'Belum ada penjualan pada periode ini.',
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: AppTokens.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ],
-                  )
-                )
+                  ),
+                ),
               )
             else
               // OPTIMASI: Membungkus list dinamis agar render lebih cepat saat scroll
-              RepaintBoundary( 
+              RepaintBoundary(
                 child: ListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: _ringkasanItem.length,
-                  itemBuilder: (ctx, i) => _SalesItemCard(item: _ringkasanItem[i], textTheme: textTheme),
+                  itemBuilder: (ctx, i) => _SalesItemCard(
+                    item: _ringkasanItem[i],
+                    textTheme: textTheme,
+                  ),
                 ),
               ),
             const SizedBox(height: AppTokens.space48),
@@ -282,37 +447,84 @@ class _SalesSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: AppTokens.space24, horizontal: AppTokens.space16),
-      decoration: BoxDecoration(color: AppTokens.surface, borderRadius: BorderRadius.circular(AppTokens.radius20), border: Border.all(color: AppTokens.border, width: 1.5), boxShadow: AppTokens.cardShadow),
+      padding: const EdgeInsets.symmetric(
+        vertical: AppTokens.space24,
+        horizontal: AppTokens.space16,
+      ),
+      decoration: BoxDecoration(
+        color: AppTokens.surface,
+        borderRadius: BorderRadius.circular(AppTokens.radius20),
+        border: Border.all(color: AppTokens.border, width: 1.5),
+        boxShadow: AppTokens.cardShadow,
+      ),
       child: Column(
         children: [
-          Text('Total Penjualan', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700, color: AppTokens.textSecondary)),
+          Text(
+            'Total Penjualan',
+            style: textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: AppTokens.textSecondary,
+            ),
+          ),
           const SizedBox(height: AppTokens.space8),
-          Text('Rp ${AppTokens.formatRupiah(totalPenjualan)}', style: textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, color: AppTokens.blue, letterSpacing: -0.5)),
+          Text(
+            'Rp ${AppTokens.formatRupiah(totalPenjualan)}',
+            style: textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: AppTokens.blue,
+              letterSpacing: -0.5,
+            ),
+          ),
           const SizedBox(height: AppTokens.space24),
           Row(
             children: [
               Expanded(
                 child: Column(
                   children: [
-                    Text('Rata-Rata / Hari', textAlign: TextAlign.center, style: textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600, color: AppTokens.textSecondary)), 
-                    const SizedBox(height: AppTokens.space4), 
-                    Text('Rp ${AppTokens.formatRupiah(rataRata)}', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, color: AppTokens.textPrimary))
-                  ]
-                )
+                    Text(
+                      'Rata-Rata / Hari',
+                      textAlign: TextAlign.center,
+                      style: textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppTokens.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: AppTokens.space4),
+                    Text(
+                      'Rp ${AppTokens.formatRupiah(rataRata)}',
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: AppTokens.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               Container(width: 1, height: 40, color: AppTokens.border),
               Expanded(
                 child: Column(
                   children: [
-                    Text('Jml. Transaksi', textAlign: TextAlign.center, style: textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600, color: AppTokens.textSecondary)), 
-                    const SizedBox(height: AppTokens.space4), 
-                    Text('$jumlahTransaksi', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, color: AppTokens.textPrimary))
-                  ]
-                )
+                    Text(
+                      'Jml. Transaksi',
+                      textAlign: TextAlign.center,
+                      style: textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppTokens.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: AppTokens.space4),
+                    Text(
+                      '$jumlahTransaksi',
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: AppTokens.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
-          )
+          ),
         ],
       ),
     );
@@ -346,7 +558,12 @@ class _SalesItemCardState extends State<_SalesItemCard> {
         child: Container(
           margin: const EdgeInsets.only(bottom: AppTokens.space12),
           padding: const EdgeInsets.all(AppTokens.space16),
-          decoration: BoxDecoration(color: AppTokens.surface, borderRadius: BorderRadius.circular(AppTokens.radius16), border: Border.all(color: AppTokens.border, width: 1.5), boxShadow: AppTokens.cardShadow),
+          decoration: BoxDecoration(
+            color: AppTokens.surface,
+            borderRadius: BorderRadius.circular(AppTokens.radius16),
+            border: Border.all(color: AppTokens.border, width: 1.5),
+            boxShadow: AppTokens.cardShadow,
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -354,13 +571,31 @@ class _SalesItemCardState extends State<_SalesItemCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(widget.item['nama'], style: widget.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, color: AppTokens.textPrimary)),
+                    Text(
+                      widget.item['nama'],
+                      style: widget.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: AppTokens.textPrimary,
+                      ),
+                    ),
                     const SizedBox(height: AppTokens.space4),
-                    Text('Rp ${AppTokens.formatRupiah(widget.item['harga_satuan'])} x${widget.item['qty']} Pcs', style: widget.textTheme.labelMedium?.copyWith(color: AppTokens.textSecondary, fontWeight: FontWeight.w600)),
+                    Text(
+                      'Rp ${AppTokens.formatRupiah(widget.item['harga_satuan'])} x${widget.item['qty']} Pcs',
+                      style: widget.textTheme.labelMedium?.copyWith(
+                        color: AppTokens.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ],
                 ),
               ),
-              Text('Rp ${AppTokens.formatRupiah(widget.item['subtotal'])}', style: widget.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, color: AppTokens.textPrimary)),
+              Text(
+                'Rp ${AppTokens.formatRupiah(widget.item['subtotal'])}',
+                style: widget.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: AppTokens.textPrimary,
+                ),
+              ),
             ],
           ),
         ),
@@ -377,13 +612,17 @@ class _ReportSkeletonShimmer extends StatefulWidget {
   State<_ReportSkeletonShimmer> createState() => _ReportSkeletonShimmerState();
 }
 
-class _ReportSkeletonShimmerState extends State<_ReportSkeletonShimmer> with SingleTickerProviderStateMixin {
+class _ReportSkeletonShimmerState extends State<_ReportSkeletonShimmer>
+    with SingleTickerProviderStateMixin {
   late AnimationController _anim;
 
   @override
   void initState() {
     super.initState();
-    _anim = AnimationController(vsync: this, duration: const Duration(milliseconds: 800))..repeat(reverse: true);
+    _anim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..repeat(reverse: true);
   }
 
   @override
@@ -400,11 +639,32 @@ class _ReportSkeletonShimmerState extends State<_ReportSkeletonShimmer> with Sin
         padding: const EdgeInsets.all(AppTokens.space20),
         child: Column(
           children: [
-            Container(height: 180, decoration: BoxDecoration(color: AppTokens.surface, borderRadius: BorderRadius.circular(AppTokens.radius20), border: Border.all(color: AppTokens.border))),
+            Container(
+              height: 180,
+              decoration: BoxDecoration(
+                color: AppTokens.surface,
+                borderRadius: BorderRadius.circular(AppTokens.radius20),
+                border: Border.all(color: AppTokens.border),
+              ),
+            ),
             const SizedBox(height: AppTokens.space32),
-            Container(height: 70, decoration: BoxDecoration(color: AppTokens.surface, borderRadius: BorderRadius.circular(AppTokens.radius16), border: Border.all(color: AppTokens.border))),
+            Container(
+              height: 70,
+              decoration: BoxDecoration(
+                color: AppTokens.surface,
+                borderRadius: BorderRadius.circular(AppTokens.radius16),
+                border: Border.all(color: AppTokens.border),
+              ),
+            ),
             const SizedBox(height: AppTokens.space12),
-            Container(height: 70, decoration: BoxDecoration(color: AppTokens.surface, borderRadius: BorderRadius.circular(AppTokens.radius16), border: Border.all(color: AppTokens.border))),
+            Container(
+              height: 70,
+              decoration: BoxDecoration(
+                color: AppTokens.surface,
+                borderRadius: BorderRadius.circular(AppTokens.radius16),
+                border: Border.all(color: AppTokens.border),
+              ),
+            ),
           ],
         ),
       ),
