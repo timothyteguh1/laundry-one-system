@@ -180,13 +180,13 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(children: [Icon(Icons.warning_amber_rounded, color: Colors.red), SizedBox(width: 8), Text('Hapus Nota?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))]),
-        content: Text('Yakin ingin membatalkan nota ${nota.id}? Stok barang yang masuk dari nota ini akan dikurangi kembali (Reverse).'),
+        content: Text('Yakin ingin membatalkan nota ${nota.id}? Stok barang yang masuk dari nota ini akan dikurangi kembali dan nota dihapus permanen.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal', style: TextStyle(color: Colors.grey))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Ya, Batalkan Nota', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text('Ya, Hapus Nota', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -195,40 +195,35 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     if (confirm == true) {
       setState(() => _isLoading = true);
       try {
-        final adminId = _supabase.auth.currentUser!.id;
-        
-        // 1. Kembalikan stok & tambah log keluar (Reverse)
+        // 1. Kembalikan (Reverse) stok barang
         for (var item in nota.items) {
           final inv = await _supabase.from('inventory').select('stok_saat_ini').eq('id', item.inventoryId).single();
           int currentStok = inv['stok_saat_ini'];
           int newStok = currentStok - item.qty;
           
           await _supabase.from('inventory').update({'stok_saat_ini': newStok}).eq('id', item.inventoryId);
-          await _supabase.from('inventory_log').insert({
-            'inventory_id': item.inventoryId,
-            'tipe': 'keluar',
-            'qty': item.qty,
-            'stok_sebelum': currentStok,
-            'stok_sesudah': newStok,
-            'keterangan': 'Pembatalan Nota ${nota.id}',
-            'created_by': adminId,
-          });
         }
 
-        // 2. Ubah tag ID agar tersembunyi dari dashboard ini
-        final oldLogs = await _supabase.from('inventory_log').select('id, keterangan').like('keterangan', '%[ID: ${nota.id}]%');
-        for (var oLog in oldLogs) {
-          String oldKet = oLog['keterangan'];
-          String newKet = oldKet.replaceAll('[ID:', '[BATAL:');
-          await _supabase.from('inventory_log').update({'keterangan': newKet}).eq('id', oLog['id']);
-        }
+        // 2. Cascade Manual: Hapus BERSIH data di inventory_log (sekarang pakai delete, bukan update)
+        await _supabase.from('inventory_log').delete().like('keterangan', '%[ID: ${nota.id}]%');
 
-        // 3. Hapus pengeluaran kas
+        // 3. Cascade Manual: Hapus BERSIH pengeluaran kas di expenses
         await _supabase.from('expenses').delete().like('keterangan', '%[ID: ${nota.id}]%');
 
         await _loadHistory();
       } catch (e) {
-        if (mounted) setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() => _isLoading = false);
+          // 4. JANGAN DIAM SAJA JIKA ERROR! Tampilkan penyebab aslinya ke layar:
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Gagal menghapus: $e'), 
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(20),
+            ),
+          );
+        }
       }
     }
   }

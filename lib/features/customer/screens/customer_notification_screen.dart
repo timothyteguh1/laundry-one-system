@@ -38,10 +38,11 @@ class _CustomerNotificationScreenState extends State<CustomerNotificationScreen>
 
       final List<String> custIds = customerData.map((e) => e['id'] as String).toList();
 
-      // [PERBAIKAN]: Tarik notifikasi dari seluruh dompet menggunakan inFilter
+      
+      // [PERBAIKAN]: Tarik notifikasi beserta nama cabang dari relasi
       final notifResponse = await _supabase
           .from('notifications')
-          .select()
+          .select('*, customers!inner(branches(nama_cabang))') // <-- Tambahan relasi ini
           .inFilter('customer_id', custIds)
           .order('created_at', ascending: false);
 
@@ -188,9 +189,30 @@ class _CustomerNotificationScreenState extends State<CustomerNotificationScreen>
                                     style: const TextStyle(color: CustomerTheme.textSecondary, fontSize: 13, height: 1.4, fontWeight: FontWeight.w500),
                                   ),
                                   const SizedBox(height: 12),
-                                  Text(
-                                    _formatDate(notif['created_at']),
-                                    style: const TextStyle(color: CustomerTheme.textHint, fontSize: 11, fontWeight: FontWeight.w600),
+                                  // 👇 INI BAGIAN YANG BERUBAH (Ditambah Row untuk Tanggal & Label Cabang)
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        _formatDate(notif['created_at']),
+                                        style: const TextStyle(color: CustomerTheme.textHint, fontSize: 11, fontWeight: FontWeight.w600),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: CustomerTheme.primary.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          notif['customers']?['branches']?['nama_cabang'] ?? 'Cabang',
+                                          style: const TextStyle(
+                                            color: CustomerTheme.primary,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),

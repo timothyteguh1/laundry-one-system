@@ -221,9 +221,12 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
             _selectedBranchId = branchId;
             _selectedBranchName = branchName;
           } else if (_branches.isNotEmpty) {
-            // Default ke cabang utama jika belum pernah pilih
+            // Default ke cabang pertama
             _selectedBranchId = _branches.first['id'] as String;
             _selectedBranchName = _branches.first['nama_cabang'] as String? ?? 'Cabang';
+            
+            // [PERBAIKAN BUG SUPER ADMIN]: Langsung simpan ke memori lokal!
+            AppState.saveBranch(branchId: _selectedBranchId, branchName: _selectedBranchName);
           }
         });
       }
@@ -432,14 +435,16 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
                          fontWeight: FontWeight.w600,
                        ),
                      ),
-                     onTap: () {
+                     onTap: () async { // <-- Tambahkan async
                        Navigator.pop(context);
-                       Navigator.push(
+                       await Navigator.push( // <-- Tambahkan await
                          context,
                          MaterialPageRoute(
                            builder: (_) => const BranchManagementScreen(),
                          ),
                        );
+                       // [PERBAIKAN BUG TAMBAH CABANG]: Refresh dropdown setelah halaman ditutup
+                       _loadBranchesForSwitcher();
                      },
                    ),
                   ListTile(
