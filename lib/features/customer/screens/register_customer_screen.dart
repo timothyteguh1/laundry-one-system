@@ -106,6 +106,97 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
     }
   }
 
+  // ============================================================
+  // [UPDATE UX] Dialog Custom pengganti SnackBar Merah
+  // ============================================================
+  void _showCustomDialog({
+    required String title,
+    required String message,
+    required bool isSuccess,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF1976D2).withOpacity(0.15),
+                blurRadius: 32,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isSuccess ? Colors.green.shade50 : Colors.red.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isSuccess ? Icons.check_circle_rounded : Icons.error_rounded,
+                  color: isSuccess ? Colors.green : Colors.red,
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                  color: Color(0xFF0F2557),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                style: const TextStyle(
+                  color: Color(0xFF6B7A99),
+                  fontSize: 13,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isSuccess
+                        ? const Color(0xFF1976D2)
+                        : Colors.red.shade600,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 0,
+                  ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text(
+                    'Mengerti',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   String _formatTanggal(DateTime date) {
     final bulan = [
       '', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
@@ -189,16 +280,26 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
     } catch (e) {
       if (mounted) {
         HapticFeedback.vibrate();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
-          ),
-        );
+        
+        final errorMsg = e.toString();
+        String title = 'Pendaftaran Gagal';
+        String message = errorMsg.replaceAll('Exception: ', '');
+
+        // LOGIKA PENCEGATAN PESAN ERROR AGAR LEBIH RAMAH
+        if (errorMsg.contains('sudah terdaftar') || errorMsg.contains('already registered')) {
+          title = 'Nomor Sudah Terdaftar';
+          message = 'Nomor WhatsApp ini sudah pernah didaftarkan. Silakan langsung masuk (login) menggunakan nomor tersebut.';
+        } else if (errorMsg.contains('SocketException') ||
+            errorMsg.contains('Failed host lookup') ||
+            errorMsg.contains('Network is unreachable') ||
+            errorMsg.contains('Connection failed') ||
+            errorMsg.contains('ClientException')) {
+          title = 'Tidak Ada Koneksi';
+          message = 'Periksa koneksi internet atau WiFi kamu, lalu coba lagi.';
+        }
+
+        // Panggil custom pop-up yang baru kita buat
+        _showCustomDialog(title: title, message: message, isSuccess: false);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
