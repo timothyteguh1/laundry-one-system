@@ -63,3 +63,7 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Swift Package Manager
+ios/SourcePackages/
+macos/SourcePackages/
