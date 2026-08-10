@@ -7,6 +7,7 @@ import 'package:laundry_one/features/customer/screens/home_customer_screen.dart'
 // IMPORT WAJIB UNTUK JURUS NINJA NOTIFIKASI FCM
 // ============================================================
 import 'package:laundry_one/features/auth/services/notification_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ============================================================
 // REGISTER CUSTOMER SCREEN
@@ -33,6 +34,7 @@ class RegisterCustomerScreen extends StatefulWidget {
 class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
     with SingleTickerProviderStateMixin {
   final _namaController = TextEditingController();
+  final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _konfirmasiController = TextEditingController();
@@ -71,6 +73,7 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
   void dispose() {
     _animController.dispose();
     _namaController.dispose();
+    _emailController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
     _konfirmasiController.dispose();
@@ -216,62 +219,61 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
     setState(() => _isLoading = true);
 
     try {
-      // Format tanggal lahir kalau ada
       String? tanggalLahirStr;
       if (_tanggalLahir != null) {
         tanggalLahirStr =
             '${_tanggalLahir!.year}-${_tanggalLahir!.month.toString().padLeft(2, '0')}-${_tanggalLahir!.day.toString().padLeft(2, '0')}';
       }
 
+      // 1. Daftar Akun
       await _authService.registerPelanggan(
         phone: _phoneController.text.trim(),
         fullName: _namaController.text.trim(),
+        email: _emailController.text.trim(), 
         tanggalLahir: tanggalLahirStr,
         password: _passwordController.text.trim(),
       );
 
-      // ==========================================================
-      // [PERBAIKAN FIX]: LOGIN OTOMATIS SETELAH REGISTER
-      // ==========================================================
+      // 2. Login Otomatis
       await _authService.loginWithRole(
         identifier: _phoneController.text.trim(),
         password: _passwordController.text.trim(),
         expectedRole: 'customer',
       );
-      // ==========================================================
 
-      // ==========================================================
-      // [JURUS NINJA FCM]: UPDATE TOKEN DIAM-DIAM SETELAH DAFTAR
-      // ==========================================================
+      // 3. Pastikan email benar-benar tersimpan di tabel profiles
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId != null) {
+        await Supabase.instance.client.from('profiles').update({
+          'email': _emailController.text.trim()
+        }).eq('id', userId);
+      }
+
+      // 4. Update FCM Token
       try {
         await NotificationService.saveTokenToSupabase();
       } catch (e) {
         debugPrint('Ninja Token Gagal: $e'); 
       }
-      // ==========================================================
 
       if (mounted) {
         HapticFeedback.mediumImpact();
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-                'Selamat datang, ${_namaController.text.trim().split(' ').first}! 👋'),
+            content: Text('Selamat datang, ${_namaController.text.trim().split(' ').first}! 👋'),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
 
-        // Langsung ke home pelanggan
         Navigator.pushAndRemoveUntil(
           context,
           PageRouteBuilder(
             pageBuilder: (_, animation, __) => const HomeCustomerScreen(),
-            transitionsBuilder: (_, animation, __, child) =>
-                FadeTransition(opacity: animation, child: child),
+            transitionsBuilder: (_, animation, __, child) => FadeTransition(opacity: animation, child: child),
             transitionDuration: const Duration(milliseconds: 400),
           ),
           (route) => false,
@@ -285,7 +287,6 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
         String title = 'Pendaftaran Gagal';
         String message = errorMsg.replaceAll('Exception: ', '');
 
-        // LOGIKA PENCEGATAN PESAN ERROR AGAR LEBIH RAMAH
         if (errorMsg.contains('sudah terdaftar') || errorMsg.contains('already registered')) {
           title = 'Nomor Sudah Terdaftar';
           message = 'Nomor WhatsApp ini sudah pernah didaftarkan. Silakan langsung masuk (login) menggunakan nomor tersebut.';
@@ -298,7 +299,6 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
           message = 'Periksa koneksi internet atau WiFi kamu, lalu coba lagi.';
         }
 
-        // Panggil custom pop-up yang baru kita buat
         _showCustomDialog(title: title, message: message, isSuccess: false);
       }
     } finally {
@@ -374,13 +374,34 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
                       _buildField(
                         controller: _namaController,
                         label: 'Nama Lengkap',
-                        icon: Icons.badge_outlined,
+                        icon: Icons.person_outline_rounded,
+                        keyboardType: TextInputType.name,
+                        hint: 'Cth: Budi Santoso',
                         validator: (val) {
                           if (val == null || val.trim().isEmpty) {
-                            return 'Nama lengkap wajib diisi';
+                            return 'Nama wajib diisi';
                           }
                           if (val.trim().length < 3) {
-                            return 'Nama minimal 3 karakter';
+                            return 'Nama minimal 3 huruf';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 14),
+
+                      // === EMAIL ===
+                      _buildField(
+                        controller: _emailController,
+                        label: 'Alamat Email',
+                        icon: Icons.email_outlined,
+                        keyboardType: TextInputType.emailAddress,
+                        hint: 'contoh@email.com',
+                        validator: (val) {
+                          if (val == null || val.trim().isEmpty) {
+                            return 'Email wajib diisi';
+                          }
+                          if (!val.contains('@') || !val.contains('.')) {
+                            return 'Format email tidak valid';
                           }
                           return null;
                         },

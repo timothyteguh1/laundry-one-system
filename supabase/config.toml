@@ -474,3 +474,36 @@ entrypoint = "./functions/otp-self-reset/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/otp-self-reset/*.html" ]
+
+[functions.send-otp]
+enabled = true
+verify_jwt = true
+import_map = "./functions/send-otp/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/send-otp/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/send-otp/*.html" ]
+
+[functions.verify-otp]
+enabled = true
+verify_jwt = true
+import_map = "./functions/verify-otp/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/verify-otp/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/verify-otp/*.html" ]
+
+[functions.verify-voucher-otp]
+enabled = true
+verify_jwt = true
+import_map = "./functions/verify-voucher-otp/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/verify-voucher-otp/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/verify-voucher-otp/*.html" ]

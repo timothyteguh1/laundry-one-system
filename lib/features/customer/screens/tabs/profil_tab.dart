@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:laundry_one/features/customer/customer_theme.dart';
-import 'package:laundry_one/features/customer/widgets/customer_shared_widgets.dart'; // [UPDATE UX] Import ModernSpinner
+import 'package:laundry_one/features/customer/widgets/customer_shared_widgets.dart';
 
 class ProfilTab extends StatefulWidget {
   final String nama;
@@ -154,14 +154,12 @@ class _ProfilTabState extends State<ProfilTab> {
     
     setState(() => _isUploading = true);
     try {
-      // [PERBAIKAN]: Membaca gambar sebagai Bytes agar aman di Flutter Web & Mobile
       final bytes = await image.readAsBytes(); 
       final userId = _supabase.auth.currentUser!.id;
       final fileExt = image.name.split('.').last;
       final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExt';
       final filePath = '$userId/$fileName';
 
-      // [PERBAIKAN]: Menggunakan uploadBinary khusus untuk data Bytes
       await _supabase.storage.from('avatars').uploadBinary(
         filePath, 
         bytes, 
@@ -215,8 +213,33 @@ class _ProfilTabState extends State<ProfilTab> {
     );
   }
 
-  void _showEditProfilDialog() {
+  // ============================================================
+  // [UPDATE TAMBAHAN EMAIL]: Fungsi Edit Profil Dirombak
+  // ============================================================
+  void _showEditProfilDialog() async {
+    // Tampilkan loading spinner singkat sebelum modal terbuka
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: ModernSpinner(size: 48, color: Colors.white)),
+    );
+
+    String currentEmail = '';
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user != null) {
+        final profile = await _supabase.from('profiles').select('email').eq('id', user.id).single();
+        currentEmail = profile['email']?.toString() ?? '';
+      }
+    } catch (e) {
+      debugPrint('Gagal fetch email: $e');
+    }
+
+    if (!mounted) return;
+    Navigator.pop(context); // Tutup loading spinner
+
     final namaController = TextEditingController(text: widget.nama);
+    final emailController = TextEditingController(text: currentEmail); // Masukkan data email
     bool isLoading = false;
 
     showModalBottomSheet(
@@ -241,6 +264,22 @@ class _ProfilTabState extends State<ProfilTab> {
               ),
               const SizedBox(height: 16),
 
+              // === TAMBAHAN EMAIL DI FORM EDIT ===
+              const Text('Alamat Email (Untuk Reset Sandi / OTP)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CustomerTheme.textSecondary)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  hintText: 'contoh@email.com',
+                  filled: true, 
+                  fillColor: CustomerTheme.ground, 
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), 
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14)
+                ),
+              ),
+              const SizedBox(height: 16),
+
               const Text('Nomor HP (Tidak dapat diubah)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CustomerTheme.textSecondary)),
               const SizedBox(height: 8),
               TextField(
@@ -256,10 +295,22 @@ class _ProfilTabState extends State<ProfilTab> {
                   style: ElevatedButton.styleFrom(backgroundColor: CustomerTheme.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0),
                   onPressed: isLoading ? null : () async {
                     if (namaController.text.trim().isEmpty) return;
+                    
+                    final emailText = emailController.text.trim();
+                    if (emailText.isNotEmpty && (!emailText.contains('@') || !emailText.contains('.'))) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Format email tidak valid!'), backgroundColor: Colors.red));
+                      return;
+                    }
+
                     setModalState(() => isLoading = true);
                     try {
                       final user = _supabase.auth.currentUser;
-                      if (user != null) await _supabase.from('profiles').update({'nama_lengkap': namaController.text.trim()}).eq('id', user.id);
+                      if (user != null) {
+                        await _supabase.from('profiles').update({
+                          'nama_lengkap': namaController.text.trim(),
+                          'email': emailText.isEmpty ? null : emailText, // Save email to database
+                        }).eq('id', user.id);
+                      }
                       if (mounted) Navigator.pop(context);
                     } catch (e) {
                       setModalState(() => isLoading = false);
@@ -306,7 +357,7 @@ class _ProfilTabState extends State<ProfilTab> {
                                 : null,
                           ), 
                           child: _isUploading 
-                              ? const Center(child: ModernSpinner(size: 24)) // [UPDATE UX]
+                              ? const Center(child: ModernSpinner(size: 24))
                               : widget.avatarUrl == null 
                                   ? Center(child: Text(widget.nama.isNotEmpty ? widget.nama[0].toUpperCase() : '?', style: const TextStyle(color: CustomerTheme.primary, fontSize: 24, fontWeight: FontWeight.w800)))
                                   : null,

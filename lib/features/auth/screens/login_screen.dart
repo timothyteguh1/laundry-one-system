@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // IMPORT WAJIB UNTUK JURUS NINJA NOTIFIKASI FCM
 // ============================================================
 import 'package:laundry_one/features/auth/services/notification_service.dart';
+import 'package:laundry_one/features/auth/screens/forgot_password_screen.dart';
 
 // ============================================================
 // LOGIN SCREEN — Industry-standard design
@@ -503,6 +504,34 @@ class _LoginScreenState extends State<LoginScreen>
                                         return null;
                                       },
                                     ),
+                                    const SizedBox(height: 12),
+                                    
+                                    // === TOMBOL LUPA SANDI (Hanya muncul jika role-nya customer) ===
+                                    if (widget.config.roleDatabase == 'customer') ...[
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: GestureDetector(
+                                          onTap: () {
+                                            HapticFeedback.lightImpact();
+                                            Navigator.push(
+                                              context,
+                                              PageRouteBuilder(
+                                                pageBuilder: (_, __, ___) => ForgotPasswordScreen(config: widget.config),
+                                                transitionsBuilder: (_, anim, __, child) => FadeTransition(opacity: anim, child: child),
+                                              ),
+                                            );
+                                          },
+                                          child: Text(
+                                            'Lupa Sandi?',
+                                            style: TextStyle(
+                                              color: widget.config.primaryColor,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                     const SizedBox(height: 28),
 
                                     SizedBox(

@@ -74,7 +74,25 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
   Future<void> _fetchInitialData(String userId) async {
       final profileData = await _supabase.from('profiles').select().eq('id', userId).single();
       
-      // [MULTI-WALLET]: Tarik SEMUA dompet cabang milik pelanggan ini
+      // ==========================================================
+      // [UPDATE]: CEK EMAIL KOSONG, PALSU, ATAU TIDAK VALID
+      // ==========================================================
+      final String? userEmail = profileData['email']?.toString().trim();
+      
+      final bool isEmailKosong = userEmail == null || userEmail.isEmpty;
+      // Cek apakah isi emailnya adalah buatan sistem (@laundry.local) 
+      // ATAU formatnya salah (tidak ada @ atau . yang menandakan itu cuma nomor HP/nama)
+      final bool isEmailPalsu = userEmail != null && 
+          (userEmail.contains('@laundry.local') || !userEmail.contains('@') || !userEmail.contains('.'));
+
+      if (isEmailKosong || isEmailPalsu) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _tampilkanPopupLengkapiEmail(userId);
+        });
+      }
+      // ==========================================================
+      // ==========================================================
+
       final walletsData = await _supabase
           .from('customers')
           .select('*, branches(nama_cabang, alamat)')
@@ -85,9 +103,9 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
 
       if (wallets.isNotEmpty) {
         if (activeWallet == null || !wallets.any((w) => w['id'] == activeWallet!['id'])) {
-          activeWallet = wallets.first; // Default: Pilih dompet pertama
+          activeWallet = wallets.first; 
         } else {
-          activeWallet = wallets.firstWhere((w) => w['id'] == activeWallet!['id']); // Update data dompet aktif jika ada refresh
+          activeWallet = wallets.firstWhere((w) => w['id'] == activeWallet!['id']); 
         }
       } else {
         activeWallet = null;
@@ -101,7 +119,7 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
         final ordersData = await _supabase
             .from('orders')
             .select('*, customers(profiles(nama_lengkap, nomor_hp)), profiles!orders_cashier_id_fkey(nama_lengkap), order_items(jumlah, harga_satuan, services(nama))')
-            .eq('customer_id', customerId) // Isolasi: Tarik order khusus di dompet ini
+            .eq('customer_id', customerId) 
             .order('created_at', ascending: false);
 
         for (var order in ordersData) {
@@ -143,6 +161,124 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
     _ordersSubscription = _supabase.from('orders').stream(primaryKey: ['id']).listen((data) {
        _fetchInitialData(userId);
     });
+  }
+
+  // =========================================================
+  // [TAMBAHAN BARU]: FUNGSI POP-UP LENGKAPI EMAIL
+  // =========================================================
+  void _tampilkanPopupLengkapiEmail(String userId) {
+    final emailController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Layar dikunci
+      builder: (ctx) => PopScope(
+        canPop: false, // Cegah tombol kembali (back) di Android
+        child: StatefulBuilder(
+          builder: (context, setPopupState) {
+            return Dialog(
+              backgroundColor: CustomerTheme.surface,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(color: CustomerTheme.primary.withOpacity(0.1), shape: BoxShape.circle),
+                        child: const Icon(Icons.mark_email_unread_rounded, size: 40, color: CustomerTheme.primary),
+                      ),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Lengkapi Data Email',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: CustomerTheme.textPrimary),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Masukkan alamat email Anda untuk keamanan akun dan fitur pemulihan kata sandi (OTP).',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 13, color: CustomerTheme.textSecondary),
+                      ),
+                      const SizedBox(height: 24),
+                      TextFormField(
+                        controller: emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: InputDecoration(
+                          labelText: 'Alamat Email',
+                          hintText: 'contoh@email.com',
+                          prefixIcon: const Icon(Icons.email_outlined, color: Colors.grey),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: CustomerTheme.primary, width: 2)),
+                        ),
+                        validator: (val) {
+                          if (val == null || val.trim().isEmpty) return 'Email wajib diisi';
+                          if (!val.contains('@') || !val.contains('.')) return 'Format email tidak valid';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: CustomerTheme.primary,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          ),
+                          onPressed: isSaving
+                              ? null
+                              : () async {
+                                  if (!formKey.currentState!.validate()) return;
+                                  setPopupState(() => isSaving = true);
+                                  try {
+                                    await _supabase.from('profiles').update({
+                                      'email': emailController.text.trim()
+                                    }).eq('id', userId);
+                                    
+                                    if (mounted) {
+                                      Navigator.pop(ctx); 
+                                      _loadAllData(); // Refresh UI
+                                    }
+                                  } catch (e) {
+                                    setPopupState(() => isSaving = false);
+                                    // Tampilkan error langsung di atas pop-up agar terlihat jelas!
+                                    showDialog(
+                                      context: ctx,
+                                      builder: (errCtx) => AlertDialog(
+                                        backgroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                        title: const Text('Gagal Menyimpan', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                                        content: Text(e.toString().replaceAll('Exception: ', '')),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(errCtx), 
+                                            child: const Text('Mengerti', style: TextStyle(fontWeight: FontWeight.bold))
+                                          )
+                                        ],
+                                      )
+                                    );
+                                  }
+                                },
+                          child: isSaving
+                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Text('Simpan Email', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   Future<void> _handleLogout() async {

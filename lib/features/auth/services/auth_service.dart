@@ -113,13 +113,13 @@ class AuthService {
   Future<void> registerPelanggan({
     required String phone,
     required String fullName,
-    String? password,       // opsional, default = nomor HP
-    String? tanggalLahir,   // opsional, untuk notif ulang tahun
-    String? branchId,       // [MULTI-BRANCH]: cabang tempat pelanggan didaftarkan
+    String? email,          // <--- [TAMBAHAN BARU]
+    String? password,       
+    String? tanggalLahir,   
+    String? branchId,       
   }) async {
     try {
       final authEmail = _hpKeEmail(phone);
-      // Kalau password tidak dikirim (kasir daftarkan), pakai nomor HP
       final authPassword = (password != null && password.isNotEmpty)
           ? password
           : phone.trim();
@@ -130,11 +130,11 @@ class AuthService {
         branchIdToSend = await AppState.getBranchId();
       }
 
-      // [UPDATE]: Kita gunakan Edge Function agar sesi kasir tidak tertimpa!
       final response = await _supabase.functions.invoke(
         'register-customer',
         body: {
           'email': authEmail,
+          'email_asli': email, // <--- [TAMBAHAN BARU] Kirim ke fungsi server
           'password': authPassword,
           'full_name': fullName,
           'phone': phone,
@@ -143,15 +143,18 @@ class AuthService {
         },
       );
 
-      // Tangkap jika Edge Function mengembalikan error (misal nomor sudah ada)
       if (response.status != 200) {
          final errorMsg = response.data['error'] ?? 'Gagal mendaftarkan pelanggan';
          throw Exception(_translateError(errorMsg.toString()));
       }
 
     } on FunctionException catch (e) {
-      // Gunakan toString() agar aman dari perubahan versi package Supabase
-      throw Exception('Server Error: ${e.toString()}');
+      // [UPDATE UI]: Ekstrak pesan error asli dari Edge Function
+      String cleanError = 'Gagal mendaftar. Silakan coba lagi.';
+      if (e.details != null && e.details is Map && e.details['error'] != null) {
+        cleanError = e.details['error'].toString();
+      }
+      throw Exception(cleanError);
     } catch (e) {
       throw Exception(e.toString().replaceAll('Exception: ', ''));
     }
@@ -295,28 +298,132 @@ class AuthService {
     await _supabase.auth.signOut();
     await AppState.clearAll();
   }
+  // // ============================================================
+  // // LUPA SANDI VIA OTP (Memanggil Edge Function otp-self-reset)
+  // // ============================================================
+  // Future<void> resetPasswordViaOtp({
+  //   required String phone,
+  //   required String newPassword,
+  // }) async {
+  //   try {
+  //     final response = await _supabase.functions.invoke(
+  //       'otp-self-reset',
+  //       body: {
+  //         'phone': phone,
+  //         'new_password': newPassword,
+  //       },
+  //     );
+
+  //     if (response.status != 200) {
+  //       final errorMsg = response.data['error'] ?? 'Gagal mereset sandi.';
+  //       throw Exception(_translateError(errorMsg.toString()));
+  //     }
+  //   } on FunctionException catch (e) {
+  //     throw Exception('Server Error: ${e.toString()}');
+  //   } catch (e) {
+  //     throw Exception(e.toString().replaceAll('Exception: ', ''));
+  //   }
+  // }
+
   // ============================================================
-  // LUPA SANDI VIA OTP (Memanggil Edge Function otp-self-reset)
+  // LUPA SANDI (TAHAP 1): MINTA OTP KE EMAIL
   // ============================================================
-  Future<void> resetPasswordViaOtp({
+  Future<void> sendOtpLupaSandi({
     required String phone,
+    required String email,
+  }) async {
+    try {
+      final response = await _supabase.functions.invoke(
+        'send-otp',
+        body: {
+          'nomor_hp': phone,
+          'email': email,
+        },
+      );
+
+      if (response.status != 200) {
+        final errorMsg = response.data['error'] ?? 'Gagal mengirim OTP.';
+        throw Exception(_translateError(errorMsg.toString()));
+      }
+    } on FunctionException catch (e) {
+      // [UPDATE UI]: Kita ekstrak dan rapikan pesan aslinya agar cantik!
+      String cleanError = 'Gagal memproses data.';
+      if (e.details != null && e.details is Map && e.details['error'] != null) {
+        cleanError = e.details['error'].toString();
+      }
+      throw Exception(cleanError);
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    }
+  }
+
+  // ============================================================
+  // LUPA SANDI (TAHAP 2): VERIFIKASI OTP & RESET SANDI
+  // ============================================================
+  Future<void> verifyOtpDanResetSandi({
+    required String phone,
+    required String otp,
     required String newPassword,
   }) async {
     try {
       final response = await _supabase.functions.invoke(
-        'otp-self-reset',
+        'verify-otp',
         body: {
-          'phone': phone,
+          'nomor_hp': phone,
+          'otp_input': otp,
           'new_password': newPassword,
         },
       );
 
       if (response.status != 200) {
-        final errorMsg = response.data['error'] ?? 'Gagal mereset sandi.';
+        final errorMsg = response.data['error'] ?? 'Gagal verifikasi OTP.';
         throw Exception(_translateError(errorMsg.toString()));
       }
     } on FunctionException catch (e) {
-      throw Exception('Server Error: ${e.toString()}');
+      // [UPDATE UI]: Kita ekstrak dan rapikan pesan aslinya agar cantik!
+      String cleanError = 'Gagal memproses data.';
+      if (e.details != null && e.details is Map && e.details['error'] != null) {
+        cleanError = e.details['error'].toString();
+      }
+      throw Exception(cleanError);
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    }
+  }
+
+  // ============================================================
+  // VERIFIKASI OTP VOUCHER KHUSUS KASIR (BYPASS EDGE FUNCTION)
+  // ============================================================
+  Future<void> verifyVoucherOtpOnly({
+    required String phone,
+    required String otp,
+  }) async {
+    try {
+      // Langsung ngebut baca dari database lokal Supabase
+      final data = await _supabase
+          .from('otp_verifications')
+          .select('*')
+          .eq('nomor_hp', phone)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (data == null) throw Exception('Kode OTP tidak ditemukan.');
+
+      // Cek kedaluwarsa
+      final expiresAt = DateTime.parse(data['expires_at']).toUtc();
+      if (DateTime.now().toUtc().isAfter(expiresAt)) {
+        throw Exception('Kode OTP sudah kedaluwarsa.');
+      }
+
+      // Cek kecocokan
+      if (data['kode'] != otp) {
+        throw Exception('Kode OTP salah!');
+      }
+
+      // Sukses? Langsung hapus OTP agar tidak bisa dipakai 2x
+      await _supabase.from('otp_verifications').delete().eq('id', data['id']);
+      
     } catch (e) {
       throw Exception(e.toString().replaceAll('Exception: ', ''));
     }

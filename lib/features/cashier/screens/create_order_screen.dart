@@ -521,6 +521,116 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     }
   }
 
+  // =========================================================
+  // SISTEM ANTI-FRAUD VOUCHER (OTP)
+  // =========================================================
+  Future<void> _prosesAntiFraudVoucher(VoidCallback onSuccess) async {
+    final phone = _selectedCustomer?['nomor_hp'];
+    if (phone == null || phone.isEmpty) {
+      _showCustomDialog(title: 'Gagal', message: 'Nomor HP pelanggan tidak ditemukan.', isSuccess: false);
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      // 1. Cek Email Pelanggan di Database
+      final profileData = await _supabase.from('profiles').select('email, nama_lengkap').eq('id', _selectedCustomer!['id']).single();
+      final email = profileData['email'];
+
+      if (email == null || email.toString().trim().isEmpty) {
+        throw 'Pelanggan ini belum melengkapi alamat Email di aplikasinya. Voucher tidak dapat digunakan demi keamanan.';
+      }
+
+      // 2. Tembak OTP ke Email Pelanggan Secara Diam-Diam
+      await AuthService().sendOtpLupaSandi(phone: phone, email: email.toString());
+      setState(() => _isLoading = false);
+
+      // 3. Munculkan Tembok Pop-Up OTP ke Layar Kasir
+      _tampilkanPopUpOTP(phone, email.toString(), onSuccess);
+
+    } catch (e) {
+      setState(() => _isLoading = false);
+      _showCustomDialog(title: 'Akses Ditolak', message: e.toString().replaceAll('Exception: ', ''), isSuccess: false);
+    }
+  }
+
+  void _tampilkanPopUpOTP(String phone, String email, VoidCallback onSuccess) {
+    final otpCtrl = TextEditingController();
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Layar dikunci agar kasir tidak bisa kabur
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => AlertDialog(
+          backgroundColor: _DS.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Otorisasi Pelanggan', style: TextStyle(fontWeight: FontWeight.w800, color: _DS.textPrimary)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(12)),
+                child: Row(
+                  children: [
+                    Icon(Icons.security_rounded, color: Colors.orange.shade700),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Kode rahasia telah dikirim ke email $email. Minta kode tersebut ke pelanggan untuk menyetujui pemakaian voucher.',
+                        style: TextStyle(color: Colors.orange.shade800, fontSize: 12),
+                      ),
+                    )
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: otpCtrl,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 8),
+                decoration: InputDecoration(
+                  hintText: '000000',
+                  filled: true,
+                  fillColor: _DS.ground,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: const Text('Batal', style: TextStyle(color: _DS.textSecondary)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              onPressed: isSubmitting ? null : () async {
+                if (otpCtrl.text.length != 6) return;
+                setModalState(() => isSubmitting = true);
+                try {
+                  // [KUNCI PERBAIKAN]: Gunakan jalur baru yang tidak menyenggol auth/session!
+                  await AuthService().verifyVoucherOtpOnly(phone: phone, otp: otpCtrl.text);
+                  Navigator.pop(ctx); 
+                  onSuccess(); // Lanjutkan potong diskon
+                } catch (e) {
+                  setModalState(() => isSubmitting = false);
+                  ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: Colors.red));
+                }
+              },
+              child: isSubmitting 
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                : const Text('Verifikasi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _bukaDialogVoucher() async {
     if (_selectedCustomer == null) return;
     setState(() => _isLoading = true);
@@ -905,76 +1015,65 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 
-  void _pilihAutoVoucher(Map<String, dynamic> reward, int poinSaldo) {
+  Future<void> _pilihAutoVoucher(Map<String, dynamic> reward, int poinSaldo) async {
     final String safeRewardId = reward['id']?.toString() ?? '';
 
     if (_lastUsedRewards.containsKey(safeRewardId)) {
       final lastUsed = _lastUsedRewards[safeRewardId]!;
       final cooldownEnd = lastUsed.add(const Duration(days: 90));
       if (DateTime.now().toUtc().isBefore(cooldownEnd)) {
-        _showCustomDialog(
-          title: 'Cooled Down',
-          message: 'Voucher ini baru bisa ditukar lagi setelah 3 bulan!',
-          isSuccess: false,
-        );
+        _showCustomDialog(title: 'Cooled Down', message: 'Voucher ini baru bisa ditukar lagi setelah 3 bulan!', isSuccess: false);
         return;
       }
     }
     if (_activeVouchers.length >= 2) {
-      _showCustomDialog(
-        title: 'Limit Tercapai',
-        message: 'Maksimal hanya boleh memiliki 2 voucher aktif.',
-        isSuccess: false,
-      );
+      _showCustomDialog(title: 'Limit Tercapai', message: 'Maksimal hanya boleh memiliki 2 voucher aktif.', isSuccess: false);
       return;
     }
-    if (_activeVouchers.any(
-      (v) => v['reward_id']?.toString() == safeRewardId,
-    )) {
-      _showCustomDialog(
-        title: 'Sedang Aktif',
-        message:
-            'Pelanggan masih memiliki voucher jenis ini yang sedang aktif!',
-        isSuccess: false,
-      );
+    if (_activeVouchers.any((v) => v['reward_id']?.toString() == safeRewardId)) {
+      _showCustomDialog(title: 'Sedang Aktif', message: 'Pelanggan masih memiliki voucher jenis ini yang sedang aktif!', isSuccess: false);
       return;
     }
 
-    try {
-      double diskon = _hitungDiskon(reward);
-      setState(() {
-        _selectedAutoReward = reward;
-        _voucherData = null;
-        _voucherCode = null;
-        _diskonVoucher = diskon;
-      });
-      Navigator.pop(context);
-      _showCustomDialog(
-        title: 'Voucher Berhasil Dipakai!',
-        message: 'Diskon ${_formatRupiah(diskon)} diterapkan.',
-        isSuccess: true,
-      );
-    } catch (e) {
-      _showCustomDialog(
-        title: 'Tidak Memenuhi Syarat',
-        message: e.toString(),
-        isSuccess: false,
-      );
-    }
+    // [KUNCI FIX UI]: Tutup modal list voucher SEKARANG juga sebelum memunculkan loading!
+    Navigator.pop(context); 
+    
+    // Beri jeda 200ms agar animasi modal turun ke bawah selesai dengan mulus
+    await Future.delayed(const Duration(milliseconds: 200)); 
+
+    // [JEBAKAN ANTI-FRAUD DIMULAI]
+    await _prosesAntiFraudVoucher(() {
+      try {
+        double diskon = _hitungDiskon(reward);
+        setState(() {
+          _selectedAutoReward = reward;
+          _voucherData = null;
+          _voucherCode = null;
+          _diskonVoucher = diskon;
+        });
+        // Navigator.pop(context) sudah kita pindahkan ke atas, jadi di sini dihapus
+        _showCustomDialog(
+          title: 'Voucher Berhasil Dipakai!',
+          message: 'Diskon ${_formatRupiah(diskon)} diterapkan.',
+          isSuccess: true,
+        );
+      } catch (e) {
+        _showCustomDialog(title: 'Tidak Memenuhi Syarat', message: e.toString(), isSuccess: false);
+      }
+    });
   }
 
   Future<void> _prosesVoucherManual(String kode) async {
     setState(() => _isLoading = true);
     try {
       final profileId = _selectedCustomer!['id'];
-      // [UPDATE]: Ambil branchId
       final branchId = await AppState.getBranchId();
 
       final custData = await _supabase
           .from('customers')
           .select('id')
           .eq('profile_id', profileId)
-          .eq('branch_id', branchId!) // <--- [KUNCI PERBAIKAN]: Filter berdasarkan cabang
+          .eq('branch_id', branchId!) 
           .maybeSingle();
           
       if (custData == null) throw 'Data pelanggan belum lengkap di cabang ini.';
@@ -988,35 +1087,38 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           .eq('status', 'aktif')
           .maybeSingle();
 
-      if (voucher == null)
-        throw 'Voucher tidak valid atau milik pelanggan lain.';
+      if (voucher == null) throw 'Voucher tidak valid atau milik pelanggan lain.';
 
-      if (DateTime.now().toUtc().isAfter(
-        DateTime.parse(voucher['berlaku_sampai']).toUtc(),
-      ))
+      if (DateTime.now().toUtc().isAfter(DateTime.parse(voucher['berlaku_sampai']).toUtc())) {
         throw 'Voucher ini sudah expired.';
+      }
 
       double diskon = _hitungDiskon(voucher['rewards_catalog']);
 
-      setState(() {
-        _voucherData = voucher;
-        _selectedAutoReward = null;
-        _voucherCode = kode;
-        _diskonVoucher = diskon;
+      setState(() => _isLoading = false); // Matikan loading utama dulu agar pop-up OTP bisa muncul
+
+      // [JEBAKAN ANTI-FRAUD DIMULAI DISINI]
+      await _prosesAntiFraudVoucher(() {
+        setState(() {
+          _voucherData = voucher;
+          _selectedAutoReward = null;
+          _voucherCode = kode;
+          _diskonVoucher = diskon;
+        });
+        _showCustomDialog(
+          title: 'Voucher Ditemukan!',
+          message: 'Diskon ${_formatRupiah(diskon)} diterapkan pada pesanan.',
+          isSuccess: true,
+        );
       });
-      _showCustomDialog(
-        title: 'Voucher Ditemukan!',
-        message: 'Diskon ${_formatRupiah(diskon)} diterapkan pada pesanan.',
-        isSuccess: true,
-      );
+
     } catch (e) {
+      setState(() => _isLoading = false);
       _showCustomDialog(
         title: 'Gagal Memakai Voucher',
         message: e.toString(),
         isSuccess: false,
       );
-    } finally {
-      setState(() => _isLoading = false);
     }
   }
 
