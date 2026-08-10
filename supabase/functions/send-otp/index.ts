@@ -76,12 +76,49 @@ serve(async (req) => {
       }
     });
 
-    // KIRIM EMAIL
+    // BENTUK HTML EMAIL YANG LEBIH CANTIK & AMAN DARI SPAM
+    const htmlEmail = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; }
+        .container { max-width: 500px; margin: 0 auto; background: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .header { text-align: center; color: #1976D2; font-size: 26px; font-weight: 800; margin-bottom: 24px; letter-spacing: 1px;}
+        .content { color: #444444; font-size: 15px; line-height: 1.6; }
+        .otp-box { background: #f0f7ff; border: 2px dashed #1976D2; color: #1976D2; font-size: 36px; font-weight: bold; text-align: center; padding: 16px; margin: 24px 0; border-radius: 8px; letter-spacing: 8px; }
+        .warning { font-size: 13px; color: #d32f2f; background: #ffebee; padding: 12px; border-radius: 8px; margin-top: 24px; text-align: center; border: 1px solid #ffcdd2;}
+        .footer { text-align: center; margin-top: 32px; font-size: 12px; color: #999999; border-top: 1px solid #eeeeee; padding-top: 20px;}
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">Laundry One</div>
+        <div class="content">
+          <p>Halo <b>${profile.nama_lengkap}</b>,</p>
+          <p>Kami menerima permintaan kode OTP untuk keamanan akun Anda. Berikut adalah kode otorisasi Anda:</p>
+          <div class="otp-box">${otpCode}</div>
+          <p>Kode ini hanya berlaku selama <b>5 menit</b>.</p>
+          <div class="warning">
+            <b>PENTING:</b> Jangan pernah memberikan kode ini kepada siapapun. Tim Laundry One tidak akan pernah meminta kode OTP Anda.
+          </div>
+        </div>
+        <div class="footer">
+          <p>&copy; 2026 Laundry One. Semua hak dilindungi.</p>
+          <p>Email ini dikirim secara otomatis oleh sistem keamanan kami.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+    `;
+
+    // KIRIM EMAIL DENGAN HTML
     await transporter.sendMail({
-      from: '"Laundry One" <support.laundryone@gmail.com>',
+      from: '"Laundry One Security" <support.laundryone@gmail.com>', // Nama pengirim dibuat lebih meyakinkan
       to: email,
-      subject: "Kode OTP Otorisasi - Laundry One",
-      text: `Halo ${profile.nama_lengkap},\n\nKode OTP Anda adalah: ${otpCode}\n\nKode ini berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun.\n\nSalam,\nTim Laundry One`
+      subject: `Kode OTP Anda: ${otpCode} - Laundry One`, // Judul email lebih dinamis
+      html: htmlEmail, // <--- KITA GANTI DARI text MENJADI html
     });
 
     return new Response(
