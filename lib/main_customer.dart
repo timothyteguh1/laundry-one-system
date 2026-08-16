@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:in_app_update/in_app_update.dart'; // <--- [TAMBAHAN 1]: Import In-App Update
 
 // Kunci opsi Firebase khusus pelanggan
 import 'firebase_options_customer.dart' as customerFirebase;
@@ -76,9 +77,31 @@ class _SplashRouterState extends State<_SplashRouter> {
   @override
   void initState() {
     super.initState();
+    _cekUpdateOtomatis(); // <--- [TAMBAHAN 2]: Panggil pengecekan saat Splash Screen terbuka
     _checkSession();
     _setupAuthListener();
   }
+
+  // =========================================================
+  // [TAMBAHAN 3]: FUNGSI PAKSA UPDATE (IN-APP UPDATE)
+  // =========================================================
+  Future<void> _cekUpdateOtomatis() async {
+    // Pastikan hanya berjalan di Android asli, bukan di Web/Browser
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final updateInfo = await InAppUpdate.checkForUpdate();
+        
+        if (updateInfo.updateAvailability == UpdateAvailability.updateAvailable) {
+          // Munculkan layar paksa update bawaan Google
+          await InAppUpdate.performImmediateUpdate();
+        }
+      } catch (e) {
+        // Abaikan jika error (misal sedang di-run di emulator lokal)
+        debugPrint('Cek update dilewati: $e');
+      }
+    }
+  }
+  // =========================================================
 
   void _setupAuthListener() {
     Supabase.instance.client.auth.onAuthStateChange.listen((data) {

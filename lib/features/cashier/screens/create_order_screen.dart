@@ -1097,20 +1097,26 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
       setState(() => _isLoading = false); // Matikan loading utama dulu agar pop-up OTP bisa muncul
 
-      // [JEBAKAN ANTI-FRAUD DIMULAI DISINI]
-      await _prosesAntiFraudVoucher(() {
-        setState(() {
-          _voucherData = voucher;
-          _selectedAutoReward = null;
-          _voucherCode = kode;
-          _diskonVoucher = diskon;
-        });
-        _showCustomDialog(
-          title: 'Voucher Ditemukan!',
-          message: 'Diskon ${_formatRupiah(diskon)} diterapkan pada pesanan.',
-          isSuccess: true,
-        );
+     // Matikan loading utama
+      setState(() => _isLoading = false); 
+
+      // =========================================================
+      // [PERBAIKAN]: OTP DIHAPUS UNTUK KODE VOUCHER MANUAL
+      // Kasir langsung bisa pakai vouchernya karena pelanggan 
+      // sudah menyetujuinya lewat aplikasi mereka sendiri.
+      // =========================================================
+      setState(() {
+        _voucherData = voucher;
+        _selectedAutoReward = null;
+        _voucherCode = kode;
+        _diskonVoucher = diskon;
       });
+
+      _showCustomDialog(
+        title: 'Voucher Ditemukan!',
+        message: 'Diskon ${_formatRupiah(diskon)} diterapkan pada pesanan.',
+        isSuccess: true,
+      );
 
     } catch (e) {
       setState(() => _isLoading = false);
