@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -259,13 +259,13 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     }
   }
 
-  void _shareReceipt() {
+  Future<void> _shareReceipt() async {
     HapticFeedback.lightImpact();
     final statusText = widget.isPiutang
         ? 'BELUM LUNAS (PIUTANG)'
         : 'LUNAS (${widget.metodeBayar.toUpperCase()})';
 
-    // [PERBAIKAN]: Gunakan nama cabang dinamis, fallback ke "LAUNDRY" jika kosong
+    // Gunakan nama cabang dinamis, fallback ke "LAUNDRY" jika kosong
     final namaCabang = _branchName?.toUpperCase() ?? 'LAUNDRY';
 
     StringBuffer sb = StringBuffer();
@@ -300,10 +300,35 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     sb.writeln('Status   : *$statusText*');
     sb.writeln('-----------------------------------');
     sb.writeln('Terima kasih telah menggunakan jasa kami! 🙏');
+    String formattedNumber = widget.nomorHp;
+    if (formattedNumber.startsWith('0')) {
+      formattedNumber = '62${formattedNumber.substring(1)}';
+    } else if (formattedNumber.startsWith('+62')) {
+      formattedNumber = formattedNumber.replaceAll('+', '');
+    } else if (formattedNumber.startsWith('8')) {
+      formattedNumber = '62$formattedNumber';
+    }
 
-    Share.share(sb.toString(), subject: 'Nota Pesanan ${widget.nomorOrder}');
+    // 2. Encode teks nota agar aman masuk URL
+    String encodedPesan = Uri.encodeComponent(sb.toString());
+
+    // 3. Buat URL WhatsApp
+    final Uri waUrl = Uri.parse('https://wa.me/$formattedNumber?text=$encodedPesan');
+
+    // 4. Eksekusi Buka WhatsApp
+    try {
+      await launchUrl(waUrl, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal membuka WhatsApp. Pastikan aplikasi terinstal di perangkat ini.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
-
   void _showPrinterDialog() async {
     HapticFeedback.lightImpact();
 
