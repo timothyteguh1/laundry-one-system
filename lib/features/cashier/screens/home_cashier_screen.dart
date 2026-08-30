@@ -2030,24 +2030,28 @@ class _HomeCashierScreenState extends State<HomeCashierScreen>
       orderItemsRaw = List<Map<String, dynamic>>.from(
         await _supabase
             .from('order_items')
-            .select('jumlah, harga_satuan, services(nama)')
+            // [PERBAIKAN 1]: Tarik harga_per_satuan agar grosir terdeteksi
+            .select('jumlah, harga_satuan, services(nama, harga_per_satuan)')
             .eq('order_id', order['id']),
       );
     } catch (e) {
       debugPrint('Error loading order items: $e');
     }
 
-    final List<Map<String, dynamic>> mappedItems = orderItemsRaw
-        .map(
-          (i) => {
-            'qty': (i['jumlah'] as num?)?.toInt() ?? 0,
-            'subtotal':
-                (i['harga_satuan'] as num?)?.toDouble() ??
-                0 * ((i['jumlah'] as num?)?.toInt() ?? 0),
-            'service': {'nama': i['services']?['nama'] ?? 'Item'},
-          },
-        )
-        .toList();
+    // [PERBAIKAN 2]: Kalikan Qty dengan Harga Satuan
+    final List<Map<String, dynamic>> mappedItems = orderItemsRaw.map((i) {
+      final int qty = (i['jumlah'] as num?)?.toInt() ?? 0;
+      final double hargaSatuan = (i['harga_satuan'] as num?)?.toDouble() ?? 0;
+      
+      return {
+        'qty': qty,
+        'subtotal': qty * hargaSatuan, // <--- Perbaikan wajib di sini
+        'service': {
+          'nama': i['services']?['nama'] ?? 'Item',
+          'harga_per_satuan': i['services']?['harga_per_satuan'] ?? 0,
+        },
+      };
+    }).toList();
 
     String namaKasirFinal = 'Sistem';
     final dataKasir = order['profiles'];

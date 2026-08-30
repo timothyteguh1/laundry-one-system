@@ -40,10 +40,20 @@ class CustomerInvoiceScreen extends StatelessWidget {
         'Nov',
         'Des',
       ];
-      final jam = d.hour.toString().padLeft(2, '0');
-      final mnt = d.minute.toString().padLeft(2, '0');
+    final jam = d.hour.toString().padLeft(2, '0');
+    final mnt = d.minute.toString().padLeft(2, '0');
 
-      return '${d.day} ${months[d.month - 1]} ${d.year}, $jam:$mnt WIB';
+    // --- TAMBAHKAN LOGIKA ZONA WAKTU OTOMATIS INI ---
+    String zonaWaktu = 'WIB'; // Fallback default
+    if (d.timeZoneOffset.inHours == 8) {
+      zonaWaktu = 'WITA';
+    } else if (d.timeZoneOffset.inHours == 9) {
+      zonaWaktu = 'WIT';
+    }
+    // ------------------------------------------------
+
+    // Ganti kata 'WIB' yang diketik manual dengan variabel $zonaWaktu
+    return '${d.day} ${months[d.month - 1]} ${d.year}, $jam:$mnt $zonaWaktu';
     } catch (e) {
       return '-';
     }

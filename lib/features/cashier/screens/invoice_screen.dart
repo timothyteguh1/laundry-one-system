@@ -104,13 +104,35 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTokens.radius16)),
-        title: const Row(children: [Icon(Icons.warning_amber_rounded, color: Colors.red), SizedBox(width: 8), Text('Hapus Permanen?', style: TextStyle(fontWeight: FontWeight.bold))]),
-        content: const Text('Yakin ingin menghapus nota ini secara permanen? Data pembayaran, nota, dan audit akan terhapus. (Poin & Voucher akan dikembalikan ke pelanggan otomatis jika ada).'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTokens.radius16),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text(
+              'Hapus Permanen?',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Yakin ingin menghapus nota ini secara permanen? Data pembayaran, nota, dan audit akan terhapus. (Poin & Voucher akan dikembalikan ke pelanggan otomatis jika ada).',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal', style: TextStyle(color: Colors.grey))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade600, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Ya, Hapus'),
           ),
@@ -120,27 +142,46 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
     if (confirm == true) {
       HapticFeedback.heavyImpact();
-      showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)));
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) =>
+            const Center(child: CircularProgressIndicator(color: Colors.white)),
+      );
 
       try {
         final orderId = widget.orderId;
         final currentKasirId = _supabase.auth.currentUser!.id;
 
         // Ambil data order lengkap beserta branch_id nya
-        final ord = await _supabase.from('orders').select().eq('id', orderId).single();
+        final ord = await _supabase
+            .from('orders')
+            .select()
+            .eq('id', orderId)
+            .single();
         final custId = ord['customer_id'];
         final int poin = ord['poin_didapat'] ?? 0;
         final bool poinDiberikan = ord['poin_sudah_diberikan'] == true;
-        final branchId = ord['branch_id']; // <--- KUNCI PERBAIKAN: Ambil ID Cabang
+        final branchId =
+            ord['branch_id']; // <--- KUNCI PERBAIKAN: Ambil ID Cabang
 
         // 1. TARIK KEMBALI POIN EARNED (JIKA ADA)
         if (custId != null && poinDiberikan && poin > 0) {
-          final custData = await _supabase.from('customers').select('poin_saldo').eq('id', custId).single();
+          final custData = await _supabase
+              .from('customers')
+              .select('poin_saldo')
+              .eq('id', custId)
+              .single();
           final int saldoSaatIni = custData['poin_saldo'] ?? 0;
-          final int saldoBaru = (saldoSaatIni - poin < 0) ? 0 : saldoSaatIni - poin;
-          
-          await _supabase.from('customers').update({'poin_saldo': saldoBaru}).eq('id', custId);
-          
+          final int saldoBaru = (saldoSaatIni - poin < 0)
+              ? 0
+              : saldoSaatIni - poin;
+
+          await _supabase
+              .from('customers')
+              .update({'poin_saldo': saldoBaru})
+              .eq('id', custId);
+
           await _supabase.from('points_ledger').insert({
             'customer_id': custId,
             'branch_id': branchId, // <--- PASTIKAN MASUK KE CABANG YANG TEPAT
@@ -156,10 +197,13 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         // 2. REFUND POIN VOUCHER (TANPA SYARAT DISKON)
         if (custId != null) {
           List<dynamic> redemptions = [];
-          
+
           try {
             // Tarik semua voucher yang terikat ke nota ini (baik diskon maupun barang fisik)
-            final res = await _supabase.from('reward_redemptions').select().eq('dipakai_di_order', orderId);
+            final res = await _supabase
+                .from('reward_redemptions')
+                .select()
+                .eq('dipakai_di_order', orderId);
             if (res.isNotEmpty) redemptions.addAll(res);
           } catch (_) {}
 
@@ -168,16 +212,24 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
             final String? redCustId = red['customer_id'];
 
             if (redCustId != null && poinDigunakan > 0) {
-              final custData = await _supabase.from('customers').select('poin_saldo').eq('id', redCustId).single();
+              final custData = await _supabase
+                  .from('customers')
+                  .select('poin_saldo')
+                  .eq('id', redCustId)
+                  .single();
               final int saldoSaatIni = custData['poin_saldo'] ?? 0;
               final int saldoBaru = saldoSaatIni + poinDigunakan;
 
-              await _supabase.from('customers').update({'poin_saldo': saldoBaru}).eq('id', redCustId);
+              await _supabase
+                  .from('customers')
+                  .update({'poin_saldo': saldoBaru})
+                  .eq('id', redCustId);
 
               // KEMBALIKAN POIN KE PELANGGAN
               await _supabase.from('points_ledger').insert({
                 'customer_id': redCustId,
-                'branch_id': branchId, // <--- PASTIKAN MASUK KE CABANG YANG TEPAT
+                'branch_id':
+                    branchId, // <--- PASTIKAN MASUK KE CABANG YANG TEPAT
                 'tipe': 'reversed',
                 'jumlah': poinDigunakan, // Angka Positif = Saldo Bertambah
                 'saldo_sebelum': saldoSaatIni,
@@ -188,11 +240,17 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
             }
 
             try {
-               await _supabase.from('notifications').delete().eq('redemption_id', red['id']);
+              await _supabase
+                  .from('notifications')
+                  .delete()
+                  .eq('redemption_id', red['id']);
             } catch (_) {}
 
             // Hapus rekam jejak voucher
-            await _supabase.from('reward_redemptions').delete().eq('id', red['id']);
+            await _supabase
+                .from('reward_redemptions')
+                .delete()
+                .eq('id', red['id']);
           }
         }
 
@@ -202,12 +260,22 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         if (mounted) {
           Navigator.pop(context); // Tutup Loading
           Navigator.pop(context, 'dihapus'); // Tutup Invoice
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Nota batal & Poin/Voucher telah dikembalikan!'), backgroundColor: Colors.green));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Nota batal & Poin/Voucher telah dikembalikan!'),
+              backgroundColor: Colors.green,
+            ),
+          );
         }
       } catch (e) {
         if (mounted) {
-          Navigator.pop(context); 
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus: $e'), backgroundColor: Colors.red));
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Gagal menghapus: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
         }
       }
     }
@@ -249,11 +317,34 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     try {
       DateTime d = DateTime.parse(isoString).toLocal();
 
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des'];
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'Mei',
+        'Jun',
+        'Jul',
+        'Ags',
+        'Sep',
+        'Okt',
+        'Nov',
+        'Des',
+      ];
       final jam = d.hour.toString().padLeft(2, '0');
       final mnt = d.minute.toString().padLeft(2, '0');
 
-      return '${d.day} ${months[d.month - 1]} ${d.year}, $jam:$mnt WIB';
+      // --- TAMBAHKAN LOGIKA ZONA WAKTU OTOMATIS INI ---
+      String zonaWaktu = 'WIB'; // Fallback default
+      if (d.timeZoneOffset.inHours == 8) {
+        zonaWaktu = 'WITA';
+      } else if (d.timeZoneOffset.inHours == 9) {
+        zonaWaktu = 'WIT';
+      }
+      // ------------------------------------------------
+
+      // Ganti kata 'WIB' yang diketik manual dengan variabel $zonaWaktu
+      return '${d.day} ${months[d.month - 1]} ${d.year}, $jam:$mnt $zonaWaktu';
     } catch (e) {
       return '-';
     }
@@ -282,7 +373,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       final int qty = item['qty'] ?? 0;
       final double sub = (item['subtotal'] as num).toDouble();
       final int hargaNormal = item['service']?['harga_per_satuan'] ?? 0;
-      
+
       if (sub < (hargaNormal * qty)) {
         nama = "$nama (Grosir)";
       }
@@ -313,7 +404,9 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     String encodedPesan = Uri.encodeComponent(sb.toString());
 
     // 3. Buat URL WhatsApp
-    final Uri waUrl = Uri.parse('https://wa.me/$formattedNumber?text=$encodedPesan');
+    final Uri waUrl = Uri.parse(
+      'https://wa.me/$formattedNumber?text=$encodedPesan',
+    );
 
     // 4. Eksekusi Buka WhatsApp
     try {
@@ -322,20 +415,25 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Gagal membuka WhatsApp. Pastikan aplikasi terinstal di perangkat ini.'),
+            content: Text(
+              'Gagal membuka WhatsApp. Pastikan aplikasi terinstal di perangkat ini.',
+            ),
             backgroundColor: Colors.red,
           ),
         );
       }
     }
   }
+
   void _showPrinterDialog() async {
     HapticFeedback.lightImpact();
 
     if (kIsWeb || !Platform.isAndroid) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Fitur cetak Bluetooth hanya tersedia di perangkat Android.'),
+          content: Text(
+            'Fitur cetak Bluetooth hanya tersedia di perangkat Android.',
+          ),
           backgroundColor: Colors.orange,
           behavior: SnackBarBehavior.floating,
         ),
@@ -361,7 +459,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       }
 
       final namaCabang = _branchName?.toUpperCase() ?? 'LAUNDRY';
-      bluetooth.printCustom(namaCabang, 3, 1); 
+      bluetooth.printCustom(namaCabang, 3, 1);
       bluetooth.printNewLine();
       bluetooth.printCustom(widget.nomorOrder, 1, 1);
       bluetooth.printCustom(_formatDateTime(widget.created_at), 1, 1);
@@ -376,19 +474,23 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         final int qty = item['qty'] ?? 0;
         final double sub = (item['subtotal'] as num).toDouble();
         final int hargaNormal = item['service']?['harga_per_satuan'] ?? 0;
-        
+
         if (sub < (hargaNormal * qty)) {
           nama = "$nama (Grosir)";
         }
 
-        bluetooth.printCustom("$qty x $nama", 1, 0); 
+        bluetooth.printCustom("$qty x $nama", 1, 0);
         bluetooth.printLeftRight("", _formatRupiah(sub), 1);
       }
 
       bluetooth.printCustom("--------------------------------", 1, 1);
       bluetooth.printLeftRight("Subtotal", _formatRupiah(widget.subtotal), 1);
       if (widget.diskon > 0) {
-        bluetooth.printLeftRight("Diskon", "- ${_formatRupiah(widget.diskon)}", 1);
+        bluetooth.printLeftRight(
+          "Diskon",
+          "- ${_formatRupiah(widget.diskon)}",
+          1,
+        );
       }
       bluetooth.printCustom("--------------------------------", 1, 1);
       bluetooth.printLeftRight("TOTAL", _formatRupiah(widget.total), 2);
@@ -397,17 +499,24 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       if (widget.isPiutang) {
         bluetooth.printCustom("STATUS: BELUM LUNAS (PIUTANG)", 1, 1);
       } else {
-        bluetooth.printCustom("STATUS: LUNAS (${widget.metodeBayar.toUpperCase()})", 1, 1);
+        bluetooth.printCustom(
+          "STATUS: LUNAS (${widget.metodeBayar.toUpperCase()})",
+          1,
+          1,
+        );
       }
 
       bluetooth.printNewLine();
       bluetooth.printCustom("Terima Kasih!", 1, 1);
       bluetooth.printNewLine();
       bluetooth.printNewLine();
-      bluetooth.paperCut(); 
+      bluetooth.paperCut();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal mencetak: $e'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('Gagal mencetak: $e'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
@@ -428,8 +537,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
             )
           : null,
       body: SafeArea(
-        child: Center( 
-          child: ConstrainedBox( 
+        child: Center(
+          child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 500),
             child: Column(
               children: [
@@ -472,8 +581,13 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                           padding: const EdgeInsets.all(AppTokens.space24),
                           decoration: BoxDecoration(
                             color: AppTokens.surface,
-                            borderRadius: BorderRadius.circular(AppTokens.radius20),
-                            border: Border.all(color: AppTokens.border, width: 1.5),
+                            borderRadius: BorderRadius.circular(
+                              AppTokens.radius20,
+                            ),
+                            border: Border.all(
+                              color: AppTokens.border,
+                              width: 1.5,
+                            ),
                             boxShadow: AppTokens.cardShadow,
                           ),
                           child: Column(
@@ -498,138 +612,274 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                       ),
                                     ),
                                     const SizedBox(height: AppTokens.space4),
-                                     Text(
-                                       widget.nomorOrder,
-                                       style: const TextStyle(
-                                         color: AppTokens.textSecondary,
-                                         fontSize: 13,
-                                         fontWeight: FontWeight.w600,
-                                       ),
-                                     ),
-                                     const SizedBox(height: AppTokens.space4),
+                                    Text(
+                                      widget.nomorOrder,
+                                      style: const TextStyle(
+                                        color: AppTokens.textSecondary,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: AppTokens.space4),
 
-                                     // [MULTI-BRANCH]: Nama & alamat cabang secara dinamis
-                                     if (_branchName != null)
-                                       Text(
-                                         _branchName!,
-                                         style: const TextStyle(
-                                           color: AppTokens.textPrimary,
-                                           fontSize: 13,
-                                           fontWeight: FontWeight.w700,
-                                         ),
-                                       ),
-                                     if (_branchAddress != null)
-                                       Text(
-                                         _branchAddress!,
-                                         style: const TextStyle(
-                                           color: AppTokens.textSecondary,
-                                           fontSize: 11,
-                                         ),
-                                         textAlign: TextAlign.center,
-                                       ),
+                                    // [MULTI-BRANCH]: Nama & alamat cabang secara dinamis
+                                    if (_branchName != null)
+                                      Text(
+                                        _branchName!,
+                                        style: const TextStyle(
+                                          color: AppTokens.textPrimary,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    if (_branchAddress != null)
+                                      Text(
+                                        _branchAddress!,
+                                        style: const TextStyle(
+                                          color: AppTokens.textSecondary,
+                                          fontSize: 11,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
                                   ],
                                 ),
                               ),
                               const SizedBox(height: AppTokens.space20),
-                              const Divider(color: AppTokens.border, thickness: 1.5),
+                              const Divider(
+                                color: AppTokens.border,
+                                thickness: 1.5,
+                              ),
                               const SizedBox(height: AppTokens.space16),
 
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   const Text(
                                     'Tanggal Transaksi',
-                                    style: TextStyle(color: AppTokens.textSecondary, fontSize: 12),
+                                    style: TextStyle(
+                                      color: AppTokens.textSecondary,
+                                      fontSize: 12,
+                                    ),
                                   ),
                                   Text(
                                     _formatDateTime(widget.created_at),
-                                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: AppTokens.textPrimary),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                      color: AppTokens.textPrimary,
+                                    ),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: AppTokens.space8),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  const Text('Kasir', style: TextStyle(color: AppTokens.textSecondary, fontSize: 12)),
-                                  Text(widget.namaKasir, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: AppTokens.textPrimary)),
-                                ],
-                              ),
-                              const SizedBox(height: AppTokens.space8),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text('Pelanggan', style: TextStyle(color: AppTokens.textSecondary, fontSize: 12)),
-                                  Text(widget.namaPelanggan, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: AppTokens.textPrimary)),
-                                ],
-                              ),
-                              const SizedBox(height: AppTokens.space8),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text('No. HP', style: TextStyle(color: AppTokens.textSecondary, fontSize: 12)),
-                                  Text(widget.nomorHp, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: AppTokens.textPrimary)),
-                                ],
-                              ),
-
-                              const SizedBox(height: AppTokens.space16),
-                              const Divider(color: AppTokens.border, thickness: 1.5),
-                              const SizedBox(height: AppTokens.space16),
-
-                              const Text('Detail Layanan:', style: TextStyle(fontWeight: FontWeight.w700, color: AppTokens.textSecondary, fontSize: 12)),
-                              const SizedBox(height: AppTokens.space12),
-                              ...widget.items.map(
-                                (item) {
-                                  String itemName = item['service']['nama'] ?? 'Item';
-                                  final int qty = item['qty'] ?? 0;
-                                  final double sub = (item['subtotal'] as num).toDouble();
-                                  final int hargaNormal = item['service']['harga_per_satuan'] ?? 0;
-                                  
-                                  if (sub < (hargaNormal * qty)) {
-                                    itemName = "$itemName (Grosir)";
-                                  }
-
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 8),
-                                    child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text('${item['qty']}x ', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppTokens.textPrimary)),
-                                        Expanded(child: Text(itemName, style: const TextStyle(fontSize: 13, color: AppTokens.textPrimary))),
-                                        Text(_formatRupiah(item['subtotal']), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppTokens.textPrimary)),
-                                      ],
+                                  const Text(
+                                    'Kasir',
+                                    style: TextStyle(
+                                      color: AppTokens.textSecondary,
+                                      fontSize: 12,
                                     ),
-                                  );
-                                }
+                                  ),
+                                  Text(
+                                    widget.namaKasir,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                      color: AppTokens.textPrimary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: AppTokens.space8),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'Pelanggan',
+                                    style: TextStyle(
+                                      color: AppTokens.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  Text(
+                                    widget.namaPelanggan,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                      color: AppTokens.textPrimary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: AppTokens.space8),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'No. HP',
+                                    style: TextStyle(
+                                      color: AppTokens.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  Text(
+                                    widget.nomorHp,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                      color: AppTokens.textPrimary,
+                                    ),
+                                  ),
+                                ],
                               ),
 
                               const SizedBox(height: AppTokens.space16),
-                              const Divider(color: AppTokens.border, thickness: 1.5),
+                              const Divider(
+                                color: AppTokens.border,
+                                thickness: 1.5,
+                              ),
+                              const SizedBox(height: AppTokens.space16),
+
+                              const Text(
+                                'Detail Layanan:',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTokens.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: AppTokens.space12),
+                              ...widget.items.map((item) {
+                                String itemName =
+                                    item['service']['nama'] ?? 'Item';
+                                final int qty = item['qty'] ?? 0;
+                                final double sub = (item['subtotal'] as num)
+                                    .toDouble();
+                                final int hargaNormal =
+                                    item['service']['harga_per_satuan'] ?? 0;
+
+                                if (sub < (hargaNormal * qty)) {
+                                  itemName = "$itemName (Grosir)";
+                                }
+
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${item['qty']}x ',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13,
+                                          color: AppTokens.textPrimary,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          itemName,
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            color: AppTokens.textPrimary,
+                                          ),
+                                        ),
+                                      ),
+                                      Text(
+                                        _formatRupiah(item['subtotal']),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13,
+                                          color: AppTokens.textPrimary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }),
+
+                              const SizedBox(height: AppTokens.space16),
+                              const Divider(
+                                color: AppTokens.border,
+                                thickness: 1.5,
+                              ),
                               const SizedBox(height: AppTokens.space12),
 
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  const Text('Subtotal', style: TextStyle(color: AppTokens.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
-                                  Text(_formatRupiah(widget.subtotal), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppTokens.textPrimary)),
+                                  const Text(
+                                    'Subtotal',
+                                    style: TextStyle(
+                                      color: AppTokens.textSecondary,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    _formatRupiah(widget.subtotal),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                      color: AppTokens.textPrimary,
+                                    ),
+                                  ),
                                 ],
                               ),
                               if (widget.diskon > 0) ...[
                                 const SizedBox(height: AppTokens.space8),
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
-                                    const Text('Diskon Voucher', style: TextStyle(color: Colors.green, fontSize: 13, fontWeight: FontWeight.w600)),
-                                    Text('- ${_formatRupiah(widget.diskon)}', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w700, fontSize: 13)),
+                                    const Text(
+                                      'Diskon Voucher',
+                                      style: TextStyle(
+                                        color: Colors.green,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    Text(
+                                      '- ${_formatRupiah(widget.diskon)}',
+                                      style: const TextStyle(
+                                        color: Colors.green,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ],
                               const SizedBox(height: AppTokens.space16),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  const Text('TOTAL AKHIR', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppTokens.textPrimary)),
-                                  Text(_formatRupiah(widget.total), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 24, color: AppTokens.blue, letterSpacing: -0.5)),
+                                  const Text(
+                                    'TOTAL AKHIR',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 15,
+                                      color: AppTokens.textPrimary,
+                                    ),
+                                  ),
+                                  Text(
+                                    _formatRupiah(widget.total),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 24,
+                                      color: AppTokens.blue,
+                                      letterSpacing: -0.5,
+                                    ),
+                                  ),
                                 ],
                               ),
 
@@ -637,31 +887,49 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                               if (widget.isPiutang)
                                 Container(
                                   width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 10,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: Colors.red.shade50,
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.red.shade200),
+                                    border: Border.all(
+                                      color: Colors.red.shade200,
+                                    ),
                                   ),
                                   child: Text(
                                     'STATUS: PIUTANG (BELUM LUNAS)',
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w800, fontSize: 12, letterSpacing: 0.5),
+                                    style: TextStyle(
+                                      color: Colors.red.shade700,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12,
+                                      letterSpacing: 0.5,
+                                    ),
                                   ),
                                 )
                               else
                                 Container(
                                   width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 10,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: Colors.green.shade50,
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.green.shade200),
+                                    border: Border.all(
+                                      color: Colors.green.shade200,
+                                    ),
                                   ),
                                   child: Text(
                                     'STATUS: LUNAS (${widget.metodeBayar.toUpperCase()})',
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.w800, fontSize: 12, letterSpacing: 0.5),
+                                    style: TextStyle(
+                                      color: Colors.green.shade700,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12,
+                                      letterSpacing: 0.5,
+                                    ),
                                   ),
                                 ),
                             ],
@@ -677,7 +945,11 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   decoration: BoxDecoration(
                     color: AppTokens.surface,
                     boxShadow: [
-                      BoxShadow(color: const Color(0xFF0F2557).withOpacity(0.06), blurRadius: 20, offset: const Offset(0, -4)),
+                      BoxShadow(
+                        color: const Color(0xFF0F2557).withOpacity(0.06),
+                        blurRadius: 20,
+                        offset: const Offset(0, -4),
+                      ),
                     ],
                   ),
                   child: Column(
@@ -688,12 +960,22 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                             child: OutlinedButton.icon(
                               onPressed: _shareReceipt,
                               icon: const Icon(Icons.share_rounded, size: 18),
-                              label: const Text('Share Nota', style: TextStyle(fontWeight: FontWeight.w700)),
+                              label: const Text(
+                                'Share Nota',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: AppTokens.blue,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                side: const BorderSide(color: AppTokens.border, width: 1.5),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                side: const BorderSide(
+                                  color: AppTokens.border,
+                                  width: 1.5,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
                             ),
                           ),
@@ -702,12 +984,22 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                             child: OutlinedButton.icon(
                               onPressed: _showPrinterDialog,
                               icon: const Icon(Icons.print_rounded, size: 18),
-                              label: const Text('Cetak Struk', style: TextStyle(fontWeight: FontWeight.w700)),
+                              label: const Text(
+                                'Cetak Struk',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: AppTokens.blue,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                side: const BorderSide(color: AppTokens.border, width: 1.5),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                side: const BorderSide(
+                                  color: AppTokens.border,
+                                  width: 1.5,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
                             ),
                           ),
@@ -724,14 +1016,24 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                               height: 50,
                               child: ElevatedButton.icon(
                                 icon: const Icon(Icons.check_circle_outline),
-                                label: const Text('Tandai Cucian Selesai', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                                label: const Text(
+                                  'Tandai Cucian Selesai',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 15,
+                                  ),
+                                ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppTokens.blue,
                                   foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
                                   elevation: 0,
                                 ),
-                                onPressed: () { Navigator.pop(context, 'selesai'); },
+                                onPressed: () {
+                                  Navigator.pop(context, 'selesai');
+                                },
                               ),
                             ),
                           ),
@@ -742,14 +1044,24 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                             height: 50,
                             child: ElevatedButton.icon(
                               icon: const Icon(Icons.payments_outlined),
-                              label: const Text('Lunasi Tagihan', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                              label: const Text(
+                                'Lunasi Tagihan',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15,
+                                ),
+                              ),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.green.shade600,
                                 foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
                                 elevation: 0,
                               ),
-                              onPressed: () { Navigator.pop(context, 'dibayar_lunas'); },
+                              onPressed: () {
+                                Navigator.pop(context, 'dibayar_lunas');
+                              },
                             ),
                           ),
                       ] else ...[
@@ -760,11 +1072,19 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppTokens.blue,
                               foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                               elevation: 0,
                             ),
                             onPressed: () => Navigator.pop(context),
-                            child: const Text('Kembali ke Beranda', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                            child: const Text(
+                              'Kembali ke Beranda',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15,
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -775,17 +1095,32 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                           width: double.infinity,
                           height: 50,
                           child: OutlinedButton.icon(
-                            icon: const Icon(Icons.delete_forever_rounded, color: Colors.red),
-                            label: const Text('Hapus Nota (Permanen)', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 15)),
+                            icon: const Icon(
+                              Icons.delete_forever_rounded,
+                              color: Colors.red,
+                            ),
+                            label: const Text(
+                              'Hapus Nota (Permanen)',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
                             style: OutlinedButton.styleFrom(
                               backgroundColor: Colors.red.shade50,
-                              side: BorderSide(color: Colors.red.shade200, width: 1.5),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              side: BorderSide(
+                                color: Colors.red.shade200,
+                                width: 1.5,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
                             ),
                             onPressed: _hapusNota,
                           ),
                         ),
-                      ]
+                      ],
                     ],
                   ),
                 ),
