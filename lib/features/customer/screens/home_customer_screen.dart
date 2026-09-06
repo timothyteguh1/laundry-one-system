@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:laundry_one/features/auth/services/notification_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:laundry_one/features/auth/services/auth_service.dart';
@@ -22,8 +23,39 @@ class HomeCustomerScreen extends StatefulWidget {
 }
 
 class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
+  // =========================================================
+  // [INGATAN CABANG] Kunci penyimpanan dompet aktif terakhir
+  // =========================================================
+  static const String kActiveWalletKey = 'active_wallet_id';
+
+  static Future<String?> bacaWalletTersimpan() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(kActiveWalletKey);
+    } catch (e) {
+      debugPrint('Gagal baca wallet tersimpan: $e');
+      return null;
+    }
+  }
+
+  static Future<void> simpanWalletAktif(String? walletId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (walletId == null) {
+        await prefs.remove(kActiveWalletKey);
+      } else {
+        await prefs.setString(kActiveWalletKey, walletId);
+      }
+    } catch (e) {
+      debugPrint('Gagal simpan wallet aktif: $e');
+    }
+  }
+
   final _supabase = Supabase.instance.client;
   int _currentTab = 0;
+
+  // Dompet terakhir yang dibuka user (dibaca dari SharedPreferences)
+  String? _savedWalletId;
 
   bool _isLoading = true;
   String? _errorMessage;
@@ -82,6 +114,9 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
       if (user == null)
         throw Exception('Sesi login tidak ditemukan. Silakan login ulang.');
 
+      // [INGATAN CABANG] Baca dompet terakhir sebelum data ditarik
+      _savedWalletId ??= await bacaWalletTersimpan();
+
       await _fetchInitialData(user.id);
       _setupRealtimeHooks(user.id);
     } catch (e) {
@@ -119,19 +154,32 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
         .eq('profile_id', userId);
 
     List<Map<String, dynamic>> wallets = List<Map<String, dynamic>>.from(walletsData);
-    Map<String, dynamic>? activeWallet = _activeWallet;
+    Map<String, dynamic>? activeWallet;
 
+    // ==========================================================
+    // [INGATAN CABANG] Prioritas pemilihan dompet:
+    // 1. Dompet yang sedang aktif di memori (user baru saja pindah)
+    // 2. Dompet terakhir yang tersimpan di HP (buka Lish -> tetap Lish)
+    // 3. Dompet pertama (fallback untuk akun baru)
+    // ==========================================================
     if (wallets.isNotEmpty) {
-      if (activeWallet == null ||
-          !wallets.any((w) => w['id'] == activeWallet!['id'])) {
-        activeWallet = wallets.first;
-      } else {
-        activeWallet = wallets.firstWhere(
-          (w) => w['id'] == activeWallet!['id'],
-        );
-      }
+      _savedWalletId ??= await bacaWalletTersimpan();
+
+      final String? targetId =
+          _activeWallet?['id']?.toString() ?? _savedWalletId;
+
+      activeWallet = wallets.firstWhere(
+        (w) => w['id'].toString() == targetId,
+        orElse: () => wallets.first,
+      );
+
+      // Kunci hasilnya supaya tetap sama setelah aplikasi ditutup
+      _savedWalletId = activeWallet['id'].toString();
+      await simpanWalletAktif(_savedWalletId);
     } else {
       activeWallet = null;
+      _savedWalletId = null;
+      await simpanWalletAktif(null);
     }
 
     List<Map<String, dynamic>> active = [];
@@ -192,12 +240,17 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
   }
 
   // [MULTI-WALLET]: Fungsi ganti cabang/dompet (Akan dihubungkan ke UI di Gelombang 3)
-  void switchWallet(Map<String, dynamic> newWallet) {
+  void switchWallet(Map<String, dynamic> newWallet) async {
     setState(() {
       _activeWallet = newWallet;
       _isLoading = true;
     });
-    _fetchInitialData(_supabase.auth.currentUser!.id);
+
+    // [INGATAN CABANG] Simpan pilihan user ke HP saat itu juga
+    _savedWalletId = newWallet['id'].toString();
+    await simpanWalletAktif(_savedWalletId);
+
+    await _fetchInitialData(_supabase.auth.currentUser!.id);
   }
 
   void _setupRealtimeHooks(String userId) {
@@ -501,6 +554,10 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
     );
     // ==========================================================
 
+    // [INGATAN CABANG] Bersihkan jejak dompet supaya akun lain tidak ikut terbawa
+    await simpanWalletAktif(null);
+    _savedWalletId = null;
+
     await AuthService().logout();
 
     if (mounted) {
@@ -763,15 +820,16 @@ class _HomeCustomerScreenState extends State<HomeCustomerScreen> {
         myWallets: _myWallets,
         onSuccess: (newWallet) async {
           Navigator.pop(ctx);
-          setState(() => _isLoading = true);
-          await _fetchInitialData(_supabase.auth.currentUser!.id);
 
-          // Cari dompet yang baru saja dibuat agar otomatis terpilih
-          final newlyAdded = _myWallets.firstWhere(
-            (w) => w['branch_id'] == newWallet['branch_id'],
-            orElse: () => _myWallets.first,
-          );
-          switchWallet(newlyAdded);
+          // [INGATAN CABANG] Dompet baru langsung jadi pilihan aktif & tersimpan
+          _savedWalletId = newWallet['id'].toString();
+          await simpanWalletAktif(_savedWalletId);
+
+          setState(() {
+            _activeWallet = null; // biar seleksi ulang pakai _savedWalletId
+            _isLoading = true;
+          });
+          await _fetchInitialData(_supabase.auth.currentUser!.id);
         },
       ),
     );

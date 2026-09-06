@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:laundry_one/features/auth/services/auth_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -10,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // ============================================================
 import 'package:laundry_one/features/auth/services/notification_service.dart';
 import 'package:laundry_one/features/auth/screens/forgot_password_screen.dart';
+import 'package:laundry_one/core/services/app_state.dart'; // [UPDATE] Import AppState
 
 // ============================================================
 // LOGIN SCREEN — Industry-standard design
@@ -210,6 +212,177 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
+  // ============================================================
+  // [UPDATE] DIALOG PILIH CABANG SAAT LOGIN (Hanya untuk data lama)
+  // ============================================================
+  Future<String?> _showBranchSelectionDialog() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('branches')
+          .select('id, nama_cabang')
+          .eq('is_active', true);
+
+      String? tempSelected;
+
+      return await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) {
+          return StatefulBuilder(
+            builder: (context, setState) {
+              return AlertDialog(
+                backgroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                title: const Text('Pilih Cabang Anda', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF0F2557))),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Sistem mendeteksi akun Anda belum terhubung ke cabang manapun. Silakan pilih cabang:', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      decoration: InputDecoration(
+                        labelText: 'Daftar Cabang',
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: Colors.grey.shade200)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: Colors.grey.shade200)),
+                      ),
+                      value: tempSelected,
+                      items: response.map((branch) {
+                        return DropdownMenuItem<String>(
+                          value: branch['id'].toString(),
+                          child: Text(branch['nama_cabang']),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          tempSelected = val;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, null),
+                    child: const Text('Batal', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: widget.config.primaryColor,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () {
+                      if (tempSelected != null) {
+                        Navigator.pop(ctx, tempSelected);
+                      }
+                    },
+                    child: const Text('Simpan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              );
+            }
+          );
+        },
+      );
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // ============================================================
+  // [INGATAN CABANG] Pulihkan dompet/cabang terakhir milik pelanggan
+  // ============================================================
+  Future<void> _pulihkanCabangPelanggan(String userId) async {
+    final client = Supabase.instance.client;
+    final prefs = await SharedPreferences.getInstance();
+
+    final walletsData = await client
+        .from('customers')
+        .select('id, branch_id')
+        .eq('profile_id', userId);
+
+    final wallets = List<Map<String, dynamic>>.from(walletsData);
+
+    // --- Belum punya dompet sama sekali (akun lama) → minta pilih cabang
+    if (wallets.isEmpty) {
+      final selectedBranch = await _showBranchSelectionDialog();
+      if (selectedBranch == null) {
+        await client.auth.signOut();
+        throw Exception('Anda harus memilih cabang untuk melanjutkan.');
+      }
+
+      final newWallet = await client
+          .from('customers')
+          .insert({
+            'profile_id': userId,
+            'branch_id': selectedBranch,
+            'poin_saldo': 0,
+          })
+          .select()
+          .single();
+
+      await prefs.setString('active_wallet_id', newWallet['id'].toString());
+      await AppState.saveBranch(branchId: selectedBranch);
+      return;
+    }
+
+    // --- Sudah punya dompet → pakai yang terakhir dibuka kalau masih valid
+    final saved = prefs.getString('active_wallet_id');
+    Map<String, dynamic> aktif = wallets.firstWhere(
+      (w) => w['id'].toString() == saved,
+      orElse: () => wallets.first,
+    );
+
+    await prefs.setString('active_wallet_id', aktif['id'].toString());
+
+    final branchId = aktif['branch_id'];
+    if (branchId != null) {
+      await AppState.saveBranch(branchId: branchId.toString());
+    }
+  }
+
+  // ============================================================
+  // [BARU] TERJEMAHKAN ERROR MENTAH JADI BAHASA MANUSIA
+  // ============================================================
+  Map<String, String> _terjemahkanError(String raw) {
+    String title = 'Gagal Masuk';
+    String message = raw.replaceAll('Exception: ', '');
+
+    if (raw.contains('Invalid login credentials') ||
+        raw.contains('invalid_credentials')) {
+      title = 'Nomor atau Sandi Salah';
+      message =
+          'Periksa lagi nomor WhatsApp dan kata sandi kamu. Kalau lupa, pakai menu "Lupa Sandi?" di bawah kolom sandi.';
+    } else if (raw.contains('tidak ditemukan') ||
+        raw.contains('User not found') ||
+        raw.contains('user_not_found')) {
+      title = 'Akun Belum Terdaftar';
+      message =
+          'Nomor ini belum pernah didaftarkan. Silakan buat akun dulu lewat tombol "Daftar".';
+    } else if (raw.contains('Email not confirmed')) {
+      title = 'Akun Belum Aktif';
+      message = 'Akun kamu belum diaktifkan. Silakan hubungi admin kami.';
+    } else if (raw.contains('SocketException') ||
+        raw.contains('Failed host lookup') ||
+        raw.contains('Network is unreachable') ||
+        raw.contains('Connection failed') ||
+        raw.contains('ClientException')) {
+      title = 'Tidak Ada Koneksi';
+      message = 'Periksa koneksi internet atau WiFi kamu, lalu coba lagi.';
+    } else if (raw.contains('duplicate key') || raw.contains('23505')) {
+      title = 'Data Sudah Dipakai';
+      message =
+          'Data akun ini bentrok dengan akun lain. Silakan hubungi admin kami untuk dibantu.';
+    } else if (message.trim().isEmpty || message.contains('PostgrestException')) {
+      title = 'Gagal Masuk';
+      message =
+          'Terjadi kendala saat masuk. Coba beberapa saat lagi atau hubungi admin kami.';
+    }
+
+    return {'title': title, 'message': message};
+  }
+
   Future<void> _prosesLogin() async {
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) {
@@ -227,6 +400,14 @@ class _LoginScreenState extends State<LoginScreen>
           password: _passwordController.text.trim(),
           expectedRole: 'customer',
         );
+
+        // ============================================================
+        // [INGATAN CABANG] Pulihkan cabang/dompet terakhir setelah login
+        // ============================================================
+        final userId = Supabase.instance.client.auth.currentUser?.id;
+        if (userId != null) {
+          await _pulihkanCabangPelanggan(userId);
+        }
       } else {
         await _authService.loginUniversal(
           identifier: _identifierController.text.trim(),
@@ -269,6 +450,8 @@ class _LoginScreenState extends State<LoginScreen>
                  // [UPDATE] Tahan Kasir di Pintu Gerbang jika Cabang belum di-assign
                  await Supabase.instance.client.auth.signOut();
                  throw Exception('Akun disetujui, tapi Anda belum ditugaskan ke cabang mana pun. Lapor ke Admin.');
+              } else if (branchId != null) {
+                await AppState.saveBranch(branchId: branchId.toString());
               }
             }
           }
@@ -303,20 +486,12 @@ class _LoginScreenState extends State<LoginScreen>
         HapticFeedback.vibrate();
         _shakeController.forward(from: 0);
 
-        final errorMsg = e.toString();
-        String title = 'Gagal Masuk';
-        String message = errorMsg.replaceAll('Exception: ', '');
-
-        if (errorMsg.contains('SocketException') ||
-            errorMsg.contains('Failed host lookup') ||
-            errorMsg.contains('Network is unreachable') ||
-            errorMsg.contains('Connection failed') ||
-            errorMsg.contains('ClientException')) {
-          title = 'Tidak Ada Koneksi';
-          message = 'Periksa koneksi internet atau WiFi kamu, lalu coba lagi.';
-        }
-
-        _showCustomDialog(title: title, message: message, isSuccess: false);
+        final hasil = _terjemahkanError(e.toString());
+        _showCustomDialog(
+          title: hasil['title']!,
+          message: hasil['message']!,
+          isSuccess: false,
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -505,7 +680,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       },
                                     ),
                                     const SizedBox(height: 12),
-                                    
+
                                     // === TOMBOL LUPA SANDI (Hanya muncul jika role-nya customer) ===
                                     if (widget.config.roleDatabase == 'customer') ...[
                                       Align(

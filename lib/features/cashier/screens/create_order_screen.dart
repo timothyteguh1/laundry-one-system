@@ -1095,9 +1095,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
       double diskon = _hitungDiskon(voucher['rewards_catalog']);
 
-      setState(() => _isLoading = false); // Matikan loading utama dulu agar pop-up OTP bisa muncul
-
-     // Matikan loading utama
+      // Matikan loading utama
       setState(() => _isLoading = false); 
 
       // =========================================================
@@ -1181,23 +1179,21 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       // [UPDATE MULTI-BRANCH]: GENERATE KODE INISIAL CABANG
       // =======================================================
       String branchCode = 'CAB'; // Default jika gagal
-      if (branchId != null) {
-        try {
-          final branchData = await _supabase
-              .from('branches')
-              .select('nama_cabang')
-              .eq('id', branchId)
-              .maybeSingle();
-          if (branchData != null && branchData['nama_cabang'] != null) {
-            // Ambil 3 huruf/angka pertama, buang spasi dan simbol
-            String nama = branchData['nama_cabang']
-                .toString()
-                .toUpperCase()
-                .replaceAll(RegExp(r'[^A-Z0-9]'), '');
-            branchCode = nama.length >= 3 ? nama.substring(0, 3) : nama.padRight(3, 'X');
-          }
-        } catch (_) {}
-      }
+      try {
+        final branchData = await _supabase
+            .from('branches')
+            .select('nama_cabang')
+            .eq('id', branchId)
+            .maybeSingle();
+        if (branchData != null && branchData['nama_cabang'] != null) {
+          // Ambil 3 huruf/angka pertama, buang spasi dan simbol
+          String nama = branchData['nama_cabang']
+              .toString()
+              .toUpperCase()
+              .replaceAll(RegExp(r'[^A-Z0-9]'), '');
+          branchCode = nama.length >= 3 ? nama.substring(0, 3) : nama.padRight(3, 'X');
+        }
+      } catch (_) {}
 
       final now = DateTime.now();
       // Format Baru: ORD-LSH-20260731 atau ORD-HAP-20260731
@@ -1207,11 +1203,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       var lastOrderQuery = _supabase
           .from('orders')
           .select('nomor_order')
-          .like('nomor_order', '$prefix-%'); // Pastikan difilter dengan format baru
-
-      if (branchId != null) {
-        lastOrderQuery = lastOrderQuery.eq('branch_id', branchId);
-      }
+          .like('nomor_order', '$prefix-%') // Pastikan difilter dengan format baru
+          .eq('branch_id', branchId);
 
       final lastOrderResponse = await lastOrderQuery
           .order('nomor_order', ascending: false)
@@ -1269,6 +1262,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       if (_tipeBayar != 'piutang' && totalDibayar > 0) {
         await _supabase.from('order_payments').insert({
           'order_id': order['id'],
+          'branch_id': branchId,
           'jumlah': totalDibayar,
           'metode': metodeBayarFinal,
           'diterima_oleh': kasirId,
@@ -1483,6 +1477,48 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     );
   }
 
+  // =========================================================
+  // [BARU] DOMPET HANYA DIBUAT DI CABANG KASIR YANG LOGIN
+  //
+  // Tidak ada cabang default. Kalau pelanggan mau punya dompet
+  // di Happy, dia daftar lewat kasir Happy atau buka sendiri
+  // dari aplikasi (menu "Buka Cabang Lain").
+  // =========================================================
+  Future<void> _pastikanDompetCabang(String profileId, String branchId) async {
+    // 1. Sudah punya dompet di cabang ini? Sudah beres.
+    final sudahAda = await _supabase
+        .from('customers')
+        .select('id')
+        .eq('profile_id', profileId)
+        .eq('branch_id', branchId)
+        .maybeSingle();
+
+    if (sudahAda != null) return;
+
+    // 2. Ada dompet nyangkut tanpa cabang? Pakai ulang, jangan bikin baru.
+    final dompetNyangkut = await _supabase
+        .from('customers')
+        .select('id')
+        .eq('profile_id', profileId)
+        .isFilter('branch_id', null)
+        .maybeSingle();
+
+    if (dompetNyangkut != null) {
+      await _supabase
+          .from('customers')
+          .update(<String, dynamic>{'branch_id': branchId})
+          .eq('id', dompetNyangkut['id']);
+      return;
+    }
+
+    // 3. Belum punya apa-apa → buat dompet khusus cabang ini.
+    await _supabase.from('customers').insert(<String, dynamic>{
+      'profile_id': profileId,
+      'branch_id': branchId,
+      'poin_saldo': 0,
+    });
+  }
+
   void _showFormDaftarPelanggan({String nomorHpAwal = ''}) {
     final namaCtrl = TextEditingController();
     final hpCtrl = TextEditingController(text: nomorHpAwal);
@@ -1532,7 +1568,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'Sistem akan otomatis mengecek data lintas cabang',
+                  'Dompet poin dibuat khusus untuk cabang ini saja',
                   style: TextStyle(color: _DS.textSecondary, fontSize: 12),
                 ),
                 const SizedBox(height: 20),
@@ -1578,129 +1614,232 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                         : () async {
                             if (isSubmitting) return;
                             if (!formKey.currentState!.validate()) return;
-                            
+
                             setModalState(() => isSubmitting = true);
                             try {
-                               final branchId = await AppState.getBranchId();
-                               // [PERBAIKAN ERROR]: Pastikan branchId tidak null agar Supabase tidak protes
-                               if (branchId == null) throw 'Cabang tidak ditemukan. Silakan login ulang.';
+                              final branchId = await AppState.getBranchId();
+                              if (branchId == null) {
+                                throw 'Cabang tidak ditemukan. Silakan login ulang.';
+                              }
 
-                               final phoneInput = hpCtrl.text.trim();
-                               final nameInput = namaCtrl.text.trim();
+                              final phoneInput = hpCtrl.text.trim();
+                              final nameInput = namaCtrl.text.trim();
 
-                               // INTERCEPTOR PROFIL (Cek Global)
-                               final existingProfile = await _supabase
-                                   .from('profiles')
-                                   .select('id, nama_lengkap')
-                                   .eq('nomor_hp', phoneInput)
-                                   .maybeSingle();
+                              // ==========================================
+                              // INTERCEPTOR PROFIL (cek global lintas cabang)
+                              // ==========================================
+                              final existingProfile = await _supabase
+                                  .from('profiles')
+                                  .select('id, nama_lengkap')
+                                  .eq('nomor_hp', phoneInput)
+                                  .maybeSingle();
 
-                               if (existingProfile != null) {
-                                 // Profil Ditemukan!
-                                 setModalState(() => isSubmitting = false);
-                                 final profileId = existingProfile['id'];
-                                 final namaTerdaftar = existingProfile['nama_lengkap'] ?? nameInput;
+                              if (existingProfile != null) {
+                                setModalState(() => isSubmitting = false);
+                                final profileId = existingProfile['id'];
+                                final namaTerdaftar =
+                                    existingProfile['nama_lengkap'] ?? nameInput;
 
-                                 final confirmWallet = await showDialog<bool>(
-                                   context: ctx,
-                                   builder: (dialogCtx) => AlertDialog(
-                                     backgroundColor: _DS.surface,
-                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                     title: const Text('Akun Ditemukan', style: TextStyle(fontWeight: FontWeight.w800, color: _DS.textPrimary)),
-                                     content: Text('Nomor $phoneInput sudah terdaftar atas nama "$namaTerdaftar" di cabang lain.\n\nKlik "Lanjut" untuk mengaktifkan dompet poin di cabang ini.'),
-                                     actions: [
-                                       TextButton(
-                                         onPressed: () => Navigator.pop(dialogCtx, false), 
-                                         child: const Text('Batal', style: TextStyle(color: _DS.textSecondary, fontWeight: FontWeight.w600))
-                                       ),
-                                       ElevatedButton(
-                                         style: ElevatedButton.styleFrom(backgroundColor: _DS.blue, foregroundColor: Colors.white, elevation: 0),
-                                         onPressed: () => Navigator.pop(dialogCtx, true),
-                                         child: const Text('Lanjut Buat Dompet', style: TextStyle(fontWeight: FontWeight.w700)),
-                                       ),
-                                     ],
-                                   )
-                                 );
+                                // Sudah punya dompet di cabang ini? Langsung pilih.
+                                final dompetCabangIni = await _supabase
+                                    .from('customers')
+                                    .select('id')
+                                    .eq('profile_id', profileId)
+                                    .eq('branch_id', branchId)
+                                    .maybeSingle();
 
-                                 if (confirmWallet == true) {
-                                   setModalState(() => isSubmitting = true);
-                                   
-                                   final existingWallet = await _supabase
-                                       .from('customers')
-                                       .select('id')
-                                       .eq('profile_id', profileId)
-                                       .eq('branch_id', branchId!) // <--- TAMBAHKAN TANDA SERU DI SINI
-                                       .maybeSingle();
-
-                                   if (existingWallet == null) {
-                                     // [PERBAIKAN ERROR]: Gunakan <String, dynamic> agar Dart mengerti tipe datanya
-                                     await _supabase.from('customers').insert(<String, dynamic>{
-                                       'profile_id': profileId,
-                                       'branch_id': branchId,
-                                       'poin_saldo': 0
-                                     });
-                                   }
-                                   
-                                   await _loadCustomers();
-                                   if (mounted) {
-                                     Navigator.pop(ctx); 
-                                     final c = _allCustomers.firstWhere(
-                                       (e) => e['nomor_hp'] == phoneInput,
-                                       orElse: () => <String, dynamic>{
-                                         'id': profileId,
-                                         'nama_lengkap': namaTerdaftar,
-                                         'nomor_hp': phoneInput,
-                                       },
-                                     );
-                                     setState(() {
-                                       _selectedCustomer = c;
-                                       _step = 2; // Khusus di halaman pesanan, pindah ke step 2
-                                     });
-                                     _showCustomDialog(
-                                       title: 'Dompet Aktif',
-                                       message: 'Dompet $namaTerdaftar berhasil diaktifkan dan dipilih!',
-                                       isSuccess: true,
-                                     );
-                                   }
-                                 }
-                               } else {
-                                 // Profil Kosong -> Daftar Normal
-                                 await AuthService().registerPelanggan(
-                                   phone: phoneInput,
-                                   fullName: nameInput,
-                                   branchId: branchId,
-                                 );
-                                 await Future.delayed(const Duration(milliseconds: 800));
-                                 await _loadCustomers();
-                                 if (mounted) {
-                                   Navigator.pop(ctx);
-                                   final c = _allCustomers.firstWhere(
-                                     (e) => e['nomor_hp'] == phoneInput,
-                                     orElse: () => <String, dynamic>{
-                                       'id': '',
-                                       'nama_lengkap': nameInput,
-                                       'nomor_hp': phoneInput,
-                                     },
-                                   );
-                                   setState(() {
-                                     _selectedCustomer = c;
-                                     _step = 2; // Khusus di halaman pesanan, pindah ke step 2
-                                   });
+                                if (dompetCabangIni != null) {
+                                  await _loadCustomers();
+                                  if (!mounted) return;
+                                  Navigator.pop(ctx);
+                                  final c = _allCustomers.firstWhere(
+                                    (e) => e['nomor_hp'] == phoneInput,
+                                    orElse: () => <String, dynamic>{
+                                      'id': profileId,
+                                      'nama_lengkap': namaTerdaftar,
+                                      'nomor_hp': phoneInput,
+                                    },
+                                  );
+                                  setState(() {
+                                    _selectedCustomer = c;
+                                    _step = 2;
+                                  });
                                   _showCustomDialog(
-                                    title: 'Berhasil Mendaftar',
-                                    message: '$nameInput berhasil didaftarkan dan dipilih!',
+                                    title: 'Sudah Terdaftar',
+                                    message:
+                                        '$namaTerdaftar sudah punya dompet di cabang ini dan langsung dipilih.',
                                     isSuccess: true,
                                   );
+                                  return;
                                 }
-                               }
+
+                                final confirmWallet = await showDialog<bool>(
+                                  context: ctx,
+                                  builder: (dialogCtx) => AlertDialog(
+                                    backgroundColor: _DS.surface,
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(16)),
+                                    title: const Text(
+                                      'Akun Ditemukan',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          color: _DS.textPrimary),
+                                    ),
+                                    content: Text(
+                                        'Nomor $phoneInput sudah terdaftar atas nama "$namaTerdaftar" di cabang lain.\n\nKlik "Lanjut" untuk membuka dompet poin di cabang ini. Poin di cabang lain tidak ikut pindah.'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(dialogCtx, false),
+                                        child: const Text('Batal',
+                                            style: TextStyle(
+                                                color: _DS.textSecondary,
+                                                fontWeight: FontWeight.w600)),
+                                      ),
+                                      ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                            backgroundColor: _DS.blue,
+                                            foregroundColor: Colors.white,
+                                            elevation: 0),
+                                        onPressed: () =>
+                                            Navigator.pop(dialogCtx, true),
+                                        child: const Text('Lanjut Buat Dompet',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.w700)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+
+                                if (confirmWallet != true) return;
+
+                                setModalState(() => isSubmitting = true);
+                                await _pastikanDompetCabang(
+                                    profileId, branchId);
+                                await _loadCustomers();
+
+                                if (!mounted) return;
+                                Navigator.pop(ctx);
+                                final c = _allCustomers.firstWhere(
+                                  (e) => e['nomor_hp'] == phoneInput,
+                                  orElse: () => <String, dynamic>{
+                                    'id': profileId,
+                                    'nama_lengkap': namaTerdaftar,
+                                    'nomor_hp': phoneInput,
+                                  },
+                                );
+                                setState(() {
+                                  _selectedCustomer = c;
+                                  _step = 2;
+                                });
+                                _showCustomDialog(
+                                  title: 'Dompet Aktif',
+                                  message:
+                                      'Dompet $namaTerdaftar berhasil dibuka di cabang ini!',
+                                  isSuccess: true,
+                                );
+                                return;
+                              }
+
+                              // ==========================================
+                              // PROFIL KOSONG → DAFTAR BARU
+                              //
+                              // Edge function register-customer SUDAH insert
+                              // baris customers dengan branch_id yang benar.
+                              // JANGAN panggil _pastikanDompetCabang di sini —
+                              // itu menyebabkan baris dobel (race condition:
+                              // insert dari edge function belum ke-commit
+                              // saat _pastikanDompetCabang mengecek "belum
+                              // ada dompet" lalu insert lagi).
+                              // ==========================================
+                              await AuthService().registerPelanggan(
+                                phone: phoneInput,
+                                fullName: nameInput,
+                                branchId: branchId,
+                              );
+                              await Future.delayed(
+                                  const Duration(milliseconds: 800));
+
+                              final profilBaru = await _supabase
+                                  .from('profiles')
+                                  .select('id')
+                                  .eq('nomor_hp', phoneInput)
+                                  .maybeSingle();
+
+                              // Verifikasi saja (bukan insert): jaga-jaga kalau
+                              // edge function gagal di tengah proses insert
+                              // customers meski Auth user sudah kebuat.
+                              if (profilBaru != null) {
+                                final walletCekAda = await _supabase
+                                    .from('customers')
+                                    .select('id')
+                                    .eq('profile_id', profilBaru['id'])
+                                    .eq('branch_id', branchId)
+                                    .maybeSingle();
+                                if (walletCekAda == null) {
+                                  await _pastikanDompetCabang(
+                                      profilBaru['id'], branchId);
+                                }
+                              }
+
+                              await _loadCustomers();
+
+                              if (!mounted) return;
+                              Navigator.pop(ctx);
+                              final c = _allCustomers.firstWhere(
+                                (e) => e['nomor_hp'] == phoneInput,
+                                orElse: () => <String, dynamic>{
+                                  'id': profilBaru?['id'] ?? '',
+                                  'nama_lengkap': nameInput,
+                                  'nomor_hp': phoneInput,
+                                },
+                              );
+                              setState(() {
+                                _selectedCustomer = c;
+                                _step = 2;
+                              });
+                              _showCustomDialog(
+                                title: 'Berhasil Mendaftar',
+                                message:
+                                    '$nameInput berhasil didaftarkan di cabang ini dan langsung dipilih!',
+                                isSuccess: true,
+                              );
                             } catch (e) {
                               setModalState(() => isSubmitting = false);
-                              String pesanError = e.toString().replaceAll('Exception: ', '');
-                              if (pesanError.contains('already been registered') || pesanError.contains('already exists')) {
-                               pesanError = 'Nomor WhatsApp sudah terdaftar.\n\nSilakan cari di daftar pelanggan atau tarik layar ke bawah untuk refresh.';
+                              String pesanError =
+                                  e.toString().replaceAll('Exception: ', '');
+
+                              if (pesanError
+                                      .contains('already been registered') ||
+                                  pesanError.contains('already exists') ||
+                                  pesanError
+                                      .contains('profiles_nomor_hp_key')) {
+                                pesanError =
+                                    'Nomor WhatsApp ini sudah terdaftar. Coba cari di daftar pelanggan, atau tarik layar ke bawah untuk refresh.';
+                              } else if (pesanError
+                                      .contains('profiles_email_key') ||
+                                  pesanError.contains('email_exists')) {
+                                pesanError =
+                                    'Email pelanggan ini sudah dipakai akun lain. Minta pelanggan daftar sendiri lewat aplikasi dengan email berbeda.';
+                              } else if (pesanError.contains(
+                                      'customers_profile_branch_uniq') ||
+                                  pesanError.contains('duplicate key')) {
+                                pesanError =
+                                    'Pelanggan ini sudah punya dompet di cabang ini. Silakan cari di daftar pelanggan.';
+                              } else if (pesanError
+                                      .contains('SocketException') ||
+                                  pesanError.contains('ClientException') ||
+                                  pesanError.contains('Failed host lookup')) {
+                                pesanError =
+                                    'Koneksi internet bermasalah. Periksa jaringan lalu coba lagi.';
                               }
+
                               if (mounted) {
-                                _showCustomDialog(title: 'Gagal Mendaftar', message: pesanError, isSuccess: false);
+                                _showCustomDialog(
+                                    title: 'Gagal Mendaftar',
+                                    message: pesanError,
+                                    isSuccess: false);
                               }
                             }
                           },

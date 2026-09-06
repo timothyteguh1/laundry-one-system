@@ -1,5 +1,6 @@
 import java.util.Properties
 import java.io.FileInputStream
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
@@ -16,8 +17,11 @@ plugins {
 
 android {
     namespace = "com.example.laundry_one" // [UPDATE]: Ganti dari com.example
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // [UPDATE]: Kunci eksplisit ke 36 untuk standar baru Google Play
+    compileSdk = 36
+    
+    // [UPDATE]: Mengunci versi NDK ke versi terbaru yang mendukung 16 KB page size
+    ndkVersion = "30.0.16138531"
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
@@ -25,15 +29,17 @@ android {
         targetCompatibility = JavaVersion.VERSION_1_8
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_1_8.toString()
+    kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_1_8)
     }
+}
 
     defaultConfig {
         // [UPDATE]: Jangan gunakan com.example, pakai ID aplikasi pelanggan sebagai default
         applicationId = "com.example.laundry_one"
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true

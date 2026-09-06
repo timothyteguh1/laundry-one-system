@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:laundry_one/features/auth/services/auth_service.dart';
 import 'package:laundry_one/features/customer/screens/home_customer_screen.dart';
 
@@ -18,6 +19,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // - Nomor HP (wajib) → identifier untuk login
 // - Password (wajib, min 6 karakter)
 // - Konfirmasi Password (wajib)
+// - Cabang (wajib) -> Untuk alokasi outlet
 // - Tanggal Lahir (opsional) → untuk notifikasi ulang tahun
 //
 // Setelah daftar → langsung masuk HomeCustomerScreen
@@ -44,6 +46,10 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
   bool _isLoading = false;
   DateTime? _tanggalLahir;
 
+  // [UPDATE] Variabel untuk pilihan cabang
+  List<dynamic> _branches = [];
+  String? _selectedBranchId;
+
   final _formKey = GlobalKey<FormState>();
   final AuthService _authService = AuthService();
 
@@ -55,6 +61,7 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
   @override
   void initState() {
     super.initState();
+    _fetchBranches(); // [UPDATE] Ambil data cabang saat inisialisasi
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
@@ -78,6 +85,27 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
     _passwordController.dispose();
     _konfirmasiController.dispose();
     super.dispose();
+  }
+
+  // ============================================================
+  // [UPDATE] FETCH CABANG DARI SUPABASE
+  // ============================================================
+  Future<void> _fetchBranches() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('branches')
+          .select('id, nama_cabang')
+          .eq('is_active', true);
+
+      if (mounted) {
+        setState(() {
+          _branches = response;
+        });
+        debugPrint('Berhasil memuat ${_branches.length} cabang.');
+      }
+    } catch (e) {
+      debugPrint('Gagal mengambil cabang: $e');
+    }
   }
 
   // ============================================================
@@ -209,6 +237,78 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
   }
 
   // ============================================================
+  // [BARU] TERJEMAHKAN ERROR MENTAH JADI BAHASA MANUSIA
+  // ============================================================
+  Map<String, String> _terjemahkanError(String raw) {
+    String title = 'Pendaftaran Gagal';
+    String message = raw.replaceAll('Exception: ', '');
+
+    if (raw.contains('EMAIL_TERPAKAI') ||
+        raw.contains('profiles_email_key') ||
+        raw.contains('email_exists') ||
+        raw.contains('already registered') ||
+        raw.contains('User already registered')) {
+      title = 'Email Sudah Terdaftar';
+      message =
+          'Alamat email ini sudah dipakai oleh akun lain. Gunakan email lain, atau langsung masuk kalau ini memang akun kamu.';
+    } else if (raw.contains('HP_TERPAKAI') ||
+        raw.contains('profiles_nomor_hp_key') ||
+        raw.contains('sudah terdaftar') ||
+        raw.contains('phone_exists')) {
+      title = 'Nomor Sudah Terdaftar';
+      message =
+          'Nomor WhatsApp ini sudah pernah didaftarkan. Silakan langsung masuk memakai nomor tersebut. Lupa sandi? Pakai menu "Lupa Sandi?" di halaman masuk.';
+    } else if (raw.contains('23505') || raw.contains('duplicate key')) {
+      title = 'Data Sudah Dipakai';
+      message =
+          'Email atau nomor WhatsApp yang kamu isi sudah terdaftar di sistem kami. Coba periksa lagi ya.';
+    } else if (raw.contains('SocketException') ||
+        raw.contains('Failed host lookup') ||
+        raw.contains('Network is unreachable') ||
+        raw.contains('Connection failed') ||
+        raw.contains('ClientException')) {
+      title = 'Tidak Ada Koneksi';
+      message = 'Periksa koneksi internet atau WiFi kamu, lalu coba lagi.';
+    } else if (raw.contains('Invalid login credentials')) {
+      title = 'Data Tidak Cocok';
+      message =
+          'Akun berhasil dibuat, tapi login otomatis gagal. Silakan masuk manual dari halaman login.';
+    } else if (message.trim().isEmpty || message.contains('PostgrestException')) {
+      title = 'Pendaftaran Gagal';
+      message =
+          'Terjadi kendala saat membuat akun. Coba beberapa saat lagi atau hubungi admin kami.';
+    }
+
+    return {'title': title, 'message': message};
+  }
+
+  // ============================================================
+  // [BARU] CEK DUPLIKAT SEBELUM AKUN DIBUAT
+  // ============================================================
+  Future<void> _cekDuplikat() async {
+    try {
+      final hasil = await Supabase.instance.client.rpc(
+        'cek_ketersediaan_akun',
+        params: {
+          'p_email': _emailController.text.trim(),
+          'p_hp': _phoneController.text.trim(),
+        },
+      );
+
+      if (hasil == 'email') throw Exception('EMAIL_TERPAKAI');
+      if (hasil == 'hp') throw Exception('HP_TERPAKAI');
+    } catch (e) {
+      final raw = e.toString();
+      // Sengaja dilempar lagi kalau memang duplikat
+      if (raw.contains('EMAIL_TERPAKAI') || raw.contains('HP_TERPAKAI')) {
+        rethrow;
+      }
+      // Kalau RPC-nya bermasalah, jangan blokir user. Biar dicegat error mapping.
+      debugPrint('Cek duplikat dilewati: $e');
+    }
+  }
+
+  // ============================================================
   // PROSES REGISTER
   // ============================================================
   Future<void> _prosesRegister() async {
@@ -219,19 +319,23 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
     setState(() => _isLoading = true);
 
     try {
+      // 0. CEGAT DUPLIKAT SEJAK AWAL (biar akun tidak terlanjur setengah jadi)
+      await _cekDuplikat();
+
       String? tanggalLahirStr;
       if (_tanggalLahir != null) {
         tanggalLahirStr =
             '${_tanggalLahir!.year}-${_tanggalLahir!.month.toString().padLeft(2, '0')}-${_tanggalLahir!.day.toString().padLeft(2, '0')}';
       }
 
-      // 1. Daftar Akun
+      // 1. Daftar Akun (Sekarang mengirimkan ID Cabang)
       await _authService.registerPelanggan(
         phone: _phoneController.text.trim(),
         fullName: _namaController.text.trim(),
-        email: _emailController.text.trim(), 
+        email: _emailController.text.trim(),
         tanggalLahir: tanggalLahirStr,
         password: _passwordController.text.trim(),
+        branchId: _selectedBranchId, // [UPDATE] Kirim branch_id ke Edge Function
       );
 
       // 2. Login Otomatis
@@ -241,19 +345,72 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
         expectedRole: 'customer',
       );
 
-      // 3. Pastikan email benar-benar tersimpan di tabel profiles
       final userId = Supabase.instance.client.auth.currentUser?.id;
+
+      // 3. Pastikan email tersimpan di tabel profiles.
+      //    Dibungkus try/catch: akun sudah jadi di titik ini, jangan sampai meledak.
       if (userId != null) {
-        await Supabase.instance.client.from('profiles').update({
-          'email': _emailController.text.trim()
-        }).eq('id', userId);
+        try {
+          await Supabase.instance.client.from('profiles').update({
+            'email': _emailController.text.trim()
+          }).eq('id', userId);
+        } catch (e) {
+          debugPrint('Sinkron email dilewati: $e');
+        }
       }
 
-      // 4. Update FCM Token
+      // 4. [INGATAN CABANG] Pastikan dompet cabang sesuai pilihan user,
+      //    lalu simpan sebagai cabang aktif terakhir.
+      if (userId != null && _selectedBranchId != null) {
+        try {
+          final wallets = await Supabase.instance.client
+              .from('customers')
+              .select('id, branch_id')
+              .eq('profile_id', userId);
+
+          final list = List<Map<String, dynamic>>.from(wallets);
+
+          Map<String, dynamic>? target;
+          for (final w in list) {
+            if (w['branch_id'].toString() == _selectedBranchId) {
+              target = w;
+              break;
+            }
+          }
+
+          if (target == null && list.isNotEmpty) {
+            // Dompet terlanjur dibuat dengan cabang default → betulkan
+            target = await Supabase.instance.client
+                .from('customers')
+                .update({'branch_id': _selectedBranchId})
+                .eq('id', list.first['id'])
+                .select()
+                .single();
+          } else if (target == null) {
+            // Belum punya dompet sama sekali → buat sesuai pilihan
+            target = await Supabase.instance.client
+                .from('customers')
+                .insert({
+                  'profile_id': userId,
+                  'branch_id': _selectedBranchId,
+                  'poin_saldo': 0,
+                })
+                .select()
+                .single();
+          }
+
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('active_wallet_id', target['id'].toString());
+        } catch (e) {
+          debugPrint('Set cabang awal dilewati: $e');
+        }
+      }
+
+      // 5. Update FCM Token
       try {
         await NotificationService.saveTokenToSupabase();
       } catch (e) {
-        debugPrint('Ninja Token Gagal: $e'); 
+        debugPrint('Ninja Token Gagal: $e');
       }
 
       if (mounted) {
@@ -261,11 +418,13 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Selamat datang, ${_namaController.text.trim().split(' ').first}! 👋'),
+            content: Text(
+                'Selamat datang, ${_namaController.text.trim().split(' ').first}! 👋'),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
           ),
         );
 
@@ -273,7 +432,8 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
           context,
           PageRouteBuilder(
             pageBuilder: (_, animation, __) => const HomeCustomerScreen(),
-            transitionsBuilder: (_, animation, __, child) => FadeTransition(opacity: animation, child: child),
+            transitionsBuilder: (_, animation, __, child) =>
+                FadeTransition(opacity: animation, child: child),
             transitionDuration: const Duration(milliseconds: 400),
           ),
           (route) => false,
@@ -282,24 +442,13 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
     } catch (e) {
       if (mounted) {
         HapticFeedback.vibrate();
-        
-        final errorMsg = e.toString();
-        String title = 'Pendaftaran Gagal';
-        String message = errorMsg.replaceAll('Exception: ', '');
 
-        if (errorMsg.contains('sudah terdaftar') || errorMsg.contains('already registered')) {
-          title = 'Nomor Sudah Terdaftar';
-          message = 'Nomor WhatsApp ini sudah pernah didaftarkan. Silakan langsung masuk (login) menggunakan nomor tersebut.';
-        } else if (errorMsg.contains('SocketException') ||
-            errorMsg.contains('Failed host lookup') ||
-            errorMsg.contains('Network is unreachable') ||
-            errorMsg.contains('Connection failed') ||
-            errorMsg.contains('ClientException')) {
-          title = 'Tidak Ada Koneksi';
-          message = 'Periksa koneksi internet atau WiFi kamu, lalu coba lagi.';
-        }
-
-        _showCustomDialog(title: title, message: message, isSuccess: false);
+        final hasil = _terjemahkanError(e.toString());
+        _showCustomDialog(
+          title: hasil['title']!,
+          message: hasil['message']!,
+          isSuccess: false,
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -475,6 +624,32 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen>
                           }
                           if (val != _passwordController.text) {
                             return 'Password tidak cocok';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 14),
+
+                      // === [UPDATE] CABANG ===
+                      DropdownButtonFormField<String>(
+                        value: _selectedBranchId,
+                        decoration: _inputDeco(
+                          label: 'Pilih Cabang',
+                          icon: Icons.storefront_outlined,
+                          hint: 'Pilih cabang langganan kamu',
+                        ),
+                        dropdownColor: Colors.white,
+                        items: _branches.map((branch) {
+                          return DropdownMenuItem<String>(
+                            value: branch['id'].toString(),
+                            child: Text(branch['nama_cabang']),
+                          );
+                        }).toList(),
+                        onChanged: (val) =>
+                            setState(() => _selectedBranchId = val),
+                        validator: (val) {
+                          if (val == null || val.isEmpty) {
+                            return 'Cabang wajib dipilih';
                           }
                           return null;
                         },
